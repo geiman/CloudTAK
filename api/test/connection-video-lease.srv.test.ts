@@ -58,12 +58,14 @@ test('PUT api/config', async () => {
                 bearer: flight.token.admin
             },
             body: {
-                'media::url': 'https://video.example.com'
+                'media::internal_url': 'http://media:9997',
+                'media::public_url': 'https://video.example.com'
             }
         }, false);
 
         assert.deepEqual(res.body, {
-            'media::url': 'https://video.example.com'
+            'media::internal_url': 'http://media:9997',
+            'media::public_url': 'https://video.example.com'
         });
     } catch (err) {
         assert.ifError(err);
