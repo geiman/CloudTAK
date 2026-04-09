@@ -8,6 +8,7 @@ import { VideoLease } from '../schema.js';
 import { VideoLeaseResponse } from '../types.js';
 import { VideoLease_SourceType } from '../enums.js';
 import fetch from '../fetch.js';
+import { Agent } from 'undici';
 import { TAKAPI, APIAuthCertificate } from '@tak-ps/node-tak';
 
 export enum ProtocolPopulation {
@@ -221,6 +222,142 @@ export default class VideoServiceControl {
         }
 
         return headers;
+    }
+
+    defaultPort(protocol: string): string {
+        switch (protocol) {
+        case 'http:':
+            return '80';
+        case 'https:':
+            return '443';
+        case 'rtsp:':
+            return '554';
+        case 'rtmp:':
+            return '1935';
+        case 'rtmps:':
+            return '443';
+        case 'srt:':
+            return '9000';
+        default:
+            return '';
+        }
+    }
+
+    async takAuthForLease(lease: Static<typeof VideoLeaseResponse>): Promise<{
+        cert: string;
+        key: string;
+    }> {
+        if (lease.username) {
+            return (await this.config.models.Profile.from(lease.username)).auth;
+        } else if (lease.connection) {
+            return (await this.config.models.Connection.from(lease.connection)).auth;
+        } else {
+            return this.config.serverCert();
+        }
+    }
+
+    takVideoDispatcher(auth: {
+        cert: string;
+        key: string;
+    }): Agent {
+        return new Agent({
+            connect: {
+                cert: auth.cert,
+                key: auth.key,
+                rejectUnauthorized: false,
+            }
+        });
+    }
+
+    takVideoUrl(pathname: string): URL {
+        return new URL(pathname, String(this.config.server.api));
+    }
+
+    async takVideoConnectionPayload(lease: Static<typeof VideoLeaseResponse>): Promise<{
+        uuid: string;
+        active: boolean;
+        alias: string;
+        thumbnail: string;
+        classification: string;
+        feeds: Array<Record<string, string | boolean>>;
+    }> {
+        const protocols = await this.protocols(lease, ProtocolPopulation.READ);
+        if (!protocols.hls) throw new Err(400, null, 'Only HLS shared video streams are supported at this time');
+
+        return {
+            uuid: lease.path,
+            active: true,
+            alias: lease.name,
+            thumbnail: '',
+            classification: '',
+            feeds: [{
+                uuid: lease.path,
+                active: true,
+                alias: lease.name,
+                url: protocols.hls.url,
+                macAddress: '',
+                roverPort: '-1',
+                ignoreEmbeddedKLV: '',
+                source: '',
+                networkTimeout: '5000',
+                bufferTime: '',
+                rtspReliable: '0',
+                thumbnail: '',
+                classification: '',
+                latitude: '',
+                longitude: '',
+                fov: '',
+                heading: '',
+                range: '',
+            }]
+        };
+    }
+
+    async publishTakVideoFeed(lease: Static<typeof VideoLeaseResponse>): Promise<void> {
+        if (!lease.channel) throw new Err(400, null, 'Channel must be set when publish is true');
+
+        const auth = await this.takAuthForLease(lease);
+        const dispatcher = this.takVideoDispatcher(auth);
+        const url = this.takVideoUrl('/Marti/api/video');
+        url.searchParams.append('group', lease.channel);
+
+        try {
+            const res = await fetch(url, {
+                method: 'POST',
+                dispatcher,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    videoConnections: [await this.takVideoConnectionPayload(lease)]
+                }),
+            });
+
+            if (!res.ok) {
+                throw new Err(res.status, new Error(await res.text()), 'Failed to publish TAK video feed');
+            }
+        } finally {
+            await dispatcher.close();
+        }
+    }
+
+    async deleteTakVideoFeed(lease: Static<typeof VideoLeaseResponse>): Promise<void> {
+        const auth = await this.takAuthForLease(lease);
+        const dispatcher = this.takVideoDispatcher(auth);
+
+        try {
+            const url = this.takVideoUrl(`/Marti/api/video/${encodeURIComponent(lease.path)}`);
+            const res = await fetch(url, {
+                method: 'DELETE',
+                dispatcher,
+            });
+
+            if (!res.ok && res.status !== 404) {
+                throw new Err(res.status, new Error(await res.text()), 'Failed to delete TAK video feed');
+            }
+        } finally {
+            await dispatcher.close();
+        }
     }
 
     async configuration(): Promise<Static<typeof Configuration>> {
@@ -501,31 +638,8 @@ export default class VideoServiceControl {
         headers.append('Content-Type', 'application/json');
 
         if (lease.publish) {
-            const auth = this.config.serverCert();
-            const api = await TAKAPI.init(
-                new URL(String(this.config.server.api)),
-                new APIAuthCertificate(auth.cert, auth.key)
-            );
-
             try {
-                const protocols = await this.protocols(lease, ProtocolPopulation.READ)
-
-                if (protocols.hls) {
-                    await api.Video.create({
-                        uuid: lease.path,
-                        active: true,
-                        alias: lease.name,
-                        groups: [ lease.channel! ],
-                        feeds: [{
-                            uuid: lease.path,
-                            active: true,
-                            alias: lease.name,
-                            url: protocols.hls.url,
-                        }]
-                    })
-                } else {
-                    throw new Err(400, null, 'Only HLS shared video streams are supported at this time');
-                }
+                await this.publishTakVideoFeed(lease);
             } catch (err) {
                 console.error(err);
             }
@@ -687,43 +801,25 @@ export default class VideoServiceControl {
             await this.updateSecure(lease, body.secure, body.secure_rotate);
         }
 
+        const wasPublished = lease.publish;
+
         lease = await this.config.models.VideoLease.commit(leaseid, body);
 
         try {
-            const auth = this.config.serverCert();
-            const api = await TAKAPI.init(
-                new URL(String(this.config.server.api)),
-                new APIAuthCertificate(auth.cert, auth.key)
-            );
-
-            try {
-                await api.Video.delete(lease.path);
-            } catch (err) {
-                console.error(err);
+            if (wasPublished) {
+                try {
+                    await this.deleteTakVideoFeed(lease);
+                } catch (err) {
+                    console.error(err);
+                }
             }
 
-            // We can't change channels so just delete and recreate
-            try {
-                const protocols = await this.protocols(lease, ProtocolPopulation.READ)
-
-                if (protocols.hls) {
-                    await api.Video.create({
-                        uuid: lease.path,
-                        active: true,
-                        alias: lease.name,
-                        groups: [ lease.channel! ],
-                        feeds: [{
-                            uuid: lease.path,
-                            active: true,
-                            alias: lease.name,
-                            url: protocols.hls.url,
-                        }]
-                    })
-                } else {
-                    throw new Err(400, null, 'Only HLS shared video streams are supported at this time');
+            if (lease.publish) {
+                try {
+                    await this.publishTakVideoFeed(lease);
+                } catch (err) {
+                    console.error(err);
                 }
-            } catch (err) {
-                console.error(err);
             }
         } catch (err) {
             console.error(err);
@@ -859,16 +955,12 @@ export default class VideoServiceControl {
             headers: Object.fromEntries(headers.entries()),
         })
 
-        try {
-            const auth = this.config.serverCert();
-            const api = await TAKAPI.init(
-                new URL(String(this.config.server.api)),
-                new APIAuthCertificate(auth.cert, auth.key)
-            );
-
-            await api.Video.delete(lease.path);
-        } catch (err) {
-            console.error(err);
+        if (lease.publish) {
+            try {
+                await this.deleteTakVideoFeed(lease);
+            } catch (err) {
+                console.error(err);
+            }
         }
 
         return;
