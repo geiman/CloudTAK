@@ -1,6 +1,11 @@
 <template>
     <div class='col-12 py-2 g-2'>
         <TablerLoading v-if='loading' />
+        <TablerNone
+            v-else-if='!config'
+            :create='false'
+            label='Video service is not configured'
+        />
         <template v-else>
             <div class='row pb-3 g-3 d-flex align-items-center justify-content-center'>
                 <VideoConfigPort
@@ -128,5 +133,5 @@ const props = defineProps<{
 
 const loading = ref(false);
 const pathid = ref<string | undefined>();
-const config = ref(JSON.parse(JSON.stringify(props.service.config)))
+const config = ref(props.service.config ? JSON.parse(JSON.stringify(props.service.config)) : undefined)
 </script>

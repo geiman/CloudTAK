@@ -12,6 +12,11 @@ import { type InferSelectModel } from 'drizzle-orm';
 import Models from './models.js';
 import process from 'node:process';
 import * as pgtypes from './schema.js';
+import { FullConfig } from './types.js';
+
+const ConfigEnvKeyMap = new Map(
+    Object.keys(FullConfig.properties).map((key) => [key.replace(/::/g, '_'), key])
+);
 
 interface ConfigArgs {
     silent: boolean,
@@ -166,7 +171,8 @@ export default class Config {
 
             // TODO Strongly type via the Type in routes/config
             if (envkey.startsWith('CLOUDTAK_Config_')) {
-                const key = envkey.replace(/^CLOUDTAK_Config_/, '').replace(/_/g, '::');
+                const envConfigKey = envkey.replace(/^CLOUDTAK_Config_/, '');
+                const key = ConfigEnvKeyMap.get(envConfigKey) || envConfigKey.replace(/_/g, '::');
                 console.error(`ok - Updating ${key} with value from environment`);
                 await config.models.Setting.generate({
                     key,
