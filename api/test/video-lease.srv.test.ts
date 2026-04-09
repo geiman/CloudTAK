@@ -84,33 +84,9 @@ test('Mock Media Server Start', async () => {
 
     try {
         await flight.config!.models.Setting.generate({
-            key: 'media::internal_url',
-            value: 'http://media-server:9997'
+            key: 'media::url',
+            value: 'http://media-server'
         });
-
-        await flight.config!.models.Setting.generate({
-            key: 'media::public_url',
-            value: 'https://video.example.com'
-        });
-    } catch (err) {
-        assert.ifError(err);
-    }
-});
-
-test('GET: api/video/service - Separate Internal and Public URLs', async () => {
-    try {
-        const res = await flight.fetch('/api/video/service', {
-            method: 'GET',
-            auth: {
-                bearer: flight.token.admin
-            }
-        }, true);
-
-        assert.equal(res.status, 200, 'Status 200');
-        assert.equal(res.body.url, 'http://media-server:9997', 'Internal URL matches');
-        assert.equal(res.body.internal, 'http://media-server:9997', 'Internal alias matches');
-        assert.equal(res.body.external, 'https://video.example.com', 'Public URL matches');
-        assert.equal(res.body.public, 'https://video.example.com', 'Public alias matches');
     } catch (err) {
         assert.ifError(err);
     }

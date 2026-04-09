@@ -43,22 +43,10 @@
                 <div class='row'>
                     <div class='col-lg-12'>
                         <TablerInput
-                            v-model='config["media::internal_url"]'
+                            v-model='config["media::url"]'
                             :disabled='!edit'
-                            :error='validateOptionalURL(config["media::internal_url"])'
-                            label='Internal Media URL'
-                            description='Used by CloudTAK for service-to-service media API calls.'
-                            placeholder='http://media:9997'
-                        />
-                    </div>
-                    <div class='col-lg-12 mt-3'>
-                        <TablerInput
-                            v-model='config["media::public_url"]'
-                            :disabled='!edit'
-                            :error='validateOptionalURL(config["media::public_url"])'
-                            label='Public Media URL'
-                            description='Used for browser-facing playback URLs and lease metadata.'
-                            placeholder='https://video.example.com'
+                            :error='validateURL(config["media::url"])'
+                            label='CloudTAK Hosted MediaMTX Service URL'
                         />
                     </div>
                 </div>
@@ -86,8 +74,6 @@ import {
 
 interface MediaConfig {
     'media::url': string;
-    'media::internal_url': string;
-    'media::public_url': string;
 }
 
 const isOpen = ref<boolean>(false);
@@ -97,8 +83,6 @@ const err = ref<Error | null>(null);
 
 const config = ref<MediaConfig>({
     'media::url': '',
-    'media::internal_url': '',
-    'media::public_url': '',
 });
 
 onMounted(() => {
@@ -109,11 +93,6 @@ watch(isOpen, (newState) => {
     if (newState && !edit.value) void fetch();
 });
 
-function validateOptionalURL(value: string): string {
-    if (!value.trim()) return '';
-    return validateURL(value);
-}
-
 async function fetch(): Promise<void> {
     loading.value = true;
     err.value = null;
@@ -121,13 +100,8 @@ async function fetch(): Promise<void> {
         const url = stdurl('/api/config');
         url.searchParams.set('keys', Object.keys(config.value).join(','));
         const res = await std(url) as Partial<MediaConfig>;
-        const legacy = res['media::url'] || '';
-        const internal = res['media::internal_url'] || legacy;
-        const publicUrl = res['media::public_url'] || legacy || internal;
         config.value = {
-            'media::url': legacy,
-            'media::internal_url': internal,
-            'media::public_url': publicUrl,
+            'media::url': res['media::url'] ?? '',
         };
     } catch (error) {
         err.value = error instanceof Error ? error : new Error(String(error));
@@ -139,17 +113,11 @@ async function save(): Promise<void> {
     loading.value = true;
     err.value = null;
     try {
-        const body = {
-            'media::internal_url': config.value['media::internal_url'].trim(),
-            'media::public_url': config.value['media::public_url'].trim(),
-        };
-
         await std(`/api/config`, {
             method: 'PUT',
-            body
+            body: config.value
         });
         edit.value = false;
-        await fetch();
     } catch (error) {
         err.value = error instanceof Error ? error : new Error(String(error));
         console.error('Failed to save Media config:', error);

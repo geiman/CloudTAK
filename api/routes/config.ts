@@ -10,33 +10,9 @@ import { FullConfigDefaults } from '../lib/defaults.js';
 
 export { FullConfigDefaults };
 
-function withMediaFallback(
-    config: Partial<Static<typeof FullConfig>>,
-    keys: (keyof Static<typeof FullConfig>)[]
-): Partial<Static<typeof FullConfig>> {
-    const legacy = config['media::url'];
-    const internal = config['media::internal_url'] || legacy || config['media::public_url'];
-    const publicUrl = config['media::public_url'] || legacy || config['media::internal_url'];
-
-    if (keys.includes('media::internal_url') && internal !== undefined) {
-        config['media::internal_url'] = internal;
-    }
-
-    if (keys.includes('media::public_url') && publicUrl !== undefined) {
-        config['media::public_url'] = publicUrl;
-    }
-
-    if (keys.includes('media::url') && publicUrl !== undefined) {
-        config['media::url'] = publicUrl;
-    }
-
-    return config;
-}
-
 // Allows Unauthenticated Access to these Config Keys
 export const PublicConfigKeys: (keyof Static<typeof FullConfig>)[] = [
     'media::url',
-    'media::public_url',
     'login::signup',
     'login::forgot',
     'login::name',
@@ -115,7 +91,7 @@ export default async function router(schema: Schema, config: Config) {
                 }
             }
 
-            res.json(withMediaFallback(await config.models.Setting.typedKeys(keys), keys));
+            res.json(await config.models.Setting.typedKeys(keys));
         } catch (err) {
             Err.respond(err, res);
         }

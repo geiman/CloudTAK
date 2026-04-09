@@ -2131,12 +2131,8 @@ export interface paths {
                             "agol::client_id"?: string;
                             /** @description AGOL OAuth2 Client Secret */
                             "agol::client_secret"?: string;
-                            /** @description Legacy base URL for Media Service */
+                            /** @description Base URL for Media Service */
                             "media::url"?: string;
-                            /** @description Internal base URL for Media Service API calls */
-                            "media::internal_url"?: string;
-                            /** @description Public base URL for Media Service playback and metadata */
-                            "media::public_url"?: string;
                             /** @description Map Center Coordinates (lng,lat) */
                             "map::center"?: string;
                             /** @description Default Map Pitch Angle */
@@ -2314,12 +2310,8 @@ export interface paths {
                         "agol::client_id"?: string;
                         /** @description AGOL OAuth2 Client Secret */
                         "agol::client_secret"?: string;
-                        /** @description Legacy base URL for Media Service */
+                        /** @description Base URL for Media Service */
                         "media::url"?: string;
-                        /** @description Internal base URL for Media Service API calls */
-                        "media::internal_url"?: string;
-                        /** @description Public base URL for Media Service playback and metadata */
-                        "media::public_url"?: string;
                         /** @description Map Center Coordinates (lng,lat) */
                         "map::center"?: string;
                         /** @description Default Map Pitch Angle */
@@ -2432,12 +2424,8 @@ export interface paths {
                             "agol::client_id"?: string;
                             /** @description AGOL OAuth2 Client Secret */
                             "agol::client_secret"?: string;
-                            /** @description Legacy base URL for Media Service */
+                            /** @description Base URL for Media Service */
                             "media::url"?: string;
-                            /** @description Internal base URL for Media Service API calls */
-                            "media::internal_url"?: string;
-                            /** @description Public base URL for Media Service playback and metadata */
-                            "media::public_url"?: string;
                             /** @description Map Center Coordinates (lng,lat) */
                             "map::center"?: string;
                             /** @description Default Map Pitch Angle */
@@ -37963,8 +37951,6 @@ export interface paths {
                             configured: boolean;
                             url?: string;
                             external?: string;
-                            internal?: string;
-                            public?: string;
                             config?: {
                                 api: boolean;
                                 apiAddress: string;
