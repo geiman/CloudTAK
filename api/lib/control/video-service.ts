@@ -134,6 +134,8 @@ export const Configuration = Type.Object({
     configured: Type.Boolean(),
     url: Type.Optional(Type.String()),
     external: Type.Optional(Type.String()),
+    internal: Type.Optional(Type.String()),
+    public: Type.Optional(Type.String()),
     config: Type.Optional(VideoConfig),
     paths: Type.Optional(Type.Array(PathListItem))
 });
@@ -145,54 +147,71 @@ export default class VideoServiceControl {
         this.config = config;
     }
 
-    async url(): Promise<URL | null> {
+    async settingUrl(key: 'media::url' | 'media::internal_url' | 'media::public_url'): Promise<string | null> {
         try {
-            const url = await this.config.models.Setting.from('media::url');
-            if (!url.value) return null;
-            return new URL(url.value);
+            const url = await this.config.models.Setting.from(key);
+            if (!url.value || typeof url.value !== 'string') return null;
+
+            new URL(url.value);
+            return url.value;
         } catch (err) {
             if (err instanceof Error && err.message.includes('Not Found')) {
                 return null;
+            } else if (err instanceof TypeError && err.message.includes('Invalid URL')) {
+                throw new Err(400, null, `Invalid ${key} setting`);
             } else {
                 throw new Err(500, err instanceof Error ? err : new Error(String(err)), 'Media Service Configuration Error');
             }
         }
     }
 
-    async settings(): Promise<{
+    async mediaSettings(): Promise<{
         configured: boolean;
         url?: string;
+        internal_url?: string;
+        public_url?: string;
         token?: string;
     }> {
-        let video;
+        const legacy = await this.settingUrl('media::url');
+        const internal = await this.settingUrl('media::internal_url');
+        const publicUrl = await this.settingUrl('media::public_url');
 
-        try {
-            const kv = await this.config.models.Setting.from('media::url');
-            if (kv.value && typeof kv.value === 'string' && new URL(kv.value)) {
-                video = kv.value
-            } else {
-                throw new Err(400, null, 'Media Service URL is not configured');
-            }
-        } catch (err) {
-            if (err instanceof Error && err.message.includes('Not Found')) {
-                return {
-                    configured: false
-                }
-            } else if (err instanceof Err) {
-                throw err;
-            } else {
-                throw new Err(500, err instanceof Error ? err : new Error(String(err)), 'Media Service Configuration Error');
-            }
+        const resolvedInternal = internal || legacy || publicUrl;
+        const resolvedPublic = publicUrl || legacy || internal;
+
+        if (!resolvedInternal) {
+            return {
+                configured: false
+            };
         }
 
         return {
             configured: true,
-            url: video,
+            url: resolvedInternal,
+            internal_url: resolvedInternal,
+            public_url: resolvedPublic || resolvedInternal,
             token: jwt.sign({
                 internal: true,
                 access: AuthResourceAccess.MEDIA
             }, this.config.SigningSecret)
         }
+    }
+
+    async url(): Promise<URL | null> {
+        const settings = await this.mediaSettings();
+        if (!settings.configured || !settings.public_url) return null;
+
+        return new URL(settings.public_url);
+    }
+
+    async settings(): Promise<{
+        configured: boolean;
+        url?: string;
+        internal_url?: string;
+        public_url?: string;
+        token?: string;
+    }> {
+        return await this.mediaSettings();
     }
 
     headers(token?: string): Headers {
@@ -211,32 +230,28 @@ export default class VideoServiceControl {
 
         const headers = this.headers(video.token);
 
-        const url = new URL('/v3/config/global/get', video.url);
-        url.port = '9997';
+        const url = new URL('/v3/config/global/get', video.internal_url);
+        if (!url.port) url.port = '9997';
 
         const res = await fetch(url, { headers: Object.fromEntries(headers.entries()) })
         if (!res.ok) throw new Err(500, null, await res.text())
         const body = await res.typed(VideoConfig);
 
         // TODO support paging
-        const urlPaths = new URL('/path', video.url);
-        urlPaths.port = '9997';
+        const urlPaths = new URL('/path', video.internal_url);
+        if (!urlPaths.port) urlPaths.port = '9997';
 
         const resPaths = await fetch(urlPaths, { headers: Object.fromEntries(headers.entries()) })
         if (!resPaths.ok) throw new Err(500, null, await resPaths.text())
 
         const paths = await resPaths.typed(PathsList);
 
-        // Special case for supporting internal Docker Compose network
-        let external = video.url;
-        if (video.url && new URL(video.url).hostname === 'media') {
-            external = 'http://localhost'
-        }
-
         return {
             configured: video.configured,
-            url: video.url,
-            external,
+            url: video.internal_url,
+            external: video.public_url,
+            internal: video.internal_url,
+            public: video.public_url,
             config: body,
             paths: paths.items,
         };
@@ -346,7 +361,6 @@ export default class VideoServiceControl {
         if (c.config && c.config.hls) {
             // Format: http://localhost:9997/mystream/index.m3u8 - Proxied
             const url = new URL(`/stream/${lease.path}/index.m3u8`, c.external);
-            url.port = '9997'
 
             if (lease.stream_user && lease.read_user) {
                 if (populated === ProtocolPopulation.READ && lease.read_user && lease.read_pass) {
@@ -481,8 +495,8 @@ export default class VideoServiceControl {
 
         await this.updateSecure(lease, opts.secure);
 
-        const url = new URL(`/path`, video.url);
-        url.port = '9997';
+        const url = new URL(`/path`, video.internal_url);
+        if (!url.port) url.port = '9997';
 
         headers.append('Content-Type', 'application/json');
 
@@ -718,8 +732,8 @@ export default class VideoServiceControl {
         try {
             await this.path(lease.path);
 
-            const url = new URL(`/path/${lease.path}`, video.url);
-            url.port = '9997';
+            const url = new URL(`/path/${lease.path}`, video.internal_url);
+            if (!url.port) url.port = '9997';
 
             const headers = this.headers(video.token);
             headers.append('Content-Type', 'application/json');
@@ -737,8 +751,8 @@ export default class VideoServiceControl {
             if (!res.ok) throw new Err(500, null, await res.text())
         } catch (err) {
             if (err instanceof Err && err.status === 404) {
-                const url = new URL(`/path`, video.url);
-                url.port = '9997';
+                const url = new URL(`/path`, video.internal_url);
+                if (!url.port) url.port = '9997';
 
                 const headers = this.headers(video.token);
                 headers.append('Content-Type', 'application/json');
@@ -771,8 +785,8 @@ export default class VideoServiceControl {
 
         const headers = this.headers(video.token);
 
-        const url = new URL(`/path/${pathid}`, video.url);
-        url.port = '9997';
+        const url = new URL(`/path/${pathid}`, video.internal_url);
+        if (!url.port) url.port = '9997';
 
         const res = await fetch(url, {
             method: 'GET',
@@ -792,8 +806,8 @@ export default class VideoServiceControl {
 
         const headers = this.headers(video.token);
 
-        const url = new URL(`/v3/recordings/get/${path}`, video.url);
-        url.port = '9997';
+        const url = new URL(`/v3/recordings/get/${path}`, video.internal_url);
+        if (!url.port) url.port = '9997';
 
         const res = await fetch(url, {
             method: 'GET',
@@ -837,8 +851,8 @@ export default class VideoServiceControl {
 
         await this.config.models.VideoLease.delete(leaseid);
 
-        const url = new URL(`/path/${lease.path}`, video.url);
-        url.port = '9997';
+        const url = new URL(`/path/${lease.path}`, video.internal_url);
+        if (!url.port) url.port = '9997';
 
         await fetch(url, {
             method: 'DELETE',
