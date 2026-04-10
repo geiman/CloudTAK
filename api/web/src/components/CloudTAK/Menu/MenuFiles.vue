@@ -270,6 +270,7 @@ const mapStore = useMapStore();
 type GroundOverlayManifest = {
     overlays: Array<{
         name: string;
+        mime?: string;
         ext: string;
         opacity?: number;
         coordinates: [[number, number], [number, number], [number, number], [number, number]];
@@ -331,8 +332,8 @@ async function createOverlay(asset: ProfileFile) {
         if (asset.artifacts.some((artifact) => artifact.ext === '.groundoverlays.json')) {
             const manifest = await std(`/api/profile/asset/${encodeURIComponent(asset.id)}/groundoverlays`) as GroundOverlayManifest;
 
-            for (const overlay of manifest.overlays) {
-                const url = stdurl(`/api/profile/asset/${encodeURIComponent(asset.id)}${overlay.ext}`);
+            for (const [index, overlay] of manifest.overlays.entries()) {
+                const url = stdurl(`/api/profile/asset/${encodeURIComponent(asset.id)}/groundoverlay/${index}`);
 
                 mapStore.addOverlay(await Overlay.create({
                     url: String(url),

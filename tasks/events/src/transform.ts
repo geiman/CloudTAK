@@ -80,6 +80,7 @@ export default class DataTransform {
                     const ext = `.groundoverlay-${index}${overlay.ext}`;
                     return {
                         name: overlay.name,
+                        mime: overlay.mime,
                         ext,
                         opacity: overlay.opacity,
                         coordinates: overlay.coordinates

@@ -10,6 +10,7 @@ export type ConvertResponse = {
         name: string;
         path: string;
         ext: string;
+        mime?: string;
         coordinates: [[number, number], [number, number], [number, number], [number, number]];
         opacity?: number;
     }>;

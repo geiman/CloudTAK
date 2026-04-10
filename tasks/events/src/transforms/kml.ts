@@ -18,6 +18,7 @@ type GroundOverlayArtifact = {
     name: string;
     path: string;
     ext: string;
+    mime?: string;
     coordinates: [[number, number], [number, number], [number, number], [number, number]];
     opacity?: number;
 };
@@ -140,7 +141,7 @@ export default class KML implements Transform {
         localDir: string | null,
         baseUrl: string | null,
         prefix: string
-    ): Promise<{ path: string; ext: string } | undefined> {
+    ): Promise<{ path: string; ext: string; mime?: string } | undefined> {
         if (href.startsWith('data:')) {
             const match = /^data:([^;,]+)?(?:;base64)?,(.*)$/i.exec(href);
             if (!match) return undefined;
@@ -157,7 +158,7 @@ export default class KML implements Transform {
                 : Buffer.from(decodeURIComponent(body), 'utf8');
 
             await fs.writeFile(filepath, buffer);
-            return { path: filepath, ext };
+            return { path: filepath, ext, mime: mime || undefined };
         }
 
         if (!href.startsWith('http://') && !href.startsWith('https://')) {
@@ -205,7 +206,7 @@ export default class KML implements Transform {
         const filepath = path.join(this.local.tmpdir, `${prefix}${ext}`);
         await fs.writeFile(filepath, Buffer.from(await res.arrayBuffer()));
 
-        return { path: filepath, ext };
+        return { path: filepath, ext, mime: contentType || undefined };
     }
 
     async extractGroundOverlays(
@@ -242,6 +243,7 @@ export default class KML implements Transform {
                 name: this.nodeText(overlay, 'name') || path.parse(href).name || `Ground Overlay ${index + 1}`,
                 path: materialized.path,
                 ext: materialized.ext,
+                mime: materialized.mime,
                 coordinates,
                 opacity: this.parseOverlayOpacity(this.nodeText(overlay, 'color'))
             });
