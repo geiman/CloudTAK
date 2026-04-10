@@ -25,6 +25,11 @@ const OverlayCoordinates = Type.Array(Type.Tuple([Type.Number(), Type.Number()])
     maxItems: 4
 });
 
+const OverlayCoordinatesField = Type.Union([
+    Type.Null(),
+    OverlayCoordinates
+]);
+
 export default async function router(schema: Schema, config: Config) {
     await schema.get('/profile/overlay', {
         name: 'Get Overlays',
@@ -211,7 +216,7 @@ export default async function router(schema: Schema, config: Config) {
             visible: Type.Optional(Type.Boolean()),
             url: Type.Optional(Type.String()),
             mode_id: Type.Optional(Type.String()),
-            coordinates: Type.Optional(OverlayCoordinates),
+            coordinates: Type.Optional(OverlayCoordinatesField),
             styles: Type.Optional(Type.Array(Type.Unknown())),
         }),
         res: AugmentedProfileOverlayResponse
@@ -279,7 +284,7 @@ export default async function router(schema: Schema, config: Config) {
             visible: Type.Optional(Type.Boolean()),
             mode: Type.String(),
             mode_id: Type.Optional(Type.String()),
-            coordinates: Type.Optional(OverlayCoordinates),
+            coordinates: Type.Optional(OverlayCoordinatesField),
             styles: Type.Optional(Type.Array(Type.Unknown())),
             token: Type.Optional(Type.String()),
             url: Type.String(),
