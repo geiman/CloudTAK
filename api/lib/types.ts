@@ -273,6 +273,10 @@ export const ProfileOverlayResponse = createSelectSchema(schemas.ProfileOverlay,
     iconset: Type.Union([Type.Null(), Type.String()]),
     opacity: Type.Number(),
     visible: Type.Boolean(),
+    coordinates: Type.Union([
+        Type.Null(),
+        Type.Array(Type.Tuple([Type.Number(), Type.Number()]))
+    ]),
     styles: Type.Array(Type.Unknown())
 });
 

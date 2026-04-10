@@ -57,6 +57,67 @@ export default class DataTransform {
         const conversion = await convert.convert();
 
         const artifacts: Array<{ ext: string }> = this.asset.artifacts.map((a: { ext: string }) => ({ ext: a.ext }));
+        const persistArtifacts = async (): Promise<void> => {
+            const res = await fetch(new URL(`/api/profile/asset/${this.asset.id}`, this.msg.api), {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${jwt.sign({ access: 'user', email: this.msg.job.username }, this.msg.secret)}`,
+                },
+                body: JSON.stringify({ artifacts })
+            });
+
+            if (!res.ok) {
+                throw new Error(`Failed to update asset: ${await res.text()}`);
+            } else {
+                this.asset = await res.json() as Asset;
+            }
+        };
+
+        if (conversion.groundOverlays && conversion.groundOverlays.length) {
+            const manifest = {
+                overlays: conversion.groundOverlays.map((overlay: NonNullable<typeof conversion.groundOverlays>[number], index: number) => {
+                    const ext = `.groundoverlay.${index}${overlay.ext}`;
+                    return {
+                        name: overlay.name,
+                        ext,
+                        opacity: overlay.opacity,
+                        coordinates: overlay.coordinates
+                    };
+                })
+            };
+
+            for (const [index, overlay] of conversion.groundOverlays.entries()) {
+                const ext = `.groundoverlay.${index}${overlay.ext}`;
+                const uploader = new Upload({
+                    client: s3,
+                    params: {
+                        Bucket: this.msg.bucket,
+                        Key: `profile/${this.msg.job.username}/${this.asset.id}${ext}`,
+                        Body: fs.createReadStream(overlay.path)
+                    }
+                });
+
+                await uploader.done();
+                artifacts.push({ ext });
+            }
+
+            const manifestPath = path.resolve(this.local.tmpdir, `${this.asset.id}.groundoverlays.json`);
+            fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+
+            const manifestUpload = new Upload({
+                client: s3,
+                params: {
+                    Bucket: this.msg.bucket,
+                    Key: `profile/${this.msg.job.username}/${this.asset.id}.groundoverlays.json`,
+                    Body: fs.createReadStream(manifestPath)
+                }
+            });
+
+            await manifestUpload.done();
+            artifacts.push({ ext: '.groundoverlays.json' });
+            await persistArtifacts();
+        }
 
         if (conversion.icons && conversion.icons.size > 0) {
             console.error('ok - Creating Iconset');
@@ -156,7 +217,7 @@ export default class DataTransform {
 
             // Iterate over features and prefix with Iconset UID
             // Do it as a stream to ensure memory efficiency
-            if (path.parse(conversion.asset).ext === '.geojsonld') {
+            if (conversion.asset && path.parse(conversion.asset).ext === '.geojsonld') {
                 const tmpAsset = path.resolve(this.local.tmpdir, randomUUID() + '.geojsonld');
                 const readStream = fs.createReadStream(conversion.asset);
                 const writeStream = fs.createWriteStream(tmpAsset);
@@ -189,6 +250,10 @@ export default class DataTransform {
             }
         }
 
+        if (!conversion.asset) {
+            return;
+        }
+
         if (path.parse(conversion.asset).ext === '.geojsonld') {
             const geouploader = new Upload({
                 client: s3,
@@ -201,20 +266,7 @@ export default class DataTransform {
             await geouploader.done();
 
             artifacts.push({ ext: '.geojsonld' });
-            const res = await fetch(new URL(`/api/profile/asset/${this.asset.id}`, this.msg.api), {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${jwt.sign({ access: 'user', email: this.msg.job.username }, this.msg.secret)}`,
-                },
-                body: JSON.stringify({ artifacts })
-            });
-
-            if (!res.ok) {
-                throw new Error(`Failed to update asset: ${await res.text()}`);
-            } else {
-                this.asset = await res.json() as Asset;
-            }
+            await persistArtifacts();
 
             const tp = new Tippecanoe();
 
@@ -259,19 +311,6 @@ export default class DataTransform {
         await pmuploader.done();
 
         artifacts.push({ ext: '.pmtiles' });
-        const res = await fetch(new URL(`/api/profile/asset/${this.asset.id}`, this.msg.api), {
-            method: 'PATCH',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${jwt.sign({ access: 'user', email: this.msg.job.username }, this.msg.secret)}`,
-            },
-            body: JSON.stringify({ artifacts })
-        });
-
-        if (!res.ok) {
-            throw new Error(`Failed to update asset: ${await res.text()}`);
-        } else {
-            this.asset = await res.json() as Asset;
-        }
+        await persistArtifacts();
     }
 }

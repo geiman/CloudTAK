@@ -5,6 +5,11 @@ import fs from 'node:fs';
 import GeoJSON from '../src/transforms/geojson.js';
 import type { Message, LocalMessage } from '../src/types.js';
 
+function convertedAssetPath(result: Awaited<ReturnType<GeoJSON['convert']>>): string {
+    assert.ok(result.asset, 'expected a converted GeoJSON asset');
+    return result.asset;
+}
+
 test('GeoJSON Transform', async (t) => {
     const tmpdir = await fs.promises.mkdtemp('/tmp/geojson-test-');
     
@@ -31,7 +36,7 @@ test('GeoJSON Transform', async (t) => {
 
         const result = await transform.convert();
         
-        const content = await fs.promises.readFile(result.asset, 'utf8');
+        const content = await fs.promises.readFile(convertedAssetPath(result), 'utf8');
         const lines = content.trim().split('\n');
         assert.strictEqual(lines.length, 2);
         assert.deepStrictEqual(JSON.parse(lines[0]), featureCollection.features[0]);
@@ -55,7 +60,7 @@ test('GeoJSON Transform', async (t) => {
 
         const result = await transform.convert();
         
-        const content = await fs.promises.readFile(result.asset, 'utf8');
+        const content = await fs.promises.readFile(convertedAssetPath(result), 'utf8');
         const lines = content.trim().split('\n');
         assert.strictEqual(lines.length, 1);
         assert.deepStrictEqual(JSON.parse(lines[0]), feature);
@@ -79,7 +84,7 @@ test('GeoJSON Transform', async (t) => {
 
         const result = await transform.convert();
         
-        const content = await fs.promises.readFile(result.asset, 'utf8');
+        const content = await fs.promises.readFile(convertedAssetPath(result), 'utf8');
         const lines = content.trim().split('\n');
         assert.strictEqual(lines.length, 2);
         assert.deepStrictEqual(JSON.parse(lines[0]), feature1);

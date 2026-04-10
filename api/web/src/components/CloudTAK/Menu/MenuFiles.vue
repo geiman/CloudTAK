@@ -70,7 +70,7 @@
                             >
                                 <div class='col-auto'>
                                     <IconMapPlus
-                                        v-if='asset.artifacts.map(a => a.ext).includes(".pmtiles")'
+                                        v-if='assetCanCreateOverlay(asset)'
                                         :size='32'
                                         stroke='1'
                                     />
@@ -97,7 +97,7 @@
                         </template>
                         <template #expanded>
                             <div
-                                v-if='asset.artifacts.map(a => a.ext).includes(".pmtiles")'
+                                v-if='assetCanCreateOverlay(asset)'
                                 :class='[
                                     "rounded col-12 d-flex align-items-center px-2 py-2 user-select-none",
                                     assetOverlayExists(asset) ? "opacity-50 pe-none" : "cursor-pointer cloudtak-hover"
@@ -267,18 +267,29 @@ import Overlay from '../../../base/overlay.ts';
 import Upload from '../../util/Upload.vue';
 
 const mapStore = useMapStore();
+type GroundOverlayManifest = {
+    overlays: Array<{
+        name: string;
+        ext: string;
+        opacity?: number;
+        coordinates: [[number, number], [number, number], [number, number], [number, number]];
+    }>
+};
 
-const overlayUrls = computed<Set<string>>(() => {
+const overlayModeIds = computed<Set<string>>(() => {
     return new Set(
         mapStore.overlays
-            .filter((overlay) => overlay.mode === 'profile' && overlay.url)
-            .map((overlay) => overlay.url as string)
+            .filter((overlay) => overlay.mode === 'profile' && overlay.mode_id)
+            .map((overlay) => String(overlay.mode_id))
     );
 });
 
 function assetOverlayExists(asset: ProfileFile): boolean {
-    const url = `/api/profile/asset/${encodeURIComponent(asset.id)}.pmtiles/tile`;
-    return overlayUrls.value.has(url);
+    return overlayModeIds.value.has(asset.id);
+}
+
+function assetCanCreateOverlay(asset: ProfileFile): boolean {
+    return asset.artifacts.some((artifact) => ['.pmtiles', '.groundoverlays.json'].includes(artifact.ext));
 }
 
 const router = useRouter();
@@ -314,44 +325,66 @@ watch(paging.value, async () => {
 });
 
 async function createOverlay(asset: ProfileFile) {
-    if (!asset.artifacts.map(a => a.ext).includes(".pmtiles")) throw new Error('Cannot add an Overlay for an asset that is not Cloud Optimized');
-
-    const url = stdurl(`/api/profile/asset/${encodeURIComponent(asset.id)}.pmtiles/tile`);
-
     loading.value = true;
 
-    // TODO type PMTiles endpoints
-    const res = await std(url) as {
-        tiles: [ string ];
-    };
+    try {
+        if (asset.artifacts.some((artifact) => artifact.ext === '.groundoverlays.json')) {
+            const manifest = await std(`/api/profile/asset/${encodeURIComponent(asset.id)}/groundoverlays`) as GroundOverlayManifest;
 
-    if (new URL(res.tiles[0]).pathname.endsWith('.mvt')) {
-        mapStore.addOverlay(await Overlay.create({
-            url: String(url),
-            name: asset.name,
-            mode: 'profile',
-            mode_id: asset.name,
-            iconset: asset.iconset,
-            type: 'vector',
-        }, {
-            before: mapStore.getOverlayBeforeId()
-        }));
-    } else {
-        mapStore.addOverlay(await Overlay.create({
-            url: String(url),
-            name: asset.name,
-            mode: 'profile',
-            mode_id: asset.name,
-            iconset: asset.iconset,
-            type: 'raster',
-        }, {
-            before: mapStore.getOverlayBeforeId()
-        }));
+            for (const overlay of manifest.overlays) {
+                const url = stdurl(`/api/profile/asset/${encodeURIComponent(asset.id)}${overlay.ext}`);
+
+                mapStore.addOverlay(await Overlay.create({
+                    url: String(url),
+                    name: overlay.name || asset.name,
+                    mode: 'profile',
+                    mode_id: asset.id,
+                    type: 'image',
+                    opacity: overlay.opacity ?? 1,
+                    coordinates: overlay.coordinates
+                }, {
+                    before: mapStore.getOverlayBeforeId()
+                }));
+            }
+        }
+
+        if (asset.artifacts.some((artifact) => artifact.ext === '.pmtiles')) {
+            const url = stdurl(`/api/profile/asset/${encodeURIComponent(asset.id)}.pmtiles/tile`);
+
+            // TODO type PMTiles endpoints
+            const res = await std(url) as {
+                tiles: [ string ];
+            };
+
+            if (new URL(res.tiles[0]).pathname.endsWith('.mvt')) {
+                mapStore.addOverlay(await Overlay.create({
+                    url: String(url),
+                    name: asset.name,
+                    mode: 'profile',
+                    mode_id: asset.id,
+                    iconset: asset.iconset,
+                    type: 'vector',
+                }, {
+                    before: mapStore.getOverlayBeforeId()
+                }));
+            } else {
+                mapStore.addOverlay(await Overlay.create({
+                    url: String(url),
+                    name: asset.name,
+                    mode: 'profile',
+                    mode_id: asset.id,
+                    iconset: asset.iconset,
+                    type: 'raster',
+                }, {
+                    before: mapStore.getOverlayBeforeId()
+                }));
+            }
+        }
+
+        router.push('/menu/overlays');
+    } finally {
+        loading.value = false;
     }
-
-    loading.value = false;
-
-    router.push('/menu/overlays');
 }
 
 function uploadHeaders() {

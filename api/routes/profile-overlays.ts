@@ -20,6 +20,11 @@ const AugmentedProfileOverlayResponse = Type.Composite([
     })
 ])
 
+const OverlayCoordinates = Type.Array(Type.Tuple([Type.Number(), Type.Number()]), {
+    minItems: 4,
+    maxItems: 4
+});
+
 export default async function router(schema: Schema, config: Config) {
     await schema.get('/profile/overlay', {
         name: 'Get Overlays',
@@ -98,7 +103,11 @@ export default async function router(schema: Schema, config: Config) {
             // Check all overlays in parallel
             const results = await Promise.all(overlays.items.map(async (item) => {
                 if (item.mode === 'profile') {
-                    if (!(await S3.exists(`profile/${item.username}/${path.parse(item.url.replace(/\/tile$/, '')).name}.pmtiles`))) {
+                    if (item.type === 'image') {
+                        if (!item.mode_id || !(await S3.exists(`profile/${item.username}/${item.mode_id}.groundoverlays.json`))) {
+                            return { keep: false as const, item };
+                        }
+                    } else if (!(await S3.exists(`profile/${item.username}/${path.parse(item.url.replace(/\/tile$/, '')).name}.pmtiles`))) {
                         return { keep: false as const, item };
                     }
                 } else if (item.mode === 'data') {
@@ -202,6 +211,7 @@ export default async function router(schema: Schema, config: Config) {
             visible: Type.Optional(Type.Boolean()),
             url: Type.Optional(Type.String()),
             mode_id: Type.Optional(Type.String()),
+            coordinates: Type.Optional(OverlayCoordinates),
             styles: Type.Optional(Type.Array(Type.Unknown())),
         }),
         res: AugmentedProfileOverlayResponse
@@ -269,6 +279,7 @@ export default async function router(schema: Schema, config: Config) {
             visible: Type.Optional(Type.Boolean()),
             mode: Type.String(),
             mode_id: Type.Optional(Type.String()),
+            coordinates: Type.Optional(OverlayCoordinates),
             styles: Type.Optional(Type.Array(Type.Unknown())),
             token: Type.Optional(Type.String()),
             url: Type.String(),

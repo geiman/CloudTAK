@@ -530,6 +530,7 @@ export const ProfileOverlay = pgTable('profile_overlays', {
     visible: boolean().notNull().default(true),
     token: text(),
     styles: jsonb().$type<Array<unknown>>().notNull().default([]),
+    coordinates: jsonb().$type<Array<[number, number]>>(),
     mode: text().notNull(),
     mode_id: text(), // Used for Data not for Profile
     url: text().notNull()

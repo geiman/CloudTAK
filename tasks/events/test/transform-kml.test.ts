@@ -2,6 +2,7 @@ import test, { type TestContext } from 'node:test';
 import assert from 'node:assert';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import KML from '../src/transforms/kml.js';
 import type { Message, LocalMessage } from '../src/types.js';
 import { MockAgent, setGlobalDispatcher, getGlobalDispatcher } from 'undici';
@@ -60,6 +61,11 @@ async function makeTransform(t: TestContext, content: string): Promise<{ transfo
     return { transform, tmpdir };
 }
 
+function convertedAssetPath(result: Awaited<ReturnType<KML['convert']>>): string {
+    assert.ok(result.asset, 'expected a converted vector asset');
+    return result.asset;
+}
+
 test('KML Transform — NetworkLink', async (t) => {
     await t.test('linked features are fetched and merged; NetworkLink itself is excluded', async (st) => {
         const mockAgent = new MockAgent();
@@ -80,7 +86,7 @@ test('KML Transform — NetworkLink', async (t) => {
         const { transform } = await makeTransform(t, ROOT_KML);
         const result = await transform.convert();
 
-        const lines = (await fs.readFile(result.asset, 'utf8')).trim().split('\n').filter(Boolean);
+        const lines = (await fs.readFile(convertedAssetPath(result), 'utf8')).trim().split('\n').filter(Boolean);
         const features = lines.map((l) => JSON.parse(l));
 
         assert.strictEqual(features.length, 2, 'should have 2 features (1 local + 1 linked)');
@@ -175,7 +181,7 @@ test('KML Transform — NetworkLink', async (t) => {
         const { transform } = await makeTransform(t, rootKml);
         const result = await transform.convert();
 
-        const lines = (await fs.readFile(result.asset, 'utf8')).trim().split('\n').filter(Boolean);
+        const lines = (await fs.readFile(convertedAssetPath(result), 'utf8')).trim().split('\n').filter(Boolean);
         // Root (depth 0) + depth1 + depth2 + depth3 = 4 features; depth4 must not appear
         assert.strictEqual(lines.length, 4, 'should have 4 features (depths 0-3), depth 4 truncated');
     });
@@ -202,7 +208,7 @@ test('KML Transform — NetworkLink', async (t) => {
         const { transform } = await makeTransform(st, ssrfKml);
         // Should complete without throwing — SSRF URL is silently skipped
         const result = await transform.convert();
-        const lines = (await fs.readFile(result.asset, 'utf8')).trim().split('\n').filter(Boolean);
+        const lines = result.asset ? (await fs.readFile(result.asset, 'utf8')).trim().split('\n').filter(Boolean) : [];
         assert.strictEqual(lines.length, 0, 'no features — SSRF link must be blocked and skipped');
     });
 
@@ -227,7 +233,7 @@ test('KML Transform — NetworkLink', async (t) => {
 
         const { transform } = await makeTransform(st, ssrfKml);
         const result = await transform.convert();
-        const lines = (await fs.readFile(result.asset, 'utf8')).trim().split('\n').filter(Boolean);
+        const lines = result.asset ? (await fs.readFile(result.asset, 'utf8')).trim().split('\n').filter(Boolean) : [];
         assert.strictEqual(lines.length, 0, 'no features — private IP link must be blocked');
     });
 
@@ -252,7 +258,7 @@ test('KML Transform — NetworkLink', async (t) => {
 
         const { transform } = await makeTransform(st, ssrfKml);
         const result = await transform.convert();
-        const lines = (await fs.readFile(result.asset, 'utf8')).trim().split('\n').filter(Boolean);
+        const lines = result.asset ? (await fs.readFile(result.asset, 'utf8')).trim().split('\n').filter(Boolean) : [];
         assert.strictEqual(lines.length, 0, 'no features — file:// scheme must be blocked');
     });
 
@@ -307,7 +313,7 @@ test('KML Transform — NetworkLink', async (t) => {
         const { transform } = await makeTransform(t, relativeKml);
         const result = await transform.convert();
 
-        const lines = (await fs.readFile(result.asset, 'utf8')).trim().split('\n').filter(Boolean);
+        const lines = (await fs.readFile(convertedAssetPath(result), 'utf8')).trim().split('\n').filter(Boolean);
         const names = lines.map((l) => JSON.parse(l).properties?.name);
         assert.ok(names.includes('Linked Feature'), 'linked feature present');
         assert.ok(names.includes('Sibling Feature'), 'sibling feature resolved from relative href');
@@ -370,7 +376,7 @@ test('KML Transform — NetworkLink', async (t) => {
         const { transform } = await makeTransform(t, relativeKml);
         const result = await transform.convert();
 
-        const lines = (await fs.readFile(result.asset, 'utf8')).trim().split('\n').filter(Boolean);
+        const lines = (await fs.readFile(convertedAssetPath(result), 'utf8')).trim().split('\n').filter(Boolean);
         const names = lines.map((l) => JSON.parse(l).properties?.name);
         assert.ok(names.includes('Linked Feature'), 'same-origin linked feature is included');
         assert.ok(!names.includes('Cross-Origin Feature'), 'cross-origin feature must be blocked');
@@ -416,7 +422,7 @@ test('KML Transform — NetworkLink', async (t) => {
 
         const result = await transform.convert();
 
-        const lines = (await fs.readFile(result.asset, 'utf8')).trim().split('\n').filter(Boolean);
+        const lines = (await fs.readFile(convertedAssetPath(result), 'utf8')).trim().split('\n').filter(Boolean);
         const names = lines.map((l) => JSON.parse(l).properties?.name);
         assert.ok(names.includes('Root Feature'), 'root feature present');
         assert.ok(names.includes('Sub Feature'), 'local relative linked feature present');
@@ -444,7 +450,7 @@ test('KML Transform — NetworkLink', async (t) => {
         const { transform } = await makeTransform(st, traversalKml);
         const result = await transform.convert();
 
-        const lines = (await fs.readFile(result.asset, 'utf8')).trim().split('\n').filter(Boolean);
+        const lines = result.asset ? (await fs.readFile(result.asset, 'utf8')).trim().split('\n').filter(Boolean) : [];
         assert.strictEqual(lines.length, 0, 'no features — path traversal outside tmpdir must be blocked');
     });
 
@@ -480,7 +486,7 @@ test('KML Transform — NetworkLink', async (t) => {
         const { transform } = await makeTransform(t, rootKml);
         const result = await transform.convert();
 
-        const lines = (await fs.readFile(result.asset, 'utf8')).trim().split('\n').filter(Boolean);
+        const lines = (await fs.readFile(convertedAssetPath(result), 'utf8')).trim().split('\n').filter(Boolean);
         const features = lines.map((l) => JSON.parse(l));
 
         // The KMZ fixture has one Placemark with an embedded icon.png.
@@ -492,5 +498,56 @@ test('KML Transform — NetworkLink', async (t) => {
         assert.ok(result.icons && result.icons.size > 0, 'icon set from linked KMZ must not be empty');
         const iconNames = result.icons ? [...result.icons].map((i) => i.name) : [];
         assert.ok(iconNames.some((n) => n.endsWith('.png')), `icon.png from linked KMZ must be in result icons (got: ${iconNames.join(', ')})`);
+    });
+
+    await t.test('GroundOverlay-only KMZ returns extracted overlay imagery and no vector asset', async (st) => {
+        const tmpdir = await fs.mkdtemp('/tmp/kml-groundoverlay-');
+        st.after(() => fs.rm(tmpdir, { recursive: true, force: true }));
+
+        const image = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+        const kmlContent = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <GroundOverlay>
+    <name>overlay</name>
+    <Icon><href>overlay.png</href></Icon>
+    <LatLonBox>
+      <north>40.1</north>
+      <south>40.0</south>
+      <east>-75.0</east>
+      <west>-75.1</west>
+    </LatLonBox>
+  </GroundOverlay>
+</kml>`;
+
+        await fs.writeFile(path.join(tmpdir, 'doc.kml'), kmlContent);
+        await fs.writeFile(path.join(tmpdir, 'overlay.png'), image);
+        execFileSync('zip', ['-q', 'groundoverlay.kmz', 'doc.kml', 'overlay.png'], { cwd: tmpdir });
+
+        const transform = new KML(
+            {} as Message,
+            {
+                tmpdir,
+                name: 'groundoverlay.kmz',
+                ext: '.kmz',
+                id: 'groundoverlay',
+                raw: path.join(tmpdir, 'groundoverlay.kmz')
+            } as LocalMessage
+        );
+
+        const result = await transform.convert();
+
+        assert.equal(result.asset, undefined, 'pure GroundOverlay KMZ should not emit a vector asset');
+        assert.ok(result.groundOverlays, 'GroundOverlay metadata should be returned');
+        assert.equal(result.groundOverlays?.length, 1);
+        assert.equal(result.groundOverlays?.[0]?.name, 'overlay');
+        assert.equal(result.groundOverlays?.[0]?.ext, '.png');
+        assert.deepEqual(result.groundOverlays?.[0]?.coordinates, [
+            [-75.1, 40.1],
+            [-75.0, 40.1],
+            [-75.0, 40.0],
+            [-75.1, 40.0]
+        ]);
+
+        await fs.access(result.groundOverlays?.[0]?.path as string);
     });
 });

@@ -5,12 +5,27 @@ import Sharp from 'sharp';
 import { glob } from 'glob';
 import StreamZip from 'node-stream-zip';
 import { kml } from '@tmcw/togeojson';
-import { DOMParser } from '@xmldom/xmldom';
+import { DOMParser, type Document, type Element } from '@xmldom/xmldom';
 import { isSafeUrl } from '../safeurl.ts';
 import { fetch } from 'undici';
 
 const MAX_NETWORK_LINK_DEPTH = 3;
 const NETWORK_LINK_FETCH_TIMEOUT_MS = 10_000;
+
+type GeoJSONFeatures = ReturnType<typeof kml>['features'];
+
+type GroundOverlayArtifact = {
+    name: string;
+    path: string;
+    ext: string;
+    coordinates: [[number, number], [number, number], [number, number], [number, number]];
+    opacity?: number;
+};
+
+type KMLDocumentContents = {
+    features: GeoJSONFeatures;
+    groundOverlays: GroundOverlayArtifact[];
+};
 
 export default class KML implements Transform {
     static register() {
@@ -30,18 +45,224 @@ export default class KML implements Transform {
         this.local = local;
     }
 
-    async fetchFeatures(
+    nodeText(parent: Element, tagName: string): string | undefined {
+        const value = parent.getElementsByTagName(tagName)[0]?.textContent;
+        return value === undefined || value === null ? undefined : value.trim();
+    }
+
+    parseOverlayOpacity(color?: string): number | undefined {
+        if (!color) return undefined;
+
+        const normalized = color.trim();
+        if (!/^[0-9a-fA-F]{8}$/.test(normalized)) return undefined;
+
+        return parseInt(normalized.slice(0, 2), 16) / 255;
+    }
+
+    rotateCoordinate(
+        lon: number,
+        lat: number,
+        centerLon: number,
+        centerLat: number,
+        angleDegrees: number
+    ): [number, number] {
+        const angle = angleDegrees * (Math.PI / 180);
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        const dx = lon - centerLon;
+        const dy = lat - centerLat;
+
+        return [
+            centerLon + (dx * cos) - (dy * sin),
+            centerLat + (dx * sin) + (dy * cos)
+        ];
+    }
+
+    latLonBoxToCoordinates(overlay: Element): [[number, number], [number, number], [number, number], [number, number]] | undefined {
+        const box = overlay.getElementsByTagName('LatLonBox')[0];
+        if (!box) return undefined;
+
+        const north = Number(this.nodeText(box, 'north'));
+        const south = Number(this.nodeText(box, 'south'));
+        const east = Number(this.nodeText(box, 'east'));
+        const west = Number(this.nodeText(box, 'west'));
+
+        if ([north, south, east, west].some((value) => Number.isNaN(value))) return undefined;
+
+        const rotation = Number(this.nodeText(box, 'rotation') || '0');
+
+        const topLeft: [number, number] = [west, north];
+        const topRight: [number, number] = [east, north];
+        const bottomRight: [number, number] = [east, south];
+        const bottomLeft: [number, number] = [west, south];
+
+        if (!rotation) {
+            return [topLeft, topRight, bottomRight, bottomLeft];
+        }
+
+        const centerLon = (west + east) / 2;
+        const centerLat = (north + south) / 2;
+
+        return [
+            this.rotateCoordinate(...topLeft, centerLon, centerLat, -rotation),
+            this.rotateCoordinate(...topRight, centerLon, centerLat, -rotation),
+            this.rotateCoordinate(...bottomRight, centerLon, centerLat, -rotation),
+            this.rotateCoordinate(...bottomLeft, centerLon, centerLat, -rotation)
+        ];
+    }
+
+    latLonQuadToCoordinates(overlay: Element): [[number, number], [number, number], [number, number], [number, number]] | undefined {
+        const quads = overlay.getElementsByTagName('gx:LatLonQuad');
+        const quad = quads[0];
+        if (!quad) return undefined;
+        const coordinates = this.nodeText(quad, 'coordinates');
+
+        if (!coordinates) return undefined;
+
+        const parsed = coordinates
+            .trim()
+            .split(/\s+/)
+            .map((coord) => coord.split(',').map(Number))
+            .filter((coord) => coord.length >= 2 && !coord.slice(0, 2).some((value) => Number.isNaN(value)))
+            .map((coord) => [coord[0], coord[1]] as [number, number]);
+
+        if (parsed.length !== 4) return undefined;
+
+        const byLat = [...parsed].sort((a, b) => b[1] - a[1]);
+        const top = byLat.slice(0, 2).sort((a, b) => a[0] - b[0]);
+        const bottom = byLat.slice(2).sort((a, b) => b[0] - a[0]);
+
+        return [top[0], top[1], bottom[0], bottom[1]];
+    }
+
+    async materializeHref(
+        href: string,
+        localDir: string | null,
+        baseUrl: string | null,
+        prefix: string
+    ): Promise<{ path: string; ext: string } | undefined> {
+        if (href.startsWith('data:')) {
+            const match = /^data:([^;,]+)?(?:;base64)?,(.*)$/i.exec(href);
+            if (!match) return undefined;
+
+            const mime = (match[1] || '').toLowerCase();
+            const ext = mime.includes('jpeg') ? '.jpg'
+                : mime.includes('webp') ? '.webp'
+                : mime.includes('gif') ? '.gif'
+                : '.png';
+            const filepath = path.join(this.local.tmpdir, `${prefix}${ext}`);
+            const body = match[2] || '';
+            const buffer = href.includes(';base64,')
+                ? Buffer.from(body, 'base64')
+                : Buffer.from(decodeURIComponent(body), 'utf8');
+
+            await fs.writeFile(filepath, buffer);
+            return { path: filepath, ext };
+        }
+
+        if (!href.startsWith('http://') && !href.startsWith('https://')) {
+            if (!localDir) return undefined;
+
+            const resolved = path.resolve(localDir, href);
+            const tmpdirSafe = path.resolve(this.local.tmpdir);
+
+            if (resolved !== tmpdirSafe && !resolved.startsWith(tmpdirSafe + path.sep)) {
+                console.warn(`GroundOverlay ${href} would escape data directory, skipping`);
+                return undefined;
+            }
+
+            const ext = path.extname(resolved).toLowerCase() || '.png';
+            return { path: resolved, ext };
+        }
+
+        let resolvedHref = href;
+        if (baseUrl && !href.startsWith('http://') && !href.startsWith('https://')) {
+            resolvedHref = new URL(href, baseUrl).toString();
+        }
+
+        const { safe, url, reason } = await isSafeUrl(resolvedHref);
+        if (!safe || !url) {
+            console.warn(`GroundOverlay ${href} skipped — ${reason}`);
+            return undefined;
+        }
+
+        const res = await fetch(url, {
+            signal: AbortSignal.timeout(NETWORK_LINK_FETCH_TIMEOUT_MS)
+        });
+
+        if (!res.ok) {
+            throw new Error(`HTTP ${res.status} ${await res.text()}`);
+        }
+
+        const pathnameExt = path.extname(url.pathname).toLowerCase();
+        const contentType = res.headers.get('content-type')?.toLowerCase() || '';
+        const ext = pathnameExt
+            || (contentType.includes('jpeg') ? '.jpg'
+                : contentType.includes('webp') ? '.webp'
+                : contentType.includes('gif') ? '.gif'
+                : '.png');
+
+        const filepath = path.join(this.local.tmpdir, `${prefix}${ext}`);
+        await fs.writeFile(filepath, Buffer.from(await res.arrayBuffer()));
+
+        return { path: filepath, ext };
+    }
+
+    async extractGroundOverlays(
+        dom: Document,
+        baseUrl: string | null = null,
+        localDir: string | null = null
+    ): Promise<GroundOverlayArtifact[]> {
+        const overlays = Array.from(dom.getElementsByTagName('GroundOverlay')) as Element[];
+        const results: GroundOverlayArtifact[] = [];
+
+        for (const [index, overlay] of overlays.entries()) {
+            const href = this.nodeText(overlay, 'href');
+            if (!href) continue;
+
+            const coordinates = this.latLonQuadToCoordinates(overlay) || this.latLonBoxToCoordinates(overlay);
+            if (!coordinates) {
+                console.warn(`GroundOverlay ${href} is missing valid bounds, skipping`);
+                continue;
+            }
+
+            const materialized = await this.materializeHref(
+                href,
+                localDir,
+                baseUrl,
+                `groundoverlay-${Date.now()}-${index}`
+            );
+
+            if (!materialized) {
+                console.warn(`GroundOverlay ${href} could not be materialized, skipping`);
+                continue;
+            }
+
+            results.push({
+                name: this.nodeText(overlay, 'name') || path.parse(href).name || `Ground Overlay ${index + 1}`,
+                path: materialized.path,
+                ext: materialized.ext,
+                coordinates,
+                opacity: this.parseOverlayOpacity(this.nodeText(overlay, 'color'))
+            });
+        }
+
+        return results;
+    }
+
+    async fetchDocument(
         kmlContent: string,
         icons: Map<string, Buffer>,
         depth: number,
         baseUrl: string | null = null,
         localDir: string | null = null,
         visited: Set<string> = new Set()
-    ): Promise<ReturnType<typeof kml>['features']> {
+    ): Promise<KMLDocumentContents> {
         const dom = new DOMParser().parseFromString(kmlContent, 'text/xml');
         const allFeatures = kml(dom).features;
+        const groundOverlays = await this.extractGroundOverlays(dom, baseUrl, localDir);
 
-        const features: ReturnType<typeof kml>['features'] = [];
+        const features: GeoJSONFeatures = [];
 
         for (const feat of allFeatures) {
             if (!feat.properties) feat.properties = {};
@@ -84,10 +305,11 @@ export default class KML implements Transform {
 
                         try {
                             const localContent = await fs.readFile(resolved, 'utf8');
-                            const linkedFeatures = await this.fetchFeatures(
+                            const linked = await this.fetchDocument(
                                 localContent, icons, depth + 1, null, path.dirname(resolved), visited
                             );
-                            features.push(...linkedFeatures);
+                            features.push(...linked.features);
+                            groundOverlays.push(...linked.groundOverlays);
                         } catch (err) {
                             console.warn(`NetworkLink local file ${href} not readable (${err})`);
                         }
@@ -148,7 +370,7 @@ export default class KML implements Transform {
                         && buf[0] === 0x50 && buf[1] === 0x4B
                         && buf[2] === 0x03 && buf[3] === 0x04;
 
-                    let linkedFeatures: ReturnType<typeof kml>['features'];
+                    let linked: KMLDocumentContents;
 
                     if (isKmz) {
                         const tmpKmzPath = path.join(this.local.tmpdir, `nl-${Date.now()}.kmz`);
@@ -190,20 +412,25 @@ export default class KML implements Transform {
                             // Use the directory containing the extracted KML as localDir so
                             // relative paths (icon refs, nested NetworkLinks) resolve correctly.
                             const kmlDir = path.dirname(kmlFileResolved);
-                            linkedFeatures = await this.fetchFeatures(kmlContent, icons, depth + 1, normalized, kmlDir, visited);
+                            linked = await this.fetchDocument(kmlContent, icons, depth + 1, normalized, kmlDir, visited);
                         } finally {
                             await zip.close();
                             await fs.unlink(tmpKmzPath).catch(() => { /* ignore */ });
                         }
                     } else {
-                        linkedFeatures = await this.fetchFeatures(buf.toString('utf8'), icons, depth + 1, normalized, null, visited);
+                        linked = await this.fetchDocument(buf.toString('utf8'), icons, depth + 1, normalized, null, visited);
                     }
 
-                    features.push(...linkedFeatures);
+                    features.push(...linked.features);
+                    groundOverlays.push(...linked.groundOverlays);
                 } catch (err) {
                     console.warn(`NetworkLink ${normalized} not retrievable (${err})`);
                 }
 
+                continue;
+            }
+
+            if (feat.properties['@geometry-type'] === 'groundoverlay') {
                 continue;
             }
 
@@ -236,7 +463,10 @@ export default class KML implements Transform {
             features.push(feat);
         }
 
-        return features;
+        return {
+            features,
+            groundOverlays
+        };
     }
 
     async convert(): Promise<ConvertResponse> {
@@ -284,15 +514,18 @@ export default class KML implements Transform {
             asset = path.resolve(this.local.raw);
         }
 
-        const features = await this.fetchFeatures(String(await fs.readFile(asset)), icons, 0, null, path.dirname(asset));
+        const document = await this.fetchDocument(String(await fs.readFile(asset)), icons, 0, null, path.dirname(asset));
+        let output: string | undefined;
 
-        console.error('ok - converted to GeoJSON');
+        if (document.features.length) {
+            console.error('ok - converted to GeoJSON');
 
-        const output = path.resolve(this.local.tmpdir, this.local.id + '.geojsonld');
+            output = path.resolve(this.local.tmpdir, this.local.id + '.geojsonld');
 
-        await fs.writeFile(output, features.map((feat) => {
-            return JSON.stringify(feat);
-        }).join('\n'));
+            await fs.writeFile(output, document.features.map((feat: GeoJSONFeatures[number]) => {
+                return JSON.stringify(feat);
+            }).join('\n'));
+        }
 
         const iconMap = new Set<{
             name: string;
@@ -314,15 +547,10 @@ export default class KML implements Transform {
             }
         }
 
-        if (iconMap.size) {
-            return {
-                asset: output,
-                icons: iconMap
-            }
-        } else {
-            return {
-                asset: output
-            }
-        }
+        return {
+            asset: output,
+            icons: iconMap.size ? iconMap : undefined,
+            groundOverlays: document.groundOverlays.length ? document.groundOverlays : undefined
+        };
     }
 }

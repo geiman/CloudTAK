@@ -87,8 +87,8 @@
                                         stroke='1'
                                     />
                                     <IconMap
-                                        v-if='card.overlay.type === "raster"'
-                                        v-tooltip='"Raster"'
+                                        v-if='["raster", "image"].includes(card.overlay.type)'
+                                        v-tooltip='card.overlay.type === "image" ? "Image Overlay" : "Raster"'
                                         :size='20'
                                         stroke='1'
                                         class='flex-shrink-0 text-white-50'
@@ -207,7 +207,7 @@
                                     @click.stop
                                 >
                                     <div
-                                        v-if='card.overlay.type === "raster"'
+                                        v-if='["raster", "image"].includes(card.overlay.type)'
                                         class='mb-3'
                                     >
                                         <TablerRange
@@ -475,6 +475,8 @@ function getOverlayBadges(overlay: Overlay): OverlayBadge[] {
 
     if (overlay.type === 'raster') {
         addBadge({ label: 'Raster', tone: 'neutral' });
+    } else if (overlay.type === 'image') {
+        addBadge({ label: 'Image', tone: 'neutral' });
     } else if (overlay.type === 'vector') {
         addBadge({ label: 'Vector', tone: 'neutral' });
     } else if (overlay.type === 'geojson') {
