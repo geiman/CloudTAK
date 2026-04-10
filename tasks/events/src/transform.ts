@@ -77,7 +77,7 @@ export default class DataTransform {
         if (conversion.groundOverlays && conversion.groundOverlays.length) {
             const manifest = {
                 overlays: conversion.groundOverlays.map((overlay: NonNullable<typeof conversion.groundOverlays>[number], index: number) => {
-                    const ext = `.groundoverlay.${index}${overlay.ext}`;
+                    const ext = `.groundoverlay-${index}${overlay.ext}`;
                     return {
                         name: overlay.name,
                         ext,
@@ -88,7 +88,7 @@ export default class DataTransform {
             };
 
             for (const [index, overlay] of conversion.groundOverlays.entries()) {
-                const ext = `.groundoverlay.${index}${overlay.ext}`;
+                const ext = `.groundoverlay-${index}${overlay.ext}`;
                 const uploader = new Upload({
                     client: s3,
                     params: {
