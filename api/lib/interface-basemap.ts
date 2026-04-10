@@ -110,7 +110,22 @@ export class BasemapProtocol implements BasemapProtocolInterface {
     static isValidStyle(type: string, layers: Array<unknown>): void {
         const sources: Record<string, unknown> = {};
         for (const l of layers as Array<Record<string, string>>) {
-            if (!sources[l.source]) sources[l.source] = { type };
+            if (!sources[l.source]) {
+                if (type === 'image') {
+                    sources[l.source] = {
+                        type,
+                        url: 'https://example.com/overlay.png',
+                        coordinates: [
+                            [-1, 1],
+                            [1, 1],
+                            [1, -1],
+                            [-1, -1]
+                        ]
+                    };
+                } else {
+                    sources[l.source] = { type };
+                }
+            }
         }
 
         const errors = validateStyleMin({
