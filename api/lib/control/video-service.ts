@@ -264,7 +264,6 @@ export default class VideoServiceControl {
             connect: {
                 cert: auth.cert,
                 key: auth.key,
-                rejectUnauthorized: false,
             }
         });
     }
