@@ -23,6 +23,7 @@ const CONTENT_TYPES: Record<string, string> = {
 };
 
 const GROUNDOVERLAY_EXT = /^\.groundoverlay-\d+\.(png|jpg|jpeg|webp|gif|tif|tiff)$/i;
+const GROUNDOVERLAY_MANIFEST_MAX_BYTES = 5 * 1024 * 1024;
 
 const GroundOverlayManifest = Type.Object({
     overlays: Type.Array(Type.Object({
@@ -46,6 +47,31 @@ export default async function router(schema: Schema, config: Config) {
         if (iconsetRes.username !== email) {
             throw new Err(403, null, `You do not have permission to associate iconset '${iconset}'`);
         }
+    }
+
+    async function readGroundOverlayManifest(key: string): Promise<Static<typeof GroundOverlayManifest>> {
+        const head = await S3.head(key);
+        const contentLength = head.ContentLength || 0;
+        if (contentLength > GROUNDOVERLAY_MANIFEST_MAX_BYTES) {
+            throw new Err(413, null, 'Ground overlay manifest exceeds the 5 MiB limit');
+        }
+
+        const stream = await S3.get(key);
+        const chunks: Buffer[] = [];
+        let total = 0;
+
+        for await (const chunk of stream) {
+            const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+            total += buffer.length;
+
+            if (total > GROUNDOVERLAY_MANIFEST_MAX_BYTES) {
+                throw new Err(413, null, 'Ground overlay manifest exceeds the 5 MiB limit');
+            }
+
+            chunks.push(buffer);
+        }
+
+        return JSON.parse(Buffer.concat(chunks).toString('utf8')) as Static<typeof GroundOverlayManifest>;
     }
 
     await schema.get('/profile/asset', {
@@ -327,15 +353,8 @@ export default async function router(schema: Schema, config: Config) {
             const key = `profile/${user.email}/${req.params.asset}.groundoverlays.json`;
             if (!await S3.exists(key)) throw new Err(404, null, 'Ground overlay manifest does not exist');
 
-            const stream = await S3.get(key);
-            const chunks: Buffer[] = [];
-
-            for await (const chunk of stream) {
-                chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-            }
-
             res.type('application/json');
-            res.json(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+            res.json(await readGroundOverlayManifest(key));
         } catch (err) {
              Err.respond(err, res);
         }
@@ -368,15 +387,7 @@ export default async function router(schema: Schema, config: Config) {
 
             const key = `profile/${user.email}/${req.params.asset}.groundoverlays.json`;
             if (!await S3.exists(key)) throw new Err(404, null, 'Ground overlay manifest does not exist');
-
-            const stream = await S3.get(key);
-            const chunks: Buffer[] = [];
-
-            for await (const chunk of stream) {
-                chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-            }
-
-            const manifest = JSON.parse(Buffer.concat(chunks).toString('utf8')) as Static<typeof GroundOverlayManifest>;
+            const manifest = await readGroundOverlayManifest(key);
             const overlay = manifest.overlays[req.params.index];
             if (!overlay) throw new Err(404, null, 'Ground overlay image does not exist');
             if (!GROUNDOVERLAY_EXT.test(overlay.ext)) throw new Err(400, null, 'Invalid ground overlay artifact extension');
