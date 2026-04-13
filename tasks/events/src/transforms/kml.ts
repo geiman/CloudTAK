@@ -37,6 +37,8 @@ type GroundOverlayLimits = {
     maxOverlayCount: number;
 };
 
+type GroundOverlayFormat = 'png' | 'jpeg' | 'webp' | 'gif' | 'tiff';
+
 type GroundOverlayArtifact = {
     name: string;
     path: string;
@@ -146,6 +148,90 @@ export default class KML implements Transform {
         if (normalized === 'image/tiff' || normalized === 'application/tiff') return '.tiff';
 
         return '.png';
+    }
+
+    extensionForGroundOverlayFormat(format: GroundOverlayFormat): string {
+        switch (format) {
+        case 'jpeg':
+            return '.jpg';
+        case 'webp':
+            return '.webp';
+        case 'gif':
+            return '.gif';
+        case 'tiff':
+            return '.tiff';
+        case 'png':
+        default:
+            return '.png';
+        }
+    }
+
+    detectGroundOverlayFormat(buffer: Buffer): GroundOverlayFormat | null {
+        if (buffer.length >= 8
+            && buffer[0] === 0x89
+            && buffer[1] === 0x50
+            && buffer[2] === 0x4e
+            && buffer[3] === 0x47
+            && buffer[4] === 0x0d
+            && buffer[5] === 0x0a
+            && buffer[6] === 0x1a
+            && buffer[7] === 0x0a) {
+            return 'png';
+        }
+
+        if (buffer.length >= 3
+            && buffer[0] === 0xff
+            && buffer[1] === 0xd8
+            && buffer[2] === 0xff) {
+            return 'jpeg';
+        }
+
+        if (buffer.length >= 6) {
+            const signature = buffer.subarray(0, 6).toString('ascii');
+            if (signature === 'GIF87a' || signature === 'GIF89a') {
+                return 'gif';
+            }
+        }
+
+        if (buffer.length >= 12
+            && buffer.subarray(0, 4).toString('ascii') === 'RIFF'
+            && buffer.subarray(8, 12).toString('ascii') === 'WEBP') {
+            return 'webp';
+        }
+
+        if (buffer.length >= 4) {
+            const littleEndianTiff = buffer[0] === 0x49
+                && buffer[1] === 0x49
+                && buffer[2] === 0x2a
+                && buffer[3] === 0x00;
+            const bigEndianTiff = buffer[0] === 0x4d
+                && buffer[1] === 0x4d
+                && buffer[2] === 0x00
+                && buffer[3] === 0x2a;
+
+            if (littleEndianTiff || bigEndianTiff) {
+                return 'tiff';
+            }
+        }
+
+        return null;
+    }
+
+    async sniffGroundOverlayFile(filepath: string): Promise<GroundOverlayFormat> {
+        const handle = await fs.open(filepath, 'r');
+
+        try {
+            const header = Buffer.alloc(16);
+            const { bytesRead } = await handle.read(header, 0, header.length, 0);
+            const detected = this.detectGroundOverlayFormat(header.subarray(0, bytesRead));
+            if (!detected) {
+                throw new Error('GroundOverlay content does not match a supported raster image format');
+            }
+
+            return detected;
+        } finally {
+            await handle.close();
+        }
     }
 
     ensureGroundOverlayCount(): void {
@@ -331,8 +417,7 @@ export default class KML implements Transform {
             if (!match) return undefined;
 
             const mime = this.normalizeGroundOverlayMime((match[1] || '').toLowerCase());
-            const ext = this.normalizeGroundOverlayExt(this.preferredGroundOverlayExt(mime));
-            const filepath = path.join(this.local.tmpdir, `${prefix}${ext}`);
+            const filepath = path.join(this.local.tmpdir, `${prefix}.upload`);
             const body = match[2] || '';
             const buffer = href.includes(';base64,')
                 ? Buffer.from(body, 'base64')
@@ -340,7 +425,16 @@ export default class KML implements Transform {
 
             this.registerGroundOverlay(buffer.length);
             await fs.writeFile(filepath, buffer);
-            return { path: filepath, ext, mime: mime || undefined };
+            const detected = await this.sniffGroundOverlayFile(filepath);
+            const ext = this.normalizeGroundOverlayExt(this.extensionForGroundOverlayFormat(detected));
+            if (mime && ext !== this.normalizeGroundOverlayExt(this.preferredGroundOverlayExt(mime))) {
+                await fs.unlink(filepath).catch(() => { /* ignore */ });
+                throw new Error(`GroundOverlay content does not match declared MIME type ${mime}`);
+            }
+
+            const finalPath = path.join(this.local.tmpdir, `${prefix}${ext}`);
+            await fs.rename(filepath, finalPath);
+            return { path: finalPath, ext, mime: mime || undefined };
         }
 
         if (!href.startsWith('http://') && !href.startsWith('https://')) {
@@ -354,7 +448,12 @@ export default class KML implements Transform {
                 }
 
                 const stats = await fs.stat(resolved);
-                const ext = this.normalizeGroundOverlayExt(path.extname(resolved).toLowerCase() || '.png');
+                const declaredExt = this.normalizeGroundOverlayExt(path.extname(resolved).toLowerCase() || '.png');
+                const detected = await this.sniffGroundOverlayFile(resolved);
+                const ext = this.normalizeGroundOverlayExt(this.extensionForGroundOverlayFormat(detected));
+                if (declaredExt !== ext) {
+                    throw new Error(`GroundOverlay file extension ${declaredExt} does not match detected content ${ext}`);
+                }
                 this.registerGroundOverlay(stats.size);
                 return { path: resolved, ext };
             } else if (!baseUrl) {
@@ -385,17 +484,25 @@ export default class KML implements Transform {
         const filepath = path.join(this.local.tmpdir, `${prefix}${initialExt}`);
 
         const remote = await this.streamRemoteGroundOverlay(url, filepath);
-        const finalExt = pathnameExt ? initialExt : this.normalizeGroundOverlayExt(this.preferredGroundOverlayExt(remote.mime));
-        if (finalExt !== initialExt) {
-            const finalPath = path.join(this.local.tmpdir, `${prefix}${finalExt}`);
+        const detected = await this.sniffGroundOverlayFile(filepath);
+        const detectedExt = this.normalizeGroundOverlayExt(this.extensionForGroundOverlayFormat(detected));
+        if (remote.mime && detectedExt !== this.normalizeGroundOverlayExt(this.preferredGroundOverlayExt(remote.mime))) {
+            await fs.unlink(filepath).catch(() => { /* ignore */ });
+            throw new Error(`GroundOverlay content does not match declared MIME type ${remote.mime}`);
+        }
+        if (pathnameExt && initialExt !== detectedExt) {
+            await fs.unlink(filepath).catch(() => { /* ignore */ });
+            throw new Error(`GroundOverlay file extension ${initialExt} does not match detected content ${detectedExt}`);
+        }
+
+        const finalPath = path.join(this.local.tmpdir, `${prefix}${detectedExt}`);
+        if (finalPath !== filepath) {
             await fs.rename(filepath, finalPath);
-            this.registerGroundOverlay(remote.bytesRead);
-            return { path: finalPath, ext: finalExt, mime: remote.mime };
         }
 
         this.registerGroundOverlay(remote.bytesRead);
 
-        return { path: filepath, ext: initialExt, mime: remote.mime };
+        return { path: finalPath, ext: detectedExt, mime: remote.mime };
     }
 
     async extractGroundOverlays(
