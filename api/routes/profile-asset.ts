@@ -17,8 +17,12 @@ const CONTENT_TYPES: Record<string, string> = {
     jpg: 'image/jpeg',
     jpeg: 'image/jpeg',
     webp: 'image/webp',
-    gif: 'image/gif'
+    gif: 'image/gif',
+    tif: 'image/tiff',
+    tiff: 'image/tiff'
 };
+
+const GROUNDOVERLAY_EXT = /^\.groundoverlay-\d+\.(png|jpg|jpeg|webp|gif|tif|tiff)$/i;
 
 const GroundOverlayManifest = Type.Object({
     overlays: Type.Array(Type.Object({
@@ -375,6 +379,7 @@ export default async function router(schema: Schema, config: Config) {
             const manifest = JSON.parse(Buffer.concat(chunks).toString('utf8')) as Static<typeof GroundOverlayManifest>;
             const overlay = manifest.overlays[req.params.index];
             if (!overlay) throw new Err(404, null, 'Ground overlay image does not exist');
+            if (!GROUNDOVERLAY_EXT.test(overlay.ext)) throw new Err(400, null, 'Invalid ground overlay artifact extension');
 
             const ext = overlay.ext.replace(/^\./, '');
             const imageKey = `profile/${user.email}/${req.params.asset}${overlay.ext}`;

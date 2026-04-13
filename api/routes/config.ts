@@ -60,6 +60,9 @@ export const UserConfigKeys: (keyof Static<typeof FullConfig>)[] = [
     'map::bearing',
     'map::zoom',
     'map::basemap',
+    'map::groundoverlay::max_size_mb',
+    'map::groundoverlay::max_total_size_mb',
+    'map::groundoverlay::max_count',
     'group::Yellow',
     'group::Cyan',
     'group::Green',
@@ -326,7 +329,12 @@ export default async function router(schema: Schema, config: Config) {
             zoom: Type.Number({ default: 4 }),
             pitch: Type.Integer({ default: 0 }),
             bearing: Type.Integer({ default: 0 }),
-            basemap: Type.Union([Type.Null(), Type.Integer()])
+            basemap: Type.Union([Type.Null(), Type.Integer()]),
+            groundoverlay: Type.Object({
+                max_size_mb: Type.Integer({ default: FullConfigDefaults['map::groundoverlay::max_size_mb'] || 500 }),
+                max_total_size_mb: Type.Integer({ default: FullConfigDefaults['map::groundoverlay::max_total_size_mb'] || 1024 }),
+                max_count: Type.Integer({ default: FullConfigDefaults['map::groundoverlay::max_count'] || 10 })
+            })
         })
     }, async (req, res) => {
         try {
@@ -337,7 +345,10 @@ export default async function router(schema: Schema, config: Config) {
                 'map::pitch',
                 'map::bearing',
                 'map::zoom',
-                'map::basemap'
+                'map::basemap',
+                'map::groundoverlay::max_size_mb',
+                'map::groundoverlay::max_total_size_mb',
+                'map::groundoverlay::max_count'
             ];
 
             const final: Record<string, any> = {};
@@ -358,7 +369,12 @@ export default async function router(schema: Schema, config: Config) {
                 zoom: final.zoom || 4,
                 pitch: final.pitch || 0,
                 bearing: final.bearing || 0,
-                basemap: final.basemap ? Number(final.basemap) : null
+                basemap: final.basemap ? Number(final.basemap) : null,
+                groundoverlay: {
+                    max_size_mb: final['groundoverlay::max_size_mb'] ? Number(final['groundoverlay::max_size_mb']) : (FullConfigDefaults['map::groundoverlay::max_size_mb'] || 500),
+                    max_total_size_mb: final['groundoverlay::max_total_size_mb'] ? Number(final['groundoverlay::max_total_size_mb']) : (FullConfigDefaults['map::groundoverlay::max_total_size_mb'] || 1024),
+                    max_count: final['groundoverlay::max_count'] ? Number(final['groundoverlay::max_count']) : (FullConfigDefaults['map::groundoverlay::max_count'] || 10)
+                }
             });
         } catch (err) {
             Err.respond(err, res);

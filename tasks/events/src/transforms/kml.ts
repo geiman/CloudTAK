@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { createWriteStream } from 'node:fs';
 import type { Message, LocalMessage, Transform, ConvertResponse } from '../types.ts';
 import path from 'node:path';
 import Sharp from 'sharp';
@@ -8,11 +9,33 @@ import { kml } from '@tmcw/togeojson';
 import { DOMParser, type Document, type Element } from '@xmldom/xmldom';
 import { isSafeUrl } from '../safeurl.ts';
 import { fetch } from 'undici';
+import jwt from 'jsonwebtoken';
+import { Readable, Transform as NodeTransform } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 
 const MAX_NETWORK_LINK_DEPTH = 3;
 const NETWORK_LINK_FETCH_TIMEOUT_MS = 10_000;
+const MEBIBYTE = 1024 * 1024;
+const DEFAULT_GROUNDOVERLAY_MAX_SIZE_MB = 500;
+const DEFAULT_GROUNDOVERLAY_MAX_TOTAL_SIZE_MB = 1024;
+const DEFAULT_GROUNDOVERLAY_MAX_COUNT = 10;
+const SUPPORTED_GROUNDOVERLAY_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.tif', '.tiff']);
+const SUPPORTED_GROUNDOVERLAY_MIME_TYPES = new Set([
+    'image/png',
+    'image/jpeg',
+    'image/webp',
+    'image/gif',
+    'image/tiff',
+    'application/tiff'
+]);
 
 type GeoJSONFeatures = ReturnType<typeof kml>['features'];
+
+type GroundOverlayLimits = {
+    maxOverlayBytes: number;
+    maxTotalOverlayBytes: number;
+    maxOverlayCount: number;
+};
 
 type GroundOverlayArtifact = {
     name: string;
@@ -37,6 +60,13 @@ export default class KML implements Transform {
 
     msg: Message;
     local: LocalMessage;
+    groundOverlayLimits: GroundOverlayLimits = {
+        maxOverlayBytes: DEFAULT_GROUNDOVERLAY_MAX_SIZE_MB * MEBIBYTE,
+        maxTotalOverlayBytes: DEFAULT_GROUNDOVERLAY_MAX_TOTAL_SIZE_MB * MEBIBYTE,
+        maxOverlayCount: DEFAULT_GROUNDOVERLAY_MAX_COUNT,
+    };
+    groundOverlayBytes = 0;
+    groundOverlayCount = 0;
 
     constructor(
         msg: Message,
@@ -44,6 +74,158 @@ export default class KML implements Transform {
     ) {
         this.msg = msg;
         this.local = local;
+    }
+
+    async loadGroundOverlayLimits(): Promise<void> {
+        const keys = [
+            'map::groundoverlay::max_size_mb',
+            'map::groundoverlay::max_total_size_mb',
+            'map::groundoverlay::max_count'
+        ].join(',');
+
+        try {
+            const url = new URL('/api/config', this.msg.api);
+            url.searchParams.set('keys', keys);
+
+            const res = await fetch(url, {
+                headers: {
+                    'Authorization': `Bearer ${jwt.sign({ access: 'user', email: this.msg.job.username }, this.msg.secret)}`,
+                }
+            });
+
+            if (!res.ok) {
+                throw new Error(await res.text());
+            }
+
+            const body = await res.json() as Record<string, unknown>;
+            const maxSizeMb = Number(body['map::groundoverlay::max_size_mb']);
+            const maxTotalSizeMb = Number(body['map::groundoverlay::max_total_size_mb']);
+            const maxCount = Number(body['map::groundoverlay::max_count']);
+
+            this.groundOverlayLimits = {
+                maxOverlayBytes: (Number.isFinite(maxSizeMb) && maxSizeMb >= 1 ? maxSizeMb : DEFAULT_GROUNDOVERLAY_MAX_SIZE_MB) * MEBIBYTE,
+                maxTotalOverlayBytes: (Number.isFinite(maxTotalSizeMb) && maxTotalSizeMb >= 1 ? maxTotalSizeMb : DEFAULT_GROUNDOVERLAY_MAX_TOTAL_SIZE_MB) * MEBIBYTE,
+                maxOverlayCount: Number.isInteger(maxCount) && maxCount >= 1 ? maxCount : DEFAULT_GROUNDOVERLAY_MAX_COUNT,
+            };
+        } catch (err) {
+            console.warn(`Failed to load GroundOverlay limits, using defaults (${err})`);
+        }
+    }
+
+    normalizeGroundOverlayExt(ext: string): string {
+        const normalized = ext.toLowerCase();
+        if (!SUPPORTED_GROUNDOVERLAY_EXTENSIONS.has(normalized)) {
+            throw new Error(`GroundOverlay file type ${ext || '(none)'} is not supported`);
+        }
+
+        return normalized;
+    }
+
+    normalizeGroundOverlayMime(mime?: string): string | undefined {
+        if (!mime) return undefined;
+
+        const normalized = mime.split(';')[0].trim().toLowerCase();
+        if (!normalized) return undefined;
+        if (normalized === 'application/octet-stream') return undefined;
+        if (!SUPPORTED_GROUNDOVERLAY_MIME_TYPES.has(normalized)) {
+            throw new Error(`GroundOverlay content type ${normalized} is not supported`);
+        }
+
+        return normalized;
+    }
+
+    preferredGroundOverlayExt(mime?: string): string {
+        const normalized = this.normalizeGroundOverlayMime(mime);
+        if (!normalized) {
+            throw new Error('GroundOverlay content type is missing or unsupported');
+        }
+
+        if (normalized === 'image/jpeg') return '.jpg';
+        if (normalized === 'image/webp') return '.webp';
+        if (normalized === 'image/gif') return '.gif';
+        if (normalized === 'image/tiff' || normalized === 'application/tiff') return '.tiff';
+
+        return '.png';
+    }
+
+    ensureGroundOverlayCount(): void {
+        if (this.groundOverlayCount >= this.groundOverlayLimits.maxOverlayCount) {
+            throw new Error(`GroundOverlay import exceeds the configured max count of ${this.groundOverlayLimits.maxOverlayCount}`);
+        }
+    }
+
+    ensureGroundOverlayFits(bytes: number): void {
+        if (bytes > this.groundOverlayLimits.maxOverlayBytes) {
+            throw new Error(`GroundOverlay exceeds the configured per-overlay limit of ${Math.floor(this.groundOverlayLimits.maxOverlayBytes / MEBIBYTE)} MiB`);
+        }
+
+        if (this.groundOverlayBytes + bytes > this.groundOverlayLimits.maxTotalOverlayBytes) {
+            throw new Error(`GroundOverlay import exceeds the configured total budget of ${Math.floor(this.groundOverlayLimits.maxTotalOverlayBytes / MEBIBYTE)} MiB`);
+        }
+    }
+
+    registerGroundOverlay(bytes: number): void {
+        this.ensureGroundOverlayCount();
+        this.ensureGroundOverlayFits(bytes);
+        this.groundOverlayBytes += bytes;
+        this.groundOverlayCount += 1;
+    }
+
+    async streamRemoteGroundOverlay(url: URL, filepath: string, contentLength?: number): Promise<{
+        bytesRead: number;
+        mime?: string;
+    }> {
+        if (contentLength !== undefined) {
+            this.ensureGroundOverlayFits(contentLength);
+        }
+
+        const res = await fetch(url, {
+            signal: AbortSignal.timeout(NETWORK_LINK_FETCH_TIMEOUT_MS)
+        });
+
+        if (!res.ok) {
+            throw new Error(`HTTP ${res.status} ${await res.text()}`);
+        }
+
+        if (!res.body) {
+            throw new Error('GroundOverlay response did not include a body');
+        }
+
+        const mime = this.normalizeGroundOverlayMime(res.headers.get('content-type')?.toLowerCase());
+        const headerLength = Number(res.headers.get('content-length'));
+        if (Number.isFinite(headerLength) && headerLength > 0) {
+            this.ensureGroundOverlayFits(headerLength);
+        }
+
+        let bytesRead = 0;
+        const counter = new NodeTransform({
+            transform: (chunk, _encoding, callback) => {
+                bytesRead += chunk.length;
+
+                try {
+                    this.ensureGroundOverlayFits(bytesRead);
+                    callback(null, chunk);
+                } catch (err) {
+                    callback(err instanceof Error ? err : new Error(String(err)));
+                }
+            }
+        });
+
+        try {
+            await pipeline(
+                Readable.fromWeb(res.body as any),
+                counter,
+                createWriteStream(filepath)
+            );
+        } catch (err) {
+            await fs.unlink(filepath).catch(() => { /* ignore partial file cleanup */ });
+            throw err;
+        }
+
+        return {
+            bytesRead,
+            mime
+        };
     }
 
     nodeText(parent: Element, tagName: string): string | undefined {
@@ -142,43 +324,54 @@ export default class KML implements Transform {
         baseUrl: string | null,
         prefix: string
     ): Promise<{ path: string; ext: string; mime?: string } | undefined> {
+        this.ensureGroundOverlayCount();
+
         if (href.startsWith('data:')) {
             const match = /^data:([^;,]+)?(?:;base64)?,(.*)$/i.exec(href);
             if (!match) return undefined;
 
-            const mime = (match[1] || '').toLowerCase();
-            const ext = mime.includes('jpeg') ? '.jpg'
-                : mime.includes('webp') ? '.webp'
-                : mime.includes('gif') ? '.gif'
-                : '.png';
+            const mime = this.normalizeGroundOverlayMime((match[1] || '').toLowerCase());
+            const ext = this.normalizeGroundOverlayExt(this.preferredGroundOverlayExt(mime));
             const filepath = path.join(this.local.tmpdir, `${prefix}${ext}`);
             const body = match[2] || '';
             const buffer = href.includes(';base64,')
                 ? Buffer.from(body, 'base64')
                 : Buffer.from(decodeURIComponent(body), 'utf8');
 
+            this.registerGroundOverlay(buffer.length);
             await fs.writeFile(filepath, buffer);
             return { path: filepath, ext, mime: mime || undefined };
         }
 
         if (!href.startsWith('http://') && !href.startsWith('https://')) {
-            if (!localDir) return undefined;
+            if (localDir) {
+                const resolved = path.resolve(localDir, href);
+                const tmpdirSafe = path.resolve(this.local.tmpdir);
 
-            const resolved = path.resolve(localDir, href);
-            const tmpdirSafe = path.resolve(this.local.tmpdir);
+                if (resolved !== tmpdirSafe && !resolved.startsWith(tmpdirSafe + path.sep)) {
+                    console.warn(`GroundOverlay ${href} would escape data directory, skipping`);
+                    return undefined;
+                }
 
-            if (resolved !== tmpdirSafe && !resolved.startsWith(tmpdirSafe + path.sep)) {
-                console.warn(`GroundOverlay ${href} would escape data directory, skipping`);
+                const stats = await fs.stat(resolved);
+                const ext = this.normalizeGroundOverlayExt(path.extname(resolved).toLowerCase() || '.png');
+                this.registerGroundOverlay(stats.size);
+                return { path: resolved, ext };
+            } else if (!baseUrl) {
                 return undefined;
             }
-
-            const ext = path.extname(resolved).toLowerCase() || '.png';
-            return { path: resolved, ext };
         }
 
         let resolvedHref = href;
-        if (baseUrl && !href.startsWith('http://') && !href.startsWith('https://')) {
-            resolvedHref = new URL(href, baseUrl).toString();
+        if (!href.startsWith('http://') && !href.startsWith('https://') && baseUrl) {
+            const resolved = new URL(href, baseUrl);
+            const base = new URL(baseUrl);
+            if (resolved.origin !== base.origin) {
+                console.warn(`GroundOverlay ${href} resolved to a different origin (${resolved.origin}), skipping`);
+                return undefined;
+            }
+
+            resolvedHref = resolved.toString();
         }
 
         const { safe, url, reason } = await isSafeUrl(resolvedHref);
@@ -187,26 +380,22 @@ export default class KML implements Transform {
             return undefined;
         }
 
-        const res = await fetch(url, {
-            signal: AbortSignal.timeout(NETWORK_LINK_FETCH_TIMEOUT_MS)
-        });
+        const pathnameExt = path.extname(url.pathname).toLowerCase();
+        const initialExt = pathnameExt ? this.normalizeGroundOverlayExt(pathnameExt) : '.download';
+        const filepath = path.join(this.local.tmpdir, `${prefix}${initialExt}`);
 
-        if (!res.ok) {
-            throw new Error(`HTTP ${res.status} ${await res.text()}`);
+        const remote = await this.streamRemoteGroundOverlay(url, filepath);
+        const finalExt = pathnameExt ? initialExt : this.normalizeGroundOverlayExt(this.preferredGroundOverlayExt(remote.mime));
+        if (finalExt !== initialExt) {
+            const finalPath = path.join(this.local.tmpdir, `${prefix}${finalExt}`);
+            await fs.rename(filepath, finalPath);
+            this.registerGroundOverlay(remote.bytesRead);
+            return { path: finalPath, ext: finalExt, mime: remote.mime };
         }
 
-        const pathnameExt = path.extname(url.pathname).toLowerCase();
-        const contentType = res.headers.get('content-type')?.toLowerCase() || '';
-        const ext = pathnameExt
-            || (contentType.includes('jpeg') ? '.jpg'
-                : contentType.includes('webp') ? '.webp'
-                : contentType.includes('gif') ? '.gif'
-                : '.png');
+        this.registerGroundOverlay(remote.bytesRead);
 
-        const filepath = path.join(this.local.tmpdir, `${prefix}${ext}`);
-        await fs.writeFile(filepath, Buffer.from(await res.arrayBuffer()));
-
-        return { path: filepath, ext, mime: contentType || undefined };
+        return { path: filepath, ext: initialExt, mime: remote.mime };
     }
 
     async extractGroundOverlays(
@@ -473,6 +662,7 @@ export default class KML implements Transform {
 
     async convert(): Promise<ConvertResponse> {
         const icons = new Map<string, Buffer>();
+        await this.loadGroundOverlayLimits();
 
         let asset;
 

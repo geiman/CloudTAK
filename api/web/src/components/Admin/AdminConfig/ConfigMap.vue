@@ -78,6 +78,33 @@
                             :disabled='!edit'
                         />
                     </div>
+                    <div class='col-lg-12 mt-3'>
+                        <TablerInput
+                            v-model='config[`map::groundoverlay::max_size_mb`]'
+                            label='GroundOverlay Max Size (MiB)'
+                            description='Maximum size allowed for a single imported GroundOverlay image.'
+                            :error='validatePositiveInteger(config[`map::groundoverlay::max_size_mb`])'
+                            :disabled='!edit'
+                        />
+                    </div>
+                    <div class='col-lg-12'>
+                        <TablerInput
+                            v-model='config[`map::groundoverlay::max_total_size_mb`]'
+                            label='GroundOverlay Total Budget (MiB)'
+                            description='Maximum combined GroundOverlay download budget for one imported asset.'
+                            :error='validatePositiveInteger(config[`map::groundoverlay::max_total_size_mb`])'
+                            :disabled='!edit'
+                        />
+                    </div>
+                    <div class='col-lg-12'>
+                        <TablerInput
+                            v-model='config[`map::groundoverlay::max_count`]'
+                            label='GroundOverlay Max Count'
+                            description='Maximum number of GroundOverlay images allowed per imported asset.'
+                            :error='validatePositiveInteger(config[`map::groundoverlay::max_count`])'
+                            :disabled='!edit'
+                        />
+                    </div>
                 </div>
             </template>
         </div>
@@ -113,12 +140,18 @@ const config = ref<{
     'map::bearing': number;
     'map::pitch': number;
     'map::basemap': number | null;
+    'map::groundoverlay::max_size_mb': number;
+    'map::groundoverlay::max_total_size_mb': number;
+    'map::groundoverlay::max_count': number;
 }>({
     'map::center': '40,-100', // Default Lat,Lng
     'map::zoom': 4,
     'map::bearing': 0,
     'map::pitch': 0,
-    'map::basemap': null
+    'map::basemap': null,
+    'map::groundoverlay::max_size_mb': 500,
+    'map::groundoverlay::max_total_size_mb': 1024,
+    'map::groundoverlay::max_count': 10
 });
 
 onMounted(() => {
@@ -128,6 +161,14 @@ onMounted(() => {
 watch(isOpen, (newState) => {
     if (newState && !edit.value) fetch();
 });
+
+function validatePositiveInteger(value: number): string {
+    if (!Number.isInteger(Number(value)) || Number(value) < 1) {
+        return 'Value must be a positive integer';
+    }
+
+    return '';
+}
 
 async function fetch() {
     loading.value = true;
@@ -141,16 +182,20 @@ async function fetch() {
             }
         });
         if (res.error) throw new Error(res.error.message);
+        const data = res.data as Record<string, number | string | null | undefined>;
 
         config.value = {
             // DB is Lng,Lat. UI is Lat,Lng
-            'map::center': typeof res.data['map::center'] === 'string'
-                ? String(res.data['map::center']).split(',').reverse().join(',')
+            'map::center': typeof data['map::center'] === 'string'
+                ? String(data['map::center']).split(',').reverse().join(',')
                 : config.value['map::center'],
-            'map::zoom': res.data['map::zoom'] ?? config.value['map::zoom'],
-            'map::bearing': res.data['map::bearing'] ?? config.value['map::bearing'],
-            'map::pitch': res.data['map::pitch'] ?? config.value['map::pitch'],
-            'map::basemap': res.data['map::basemap'] ?? config.value['map::basemap'],
+            'map::zoom': Number(data['map::zoom'] ?? config.value['map::zoom']),
+            'map::bearing': Number(data['map::bearing'] ?? config.value['map::bearing']),
+            'map::pitch': Number(data['map::pitch'] ?? config.value['map::pitch']),
+            'map::basemap': data['map::basemap'] === null || data['map::basemap'] === undefined ? config.value['map::basemap'] : Number(data['map::basemap']),
+            'map::groundoverlay::max_size_mb': Number(data['map::groundoverlay::max_size_mb'] ?? config.value['map::groundoverlay::max_size_mb']),
+            'map::groundoverlay::max_total_size_mb': Number(data['map::groundoverlay::max_total_size_mb'] ?? config.value['map::groundoverlay::max_total_size_mb']),
+            'map::groundoverlay::max_count': Number(data['map::groundoverlay::max_count'] ?? config.value['map::groundoverlay::max_count']),
         };
     } catch (error) {
         err.value = error instanceof Error ? error : new Error(String(error));
@@ -165,9 +210,12 @@ async function save() {
         const payload = { ...config.value };
         // Save as Lng,Lat
         payload['map::center'] = payload['map::center'].split(',').reverse().join(',');
+        payload['map::groundoverlay::max_size_mb'] = Number(payload['map::groundoverlay::max_size_mb']);
+        payload['map::groundoverlay::max_total_size_mb'] = Number(payload['map::groundoverlay::max_total_size_mb']);
+        payload['map::groundoverlay::max_count'] = Number(payload['map::groundoverlay::max_count']);
 
         const res = await server.PUT('/api/config', {
-            body: payload
+            body: payload as any
         });
         if (res.error) throw new Error(res.error.message);
         edit.value = false;
