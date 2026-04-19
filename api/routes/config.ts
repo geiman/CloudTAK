@@ -51,6 +51,7 @@ export const PublicConfigKeys: (keyof Static<typeof FullConfig>)[] = [
     'oidc::name',
     'oidc::discovery',
     'oidc::logo',
+    'passkey::enabled',
 ];
 
 // Allow Authenticated but Non-Admin Access to these Config Keys
@@ -78,6 +79,12 @@ export const UserConfigKeys: (keyof Static<typeof FullConfig>)[] = [
     'group::Dark Green',
     'group::Brown',
     'external::applications',]
+
+const GeofenceConfigKeys = new Set<keyof Static<typeof FullConfig>>([
+    'geofence::enabled',
+    'geofence::url',
+    'geofence::password'
+]);
 
 function serializeConfigValue<K extends keyof Static<typeof FullConfig>>(
     key: K,
@@ -134,8 +141,11 @@ export default async function router(schema: Schema, config: Config) {
         try {
             await Auth.as_user(config, req, { admin: true });
 
+            const updatedKeys = Object.keys(req.body) as (keyof Static<typeof FullConfig>)[];
+            const refreshGeofence = updatedKeys.some((key) => GeofenceConfigKeys.has(key));
+
             const final: Partial<Static<typeof FullConfig>> = {};
-            (await Promise.allSettled((Object.keys(req.body) as (keyof Static<typeof FullConfig>)[]).map(async (key) => {
+            (await Promise.allSettled(updatedKeys.map(async (key) => {
                 if (req.body[key] === null) {
                     await config.models.Setting.delete(key);
                     return { key, value: null };
@@ -156,6 +166,10 @@ export default async function router(schema: Schema, config: Config) {
                 if (k.status === 'rejected') return;
                 return final[k.value.key as keyof Static<typeof FullConfig>] = k.value.value as any;
             });
+
+            if (refreshGeofence) {
+                await config.geofence.refresh();
+            }
 
             res.json(final);
         } catch (err) {
@@ -270,6 +284,7 @@ export default async function router(schema: Schema, config: Config) {
     });
 
     await schema.get('/config/group', {
+        deprecated: true,
         name: 'List Groups',
         group: 'Config',
         description: 'Return Group Config',

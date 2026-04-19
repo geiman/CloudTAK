@@ -79,6 +79,7 @@ export default async function server(config: Config): Promise<ServerManager> {
         await Bulldozer.fireItUp(config);
     }
 
+    await config.geofence.init();
     await config.conns.init();
 
     if (!config.noevents) await config.events.init(config.pg);
@@ -240,7 +241,7 @@ export default async function server(config: Config): Promise<ServerManager> {
                     client = config.conns.get(parsedParams.connection) as ConnectionClient;
                 }
 
-                const connClient = new ConnectionWebSocket(ws, parsedParams.format, client);
+                const connClient = new ConnectionWebSocket(ws, parsedParams.format, client, auth.session);
 
                 let webClients = config.wsClients.get(parsedParams.connection)
                 if (!webClients) webClients = [];
@@ -305,6 +306,7 @@ export default async function server(config: Config): Promise<ServerManager> {
         });
 
         srv.on('close', async () => {
+            await config.geofence.close();
             await config.conns.close();
         });
     });

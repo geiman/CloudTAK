@@ -15,8 +15,70 @@
 - `v12.85.0` Moved the Layer Incoming `groups` property to the Style Object for increased flexibility in desination management
   This array has been retained but in the next major release it will be removed
 - `v12.115.0` Added the ability to set Basemap Protocol with the default being zxy. This will be a required field in v13
+- `v12.126.0` Migrate to the base `/api/config` -> `/api/config/group` will be retired in the next major version
 
 ### Pending Release
+
+### v12.127.3 - 2026-04-19
+
+- :rocket: Fix version mismatch
+
+### v12.127.2 - 2026-04-19
+
+- :rocket: Increase supported filesize to 5gb.
+- :rocket: Fix MaxZoom support in MBTiles output
+
+### v12.127.1 - 2026-04-19
+
+- :rocket: Predetermine input resolution before creating MBTiles to prevent over-resolution errors
+- :rocket: Increase protection from path traversal attacks in the events server
+
+### v12.127.0 - 2026-04-18
+
+- :tada: Add GPS coordinate source toggle to bottom bar coordinate display
+- :rocket: Migrate badges across menus to TablerBadge component
+- :rocket: Improve icon thumbnail styling consistency across Icon views
+- :bug: Improve large file upload reliability with extended proxy timeouts and error handling
+
+### v12.126.0 - 2026-04-17
+
+- :bug: Fix flashing icon that occurred if an archived feature had a custom icon
+- :rocket: Fix badges in overlay menu that were not readable in light mode
+- :rocket: Reduce size of resize handle for Main Menu and style dynamically based on light/dark mode
+- :rocket: Add Check Icon to finish drawing for better UX with new users
+
+### v12.125.0 - 2026-04-15
+
+- :tada: Sketch out initial Geofence Connection Manager
+- :bug: fix white on white text in new light mode
+
+### v12.124.1 - 2026-04-15
+
+- :bug: Update Color in initial Modal to match color scheme
+
+### v12.124.0 - 2026-04-14
+
+- :arrow_up: Update core deps to reduce dependency use
+- :rocket: Add additional Events permissions in CloudFormation
+- :rocket: Add Stack Deployment status to Admin Layer panel
+- :bug: Fix CoTView Overflow in UI
+
+### v12.123.0 - 2026-04-13
+
+- :tada: Allow signing in with Passkeys
+- :rocket: Support session Management
+- :tada: Allow setting a chat message retention schedule - Closes https://github.com/dfpc-coe/CloudTAK/issues/978
+- :tada: Allow setting an import retention scedule
+- :tada: Add initial support for session management
+
+### v12.122.0 - 2026-04-10
+
+- :rocket: Update to consistently use the new TablerPillButton to ensure unique ID usage
+- :rocket: Continue to migrate components to pure typescript
+
+### v12.121.0 - 2026-04-09
+
+- :tada: Introduce unified Layer Update Management Tool
 
 ### v12.120.0 - 2026-04-08
 

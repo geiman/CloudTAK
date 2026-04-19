@@ -19,7 +19,7 @@
         <template #default>
             <div
                 v-if='upload'
-                class='py-2 px-4'
+                class='py-2'
             >
                 <Upload
                     :url='stdurl(`/api/import`)'
@@ -30,7 +30,7 @@
                 />
             </div>
 
-            <div class='col-12 px-2 py-2'>
+            <div class='col-12 py-2'>
                 <TablerInput
                     v-model='paging.filter'
                     icon='search'
@@ -53,7 +53,7 @@
                 <div
                     v-for='imported in list.items'
                     :key='imported.id'
-                    class='col-12 px-2 py-1'
+                    class='col-12 py-1'
                 >
                     <StandardItem
                         class='d-flex align-items-center py-2 px-3'
@@ -101,7 +101,7 @@
                 </div>
             </template>
 
-            <div class='px-2 py-2 d-flex'>
+            <div class='py-2 d-flex'>
                 <div class='ms-auto'>
                     <TablerPager
                         v-if='list.total > paging.limit'
@@ -120,7 +120,7 @@
 import { ref, watch, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import type { ImportList } from '../../../../src/types.ts';
-import { std, stdurl } from '../../../../src/std.ts';
+import { server, stdurl } from '../../../../src/std.ts';
 import {
     TablerNone,
     TablerInput,
@@ -183,13 +183,19 @@ async function fetchList() {
     error.value = undefined;
 
     try {
-        const url = stdurl('/api/import');
-        url.searchParams.set('order', 'desc');
-        url.searchParams.set('page', String(paging.value.page));
-        url.searchParams.set('limit', String(paging.value.limit));
-        url.searchParams.set('filter', paging.value.filter);
-        url.searchParams.set('sort', 'created');
-        list.value = await std(url) as ImportList;
+        const res = await server.GET('/api/import', {
+            params: {
+                query: {
+                    order: 'desc',
+                    page: paging.value.page,
+                    limit: paging.value.limit,
+                    filter: paging.value.filter,
+                    sort: 'created',
+                }
+            }
+        });
+        if (res.error) throw new Error(res.error.message);
+        list.value = res.data;
     } catch (err) {
         error.value = err instanceof Error ? err : new Error(String(err))
     }

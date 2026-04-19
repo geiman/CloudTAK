@@ -7,7 +7,7 @@
             aria-label='Close'
             @click='emit("close")'
         />
-        <div class='modal-header text-white'>
+        <div class='modal-header text-body'>
             <div class='d-flex align-items-center'>
                 <IconFileImport
                     :size='28'
@@ -16,7 +16,7 @@
                 <span class='mx-2'>Import GeoJSON to Editable Features</span>
             </div>
         </div>
-        <div class='modal-body text-white'>
+        <div class='modal-body text-body'>
             <TablerLoading v-if='loading' />
             <div
                 v-else-if='!feats.length'
@@ -173,9 +173,21 @@ async function uploadGeoJSON() {
             for (const feat of fc.features) {
                 try {
                     const norm = await normalize_geojson(feat);
+                    const creator = norm.properties.creator;
+                    const normalizedFeature: InputFeature = {
+                        ...norm,
+                        path: `/${name}/`,
+                        properties: {
+                            ...norm.properties,
+                            creator: creator ? {
+                                ...creator,
+                                callsign: creator.callsign ?? ''
+                            } : undefined
+                        }
+                    };
 
                     // TODO Remove once we support the metadata property throughout
-                    feats.value.push({ ...norm, path: `/${name}/` })
+                    feats.value.push(normalizedFeature)
                 } catch (err) {
                     console.error('Error normalizing GeoJSON feature:', feat, err);
                 }

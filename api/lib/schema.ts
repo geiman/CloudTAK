@@ -186,6 +186,7 @@ export const ProfileFeature = pgTable('profile_features', {
     path: text().notNull().default('/'),
     deleted: boolean().notNull().default(false),
     username: text().notNull().references(() => Profile.username),
+    enabled_geofence: boolean().notNull().default(false),
     properties: jsonb().notNull().default({}),
     geometry: geometry({ type: GeometryType.GeometryZ, srid: 4326 }).notNull()
 }, (table) => {
@@ -372,6 +373,7 @@ export const ConnectionFeature = pgTable('connection_features', {
     id: text().notNull(),
     path: text().notNull().default('/'),
     layer: integer().references(() => Layer.id),
+    enabled_geofence: boolean().notNull().default(false),
     connection: integer().notNull().references(() => Connection.id),
     properties: jsonb().notNull().default({}),
     geometry: geometry({ type: GeometryType.GeometryZ, srid: 4326 }).notNull()
@@ -513,6 +515,35 @@ export const ProfileInterest = pgTable('profile_interests', {
     bounds: geometry({ type: GeometryType.Polygon, srid: 4326 }).$type<Polygon>().notNull(),
     created: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
     updated: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
+});
+
+export const ProfileSession = pgTable('profile_sessions', {
+    id: serial().primaryKey(),
+    username: text().notNull().references(() => Profile.username),
+    created: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
+    ip: text().notNull(),
+    device_type: text().notNull().default('Unknown'),
+    browser: text().notNull().default('Unknown'),
+    os: text().notNull().default('Unknown'),
+    user_agent: text().notNull().default(''),
+});
+
+export const ProfilePasskey = pgTable('profile_passkeys', {
+    id: serial().primaryKey(),
+    username: text().notNull().references(() => Profile.username),
+    credential_id: text().notNull().unique(),
+    public_key: text().notNull(),
+    counter: integer().notNull().default(0),
+    transports: jsonb().$type<string[]>().default([]),
+    name: text().notNull().default(''),
+    created: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
+    last_used: timestamp({ withTimezone: true, mode: 'string' }),
+});
+
+export const ProfilePasskeyChallenge = pgTable('profile_passkey_challenges', {
+    key: text().primaryKey(),
+    challenge: text().notNull(),
+    expires: timestamp({ withTimezone: true, mode: 'string' }).notNull(),
 });
 
 export const ProfileOverlay = pgTable('profile_overlays', {

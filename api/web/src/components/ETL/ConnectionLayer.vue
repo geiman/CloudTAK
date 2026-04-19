@@ -34,10 +34,15 @@
                                     v-text='layer.name'
                                 />
 
-                                <span
+                                <TablerBadge
                                     v-if='layer.protected'
-                                    class='badge bg-red text-white ms-2'
-                                >Protected</span>
+                                    class='ms-2'
+                                    background-color='rgba(239, 68, 68, 0.2)'
+                                    border-color='rgba(239, 68, 68, 0.5)'
+                                    text-color='#dc2626'
+                                >
+                                    Protected
+                                </TablerBadge>
 
                                 <div class='ms-auto'>
                                     <div class='btn-list'>
@@ -179,69 +184,54 @@
                                                 <span class='mx-3'>Alarms</span>
 
                                                 <div class='ms-auto'>
-                                                    <span
+                                                    <TablerBadge
                                                         v-if='layer.priority === "high"'
-                                                        class='badge border-danger bg-danger text-white'
                                                         style='height: 20px'
-                                                        v-text='`High Urgency`'
-                                                    />
-                                                    <span
+                                                        background-color='rgba(239, 68, 68, 0.2)'
+                                                        border-color='rgba(239, 68, 68, 0.5)'
+                                                        text-color='#dc2626'
+                                                    >High Urgency</TablerBadge>
+                                                    <TablerBadge
                                                         v-else-if='layer.priority === "low"'
-                                                        class='badge border-warning bg-warning text-white'
                                                         style='height: 20px'
-                                                        v-text='`Low Urgency`'
-                                                    />
-                                                    <span
+                                                        background-color='rgba(245, 158, 11, 0.2)'
+                                                        border-color='rgba(245, 158, 11, 0.5)'
+                                                        text-color='#d97706'
+                                                    >Low Urgency</TablerBadge>
+                                                    <TablerBadge
                                                         v-else
-                                                        class='badge border-secondary bg-secondary text-white'
                                                         style='height: 20px'
-                                                        v-text='`Disabled`'
-                                                    />
+                                                        background-color='rgba(107, 114, 128, 0.2)'
+                                                        border-color='rgba(107, 114, 128, 0.5)'
+                                                        text-color='#6b7280'
+                                                    >Disabled</TablerBadge>
                                                 </div>
                                             </span>
 
-                                            <div
-                                                class='px-2 py-2 round btn-group w-100'
-                                                role='group'
+                                            <TablerPillGroup
+                                                v-model='mode'
+                                                :options='[
+                                                    { value: "incoming", label: "Incoming" },
+                                                    { value: "outgoing", label: "Outgoing" }
+                                                ]'
+                                                name='layer-direction'
                                             >
-                                                <input
-                                                    id='layer-incoming'
-                                                    type='radio'
-                                                    class='btn-check'
-                                                    autocomplete='off'
-                                                    :checked='mode === "incoming"'
-                                                    @keyup.enter='mode = "incoming"'
-                                                    @click='mode = "incoming"'
-                                                >
-                                                <label
-                                                    for='layer-incoming'
-                                                    type='button'
-                                                    class='btn btn-sm'
-                                                ><IconWorldDownload
-                                                    v-tooltip='"Incoming"'
-                                                    :size='32'
-                                                    stroke='1'
-                                                />Incoming</label>
-
-                                                <input
-                                                    id='layer-outgoing'
-                                                    type='radio'
-                                                    class='btn-check'
-                                                    autocomplete='off'
-                                                    :checked='mode === "outgoing"'
-                                                    @keyup.enter='mode = "outgoing"'
-                                                    @click='mode = "outgoing"'
-                                                >
-                                                <label
-                                                    for='layer-outgoing'
-                                                    type='button'
-                                                    class='btn btn-sm'
-                                                ><IconWorldUpload
-                                                    v-tooltip='"Outgoing"'
-                                                    :size='32'
-                                                    stroke='1'
-                                                />Outgoing</label>
-                                            </div>
+                                                <template #option='{ option }'>
+                                                    <IconWorldDownload
+                                                        v-if='option.value === "incoming"'
+                                                        v-tooltip='"Incoming"'
+                                                        :size='32'
+                                                        stroke='1'
+                                                    />
+                                                    <IconWorldUpload
+                                                        v-if='option.value === "outgoing"'
+                                                        v-tooltip='"Outgoing"'
+                                                        :size='32'
+                                                        stroke='1'
+                                                    />
+                                                    {{ option.label }}
+                                                </template>
+                                            </TablerPillGroup>
 
                                             <template v-if='mode === "incoming"'>
                                                 <TablerLoading
@@ -408,12 +398,14 @@ import LayerStatus from './Layer/utils/StatusDot.vue';
 import InitialAuthor from '../util/InitialAuthor.vue';
 import timeDiff from '../../timediff.ts';
 import {
+    TablerBadge,
     TablerNone,
     TablerDelete,
     TablerBreadCrumb,
     TablerIconButton,
     TablerMarkdown,
-    TablerLoading
+    TablerLoading,
+    TablerPillGroup
 } from '@tak-ps/vue-tabler'
 import {
     IconX,

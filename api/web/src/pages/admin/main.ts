@@ -1,10 +1,6 @@
 import { createApp } from 'vue'
-import { version } from '../../../package.json'
 import * as VueRouter from 'vue-router'
 import { createPinia } from 'pinia'
-import { initServiceWorker } from '../../base/service-worker.ts';
-
-initServiceWorker(version, 'admin.html');
 
 import 'floating-vue/dist/style.css'
 import FloatingVue from 'floating-vue'
@@ -28,6 +24,10 @@ const router = VueRouter.createRouter({
                 path: 'layer',
                 name: 'admin-layers',
                 component: () => import('../../components/Admin/AdminLayers.vue')
+            },{
+                path: 'layer/updates',
+                name: 'admin-layer-updates',
+                component: () => import('../../components/Admin/AdminLayerUpdates.vue')
             },{
                 path: 'layer/new',
                 name: 'admin-layer-new',
@@ -161,6 +161,10 @@ const router = VueRouter.createRouter({
                 path: 'config',
                 name: 'admin-config',
                 component: () => import('../../components/Admin/AdminConfig.vue')
+            },{
+                path: 'geofence',
+                name: 'admin-geofence',
+                component: () => import('../../components/Admin/AdminGeofence.vue')
             },{
                 path: 'export',
                 name: 'admin-export',
