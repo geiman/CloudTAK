@@ -623,6 +623,8 @@ export interface paths {
                 query?: {
                     /** @description No Description */
                     token?: string;
+                    /** @description Set Content-Disposition to download the file */
+                    download?: boolean;
                 };
                 header?: never;
                 path: {
@@ -2118,6 +2120,14 @@ export interface paths {
                             "retention::enabled"?: boolean;
                             /** @description Enable retention processing for connection features */
                             "retention::connection-feature::enabled"?: boolean;
+                            /** @description Enable retention processing for chat messages */
+                            "retention::chat::enabled"?: boolean;
+                            /** @description Number of days to retain chat messages */
+                            "retention::chat::days"?: number;
+                            /** @description Enable retention processing for imports */
+                            "retention::import::enabled"?: boolean;
+                            /** @description Number of days to retain imports */
+                            "retention::import::days"?: number;
                             /** @description Enable ArcGIS Online Integration */
                             "agol::enabled"?: boolean;
                             /**
@@ -2153,6 +2163,7 @@ export interface paths {
                             "display::speed"?: "m/s" | "km/h" | "mi/h";
                             "display::projection"?: "mercator" | "globe";
                             "display::zoom"?: "always" | "conditional" | "never";
+                            "display::style"?: "System Default" | "Light" | "Dark";
                             "display::coordinate"?: "dd" | "dm" | "dms" | "mgrs" | "utm";
                             "display::text"?: "Small" | "Medium" | "Large";
                             "display::icon_rotation"?: boolean;
@@ -2188,6 +2199,8 @@ export interface paths {
                             "oidc::scopes"?: string;
                             /** @description Base64 encoded PNG for OIDC Logo */
                             "oidc::logo"?: string;
+                            /** @description Enable Passkey Authentication */
+                            "passkey::enabled"?: boolean;
                             "provider::url"?: string;
                             "provider::secret"?: string;
                             "provider::client"?: string;
@@ -2215,6 +2228,15 @@ export interface paths {
                             "login::background::color"?: string;
                             /** @description Base64 encoded PNG for Logo */
                             "login::logo"?: string;
+                            /** @description External application links */
+                            "external::applications"?: {
+                                /** @description Application Name */
+                                name: string;
+                                /** @description Base64 encoded icon */
+                                icon: string;
+                                /** @description Application URL */
+                                url: string;
+                            }[];
                         };
                     };
                 };
@@ -2301,6 +2323,14 @@ export interface paths {
                         "retention::enabled"?: boolean;
                         /** @description Enable retention processing for connection features */
                         "retention::connection-feature::enabled"?: boolean;
+                        /** @description Enable retention processing for chat messages */
+                        "retention::chat::enabled"?: boolean;
+                        /** @description Number of days to retain chat messages */
+                        "retention::chat::days"?: number;
+                        /** @description Enable retention processing for imports */
+                        "retention::import::enabled"?: boolean;
+                        /** @description Number of days to retain imports */
+                        "retention::import::days"?: number;
                         /** @description Enable ArcGIS Online Integration */
                         "agol::enabled"?: boolean;
                         /**
@@ -2336,6 +2366,7 @@ export interface paths {
                         "display::speed"?: "m/s" | "km/h" | "mi/h";
                         "display::projection"?: "mercator" | "globe";
                         "display::zoom"?: "always" | "conditional" | "never";
+                        "display::style"?: "System Default" | "Light" | "Dark";
                         "display::coordinate"?: "dd" | "dm" | "dms" | "mgrs" | "utm";
                         "display::text"?: "Small" | "Medium" | "Large";
                         "display::icon_rotation"?: boolean;
@@ -2371,6 +2402,8 @@ export interface paths {
                         "oidc::scopes"?: string;
                         /** @description Base64 encoded PNG for OIDC Logo */
                         "oidc::logo"?: string;
+                        /** @description Enable Passkey Authentication */
+                        "passkey::enabled"?: boolean;
                         "provider::url"?: string;
                         "provider::secret"?: string;
                         "provider::client"?: string;
@@ -2398,6 +2431,15 @@ export interface paths {
                         "login::background::color"?: string;
                         /** @description Base64 encoded PNG for Logo */
                         "login::logo"?: string;
+                        /** @description External application links */
+                        "external::applications"?: {
+                            /** @description Application Name */
+                            name: string;
+                            /** @description Base64 encoded icon */
+                            icon: string;
+                            /** @description Application URL */
+                            url: string;
+                        }[];
                     };
                 };
             };
@@ -2419,6 +2461,14 @@ export interface paths {
                             "retention::enabled"?: boolean;
                             /** @description Enable retention processing for connection features */
                             "retention::connection-feature::enabled"?: boolean;
+                            /** @description Enable retention processing for chat messages */
+                            "retention::chat::enabled"?: boolean;
+                            /** @description Number of days to retain chat messages */
+                            "retention::chat::days"?: number;
+                            /** @description Enable retention processing for imports */
+                            "retention::import::enabled"?: boolean;
+                            /** @description Number of days to retain imports */
+                            "retention::import::days"?: number;
                             /** @description Enable ArcGIS Online Integration */
                             "agol::enabled"?: boolean;
                             /**
@@ -2454,6 +2504,7 @@ export interface paths {
                             "display::speed"?: "m/s" | "km/h" | "mi/h";
                             "display::projection"?: "mercator" | "globe";
                             "display::zoom"?: "always" | "conditional" | "never";
+                            "display::style"?: "System Default" | "Light" | "Dark";
                             "display::coordinate"?: "dd" | "dm" | "dms" | "mgrs" | "utm";
                             "display::text"?: "Small" | "Medium" | "Large";
                             "display::icon_rotation"?: boolean;
@@ -2489,6 +2540,8 @@ export interface paths {
                             "oidc::scopes"?: string;
                             /** @description Base64 encoded PNG for OIDC Logo */
                             "oidc::logo"?: string;
+                            /** @description Enable Passkey Authentication */
+                            "passkey::enabled"?: boolean;
                             "provider::url"?: string;
                             "provider::secret"?: string;
                             "provider::client"?: string;
@@ -2516,6 +2569,15 @@ export interface paths {
                             "login::background::color"?: string;
                             /** @description Base64 encoded PNG for Logo */
                             "login::logo"?: string;
+                            /** @description External application links */
+                            "external::applications"?: {
+                                /** @description Application Name */
+                                name: string;
+                                /** @description Base64 encoded icon */
+                                icon: string;
+                                /** @description Application URL */
+                                url: string;
+                            }[];
                         };
                     };
                 };
@@ -2640,6 +2702,11 @@ export interface paths {
                             zoom: {
                                 /** @default conditional */
                                 value: "always" | "conditional" | "never";
+                                options: string[];
+                            };
+                            style: {
+                                /** @default System Default */
+                                value: "System Default" | "Light" | "Dark";
                                 options: string[];
                             };
                             coordinate: {
@@ -4787,7 +4854,7 @@ export interface paths {
                                         /** @description The Unique ID of the creator of the CoT */
                                         uid: string;
                                         /** @description The Callsign of the creator of the CoT */
-                                        callsign: string;
+                                        callsign?: string;
                                         /** @description Time at which the CoT was created by the creator */
                                         time?: string;
                                         /** @description The Type of the creator - typically a- for things on the ground, b- for digital things, etc */
@@ -4833,6 +4900,8 @@ export interface paths {
                                             minor: number;
                                             /** @description The angle of the ellipse in degrees */
                                             angle: number;
+                                            /** @description Whether the ellipse axes should be swapped when rendered by TAK clients */
+                                            swapAxis?: boolean;
                                         };
                                     };
                                     remarks?: string;
@@ -5127,7 +5196,7 @@ export interface paths {
                                 /** @description The Unique ID of the creator of the CoT */
                                 uid: string;
                                 /** @description The Callsign of the creator of the CoT */
-                                callsign: string;
+                                callsign?: string;
                                 /** @description Time at which the CoT was created by the creator */
                                 time?: string;
                                 /** @description The Type of the creator - typically a- for things on the ground, b- for digital things, etc */
@@ -5173,6 +5242,8 @@ export interface paths {
                                     minor: number;
                                     /** @description The angle of the ellipse in degrees */
                                     angle: number;
+                                    /** @description Whether the ellipse axes should be swapped when rendered by TAK clients */
+                                    swapAxis?: boolean;
                                 };
                             };
                             remarks?: string;
@@ -5398,7 +5469,7 @@ export interface paths {
                                     /** @description The Unique ID of the creator of the CoT */
                                     uid: string;
                                     /** @description The Callsign of the creator of the CoT */
-                                    callsign: string;
+                                    callsign?: string;
                                     /** @description Time at which the CoT was created by the creator */
                                     time?: string;
                                     /** @description The Type of the creator - typically a- for things on the ground, b- for digital things, etc */
@@ -5444,6 +5515,8 @@ export interface paths {
                                         minor: number;
                                         /** @description The angle of the ellipse in degrees */
                                         angle: number;
+                                        /** @description Whether the ellipse axes should be swapped when rendered by TAK clients */
+                                        swapAxis?: boolean;
                                     };
                                 };
                                 remarks?: string;
@@ -5848,7 +5921,7 @@ export interface paths {
                                     /** @description The Unique ID of the creator of the CoT */
                                     uid: string;
                                     /** @description The Callsign of the creator of the CoT */
-                                    callsign: string;
+                                    callsign?: string;
                                     /** @description Time at which the CoT was created by the creator */
                                     time?: string;
                                     /** @description The Type of the creator - typically a- for things on the ground, b- for digital things, etc */
@@ -5894,6 +5967,8 @@ export interface paths {
                                         minor: number;
                                         /** @description The angle of the ellipse in degrees */
                                         angle: number;
+                                        /** @description Whether the ellipse axes should be swapped when rendered by TAK clients */
+                                        swapAxis?: boolean;
                                     };
                                 };
                                 remarks?: string;
@@ -6301,7 +6376,7 @@ export interface paths {
                                     /** @description The Unique ID of the creator of the CoT */
                                     uid: string;
                                     /** @description The Callsign of the creator of the CoT */
-                                    callsign: string;
+                                    callsign?: string;
                                     /** @description Time at which the CoT was created by the creator */
                                     time?: string;
                                     /** @description The Type of the creator - typically a- for things on the ground, b- for digital things, etc */
@@ -6347,6 +6422,8 @@ export interface paths {
                                         minor: number;
                                         /** @description The angle of the ellipse in degrees */
                                         angle: number;
+                                        /** @description Whether the ellipse axes should be swapped when rendered by TAK clients */
+                                        swapAxis?: boolean;
                                     };
                                 };
                                 remarks?: string;
@@ -6578,7 +6655,7 @@ export interface paths {
                                             /** @description The Unique ID of the creator of the CoT */
                                             uid: string;
                                             /** @description The Callsign of the creator of the CoT */
-                                            callsign: string;
+                                            callsign?: string;
                                             /** @description Time at which the CoT was created by the creator */
                                             time?: string;
                                             /** @description The Type of the creator - typically a- for things on the ground, b- for digital things, etc */
@@ -6624,6 +6701,8 @@ export interface paths {
                                                 minor: number;
                                                 /** @description The angle of the ellipse in degrees */
                                                 angle: number;
+                                                /** @description Whether the ellipse axes should be swapped when rendered by TAK clients */
+                                                swapAxis?: boolean;
                                             };
                                         };
                                         remarks?: string;
@@ -6942,7 +7021,7 @@ export interface paths {
                                     /** @description The Unique ID of the creator of the CoT */
                                     uid: string;
                                     /** @description The Callsign of the creator of the CoT */
-                                    callsign: string;
+                                    callsign?: string;
                                     /** @description Time at which the CoT was created by the creator */
                                     time?: string;
                                     /** @description The Type of the creator - typically a- for things on the ground, b- for digital things, etc */
@@ -6988,6 +7067,8 @@ export interface paths {
                                         minor: number;
                                         /** @description The angle of the ellipse in degrees */
                                         angle: number;
+                                        /** @description Whether the ellipse axes should be swapped when rendered by TAK clients */
+                                        swapAxis?: boolean;
                                     };
                                 };
                                 remarks?: string;
@@ -7315,7 +7396,7 @@ export interface paths {
                                         /** @description The Unique ID of the creator of the CoT */
                                         uid: string;
                                         /** @description The Callsign of the creator of the CoT */
-                                        callsign: string;
+                                        callsign?: string;
                                         /** @description Time at which the CoT was created by the creator */
                                         time?: string;
                                         /** @description The Type of the creator - typically a- for things on the ground, b- for digital things, etc */
@@ -7361,6 +7442,8 @@ export interface paths {
                                             minor: number;
                                             /** @description The angle of the ellipse in degrees */
                                             angle: number;
+                                            /** @description Whether the ellipse axes should be swapped when rendered by TAK clients */
+                                            swapAxis?: boolean;
                                         };
                                     };
                                     remarks?: string;
@@ -8568,6 +8651,116 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/layer/update-management": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all layers and whether a newer task version is available */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            total: number;
+                            items: {
+                                id: number;
+                                name: string;
+                                task_prefix: string;
+                                current_version: string;
+                                latest_version: null | string;
+                                has_update: boolean;
+                                has_stack: boolean;
+                                template: boolean;
+                                connection: null | number;
+                                parent_name: null | string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -11689,7 +11882,7 @@ export interface paths {
                 header?: never;
                 path: {
                     /** @description No Description */
-                    ":connectionid": number;
+                    ":connectionid": "template" | number;
                     /** @description No Description */
                     ":layerid": number;
                 };
@@ -15554,6 +15747,111 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/geofence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Geofence server connection status */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            state: "disabled" | "disconnected" | "connecting" | "connected" | "reconnecting" | "error" | "closing";
+                            enabled: boolean;
+                            configured: boolean;
+                            connected: boolean;
+                            url: string;
+                            reconnectAttempts: number;
+                            lastError?: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/import": {
         parameters: {
             query?: never;
@@ -18567,6 +18865,695 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/login/passkey": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List passkeys for the authenticated user */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            total: number;
+                            items: {
+                                id: number;
+                                name: string;
+                                credential_id: string;
+                                created: string;
+                                last_used: string | null;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/login/passkey/register/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Generate WebAuthn registration options for the authenticated user */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            rp: {
+                                name: string;
+                                id?: string;
+                            };
+                            user: {
+                                id: string;
+                                name: string;
+                                displayName: string;
+                            };
+                            challenge: string;
+                            pubKeyCredParams: {
+                                alg: number;
+                                type: string;
+                            }[];
+                            timeout?: number;
+                            excludeCredentials?: {
+                                id: string;
+                                type: string;
+                                transports?: string[];
+                            }[];
+                            authenticatorSelection?: {
+                                authenticatorAttachment?: string;
+                                requireResidentKey?: boolean;
+                                residentKey?: string;
+                                userVerification?: string;
+                            };
+                            attestation?: string;
+                            extensions?: unknown;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/login/passkey/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify WebAuthn registration and store credential */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @default  */
+                        name: string;
+                        credential: {
+                            id: string;
+                            rawId: string;
+                            response: {
+                                clientDataJSON: string;
+                                attestationObject: string;
+                                authenticatorData?: string;
+                                transports?: string[];
+                                publicKeyAlgorithm?: number;
+                                publicKey?: string;
+                            };
+                            authenticatorAttachment?: string;
+                            clientExtensionResults: {
+                                [key: string]: unknown;
+                            };
+                            type: string;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: number;
+                            name: string;
+                            credential_id: string;
+                            created: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/login/passkey/authenticate/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Generate WebAuthn authentication options */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            challenge: string;
+                            timeout?: number;
+                            rpId?: string;
+                            allowCredentials?: {
+                                id: string;
+                                type: string;
+                                transports?: string[];
+                            }[];
+                            userVerification?: string;
+                            extensions?: unknown;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/login/passkey/authenticate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify WebAuthn authentication and return JWT */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        credential: {
+                            id: string;
+                            rawId: string;
+                            response: {
+                                clientDataJSON: string;
+                                authenticatorData: string;
+                                signature: string;
+                                userHandle?: string;
+                            };
+                            authenticatorAttachment?: string;
+                            clientExtensionResults: {
+                                [key: string]: unknown;
+                            };
+                            type: string;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            token: string;
+                            access: "admin" | "agency" | "user";
+                            email: string;
+                            certRenewalRequired?: boolean;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/login/passkey/{:id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a passkey belonging to the authenticated user */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description No Description */
+                    ":id": number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/login": {
         parameters: {
             query?: never;
@@ -19030,7 +20017,7 @@ export interface paths {
                                     /** @description The Unique ID of the creator of the CoT */
                                     uid: string;
                                     /** @description The Callsign of the creator of the CoT */
-                                    callsign: string;
+                                    callsign?: string;
                                     /** @description Time at which the CoT was created by the creator */
                                     time?: string;
                                     /** @description The Type of the creator - typically a- for things on the ground, b- for digital things, etc */
@@ -19076,6 +20063,8 @@ export interface paths {
                                         minor: number;
                                         /** @description The angle of the ellipse in degrees */
                                         angle: number;
+                                        /** @description Whether the ellipse axes should be swapped when rendered by TAK clients */
+                                        swapAxis?: boolean;
                                     };
                                 };
                                 remarks?: string;
@@ -19401,7 +20390,7 @@ export interface paths {
                                         /** @description The Unique ID of the creator of the CoT */
                                         uid: string;
                                         /** @description The Callsign of the creator of the CoT */
-                                        callsign: string;
+                                        callsign?: string;
                                         /** @description Time at which the CoT was created by the creator */
                                         time?: string;
                                         /** @description The Type of the creator - typically a- for things on the ground, b- for digital things, etc */
@@ -19447,6 +20436,8 @@ export interface paths {
                                             minor: number;
                                             /** @description The angle of the ellipse in degrees */
                                             angle: number;
+                                            /** @description Whether the ellipse axes should be swapped when rendered by TAK clients */
+                                            swapAxis?: boolean;
                                         };
                                     };
                                     remarks?: string;
@@ -21457,7 +22448,7 @@ export interface paths {
                                         /** @description The Unique ID of the creator of the CoT */
                                         uid: string;
                                         /** @description The Callsign of the creator of the CoT */
-                                        callsign: string;
+                                        callsign?: string;
                                         /** @description Time at which the CoT was created by the creator */
                                         time?: string;
                                         /** @description The Type of the creator - typically a- for things on the ground, b- for digital things, etc */
@@ -21503,6 +22494,8 @@ export interface paths {
                                             minor: number;
                                             /** @description The angle of the ellipse in degrees */
                                             angle: number;
+                                            /** @description Whether the ellipse axes should be swapped when rendered by TAK clients */
+                                            swapAxis?: boolean;
                                         };
                                     };
                                     remarks?: string;
@@ -29173,7 +30166,7 @@ export interface paths {
                                         /** @description The Unique ID of the creator of the CoT */
                                         uid: string;
                                         /** @description The Callsign of the creator of the CoT */
-                                        callsign: string;
+                                        callsign?: string;
                                         /** @description Time at which the CoT was created by the creator */
                                         time?: string;
                                         /** @description The Type of the creator - typically a- for things on the ground, b- for digital things, etc */
@@ -29219,6 +30212,8 @@ export interface paths {
                                             minor: number;
                                             /** @description The angle of the ellipse in degrees */
                                             angle: number;
+                                            /** @description Whether the ellipse axes should be swapped when rendered by TAK clients */
+                                            swapAxis?: boolean;
                                         };
                                     };
                                     remarks?: string;
@@ -29516,7 +30511,7 @@ export interface paths {
                                 /** @description The Unique ID of the creator of the CoT */
                                 uid: string;
                                 /** @description The Callsign of the creator of the CoT */
-                                callsign: string;
+                                callsign?: string;
                                 /** @description Time at which the CoT was created by the creator */
                                 time?: string;
                                 /** @description The Type of the creator - typically a- for things on the ground, b- for digital things, etc */
@@ -29562,6 +30557,8 @@ export interface paths {
                                     minor: number;
                                     /** @description The angle of the ellipse in degrees */
                                     angle: number;
+                                    /** @description Whether the ellipse axes should be swapped when rendered by TAK clients */
+                                    swapAxis?: boolean;
                                 };
                             };
                             remarks?: string;
@@ -29787,7 +30784,7 @@ export interface paths {
                                     /** @description The Unique ID of the creator of the CoT */
                                     uid: string;
                                     /** @description The Callsign of the creator of the CoT */
-                                    callsign: string;
+                                    callsign?: string;
                                     /** @description Time at which the CoT was created by the creator */
                                     time?: string;
                                     /** @description The Type of the creator - typically a- for things on the ground, b- for digital things, etc */
@@ -29833,6 +30830,8 @@ export interface paths {
                                         minor: number;
                                         /** @description The angle of the ellipse in degrees */
                                         angle: number;
+                                        /** @description Whether the ellipse axes should be swapped when rendered by TAK clients */
+                                        swapAxis?: boolean;
                                     };
                                 };
                                 remarks?: string;
@@ -30234,7 +31233,7 @@ export interface paths {
                                     /** @description The Unique ID of the creator of the CoT */
                                     uid: string;
                                     /** @description The Callsign of the creator of the CoT */
-                                    callsign: string;
+                                    callsign?: string;
                                     /** @description Time at which the CoT was created by the creator */
                                     time?: string;
                                     /** @description The Type of the creator - typically a- for things on the ground, b- for digital things, etc */
@@ -30280,6 +31279,8 @@ export interface paths {
                                         minor: number;
                                         /** @description The angle of the ellipse in degrees */
                                         angle: number;
+                                        /** @description Whether the ellipse axes should be swapped when rendered by TAK clients */
+                                        swapAxis?: boolean;
                                     };
                                 };
                                 remarks?: string;
@@ -32536,6 +33537,7 @@ export interface paths {
                             }[];
                             display_projection: "mercator" | "globe";
                             display_zoom: "always" | "conditional" | "never";
+                            display_style: "System Default" | "Light" | "Dark";
                             display_coordinate: "dd" | "dm" | "dms" | "mgrs" | "utm";
                             display_icon_rotation: boolean;
                             display_stale: "Immediate" | "10 Minutes" | "30 Minutes" | "1 Hour" | "Never";
@@ -32630,6 +33632,7 @@ export interface paths {
                         display_projection?: "mercator" | "globe";
                         display_speed?: "m/s" | "km/h" | "mi/h";
                         display_zoom?: "always" | "conditional" | "never";
+                        display_style?: "System Default" | "Light" | "Dark";
                         display_coordinate?: "dd" | "dm" | "dms" | "mgrs" | "utm";
                         display_icon_rotation?: boolean;
                         display_text?: "Small" | "Medium" | "Large";
@@ -32697,6 +33700,7 @@ export interface paths {
                             }[];
                             display_projection: "mercator" | "globe";
                             display_zoom: "always" | "conditional" | "never";
+                            display_style: "System Default" | "Light" | "Dark";
                             display_coordinate: "dd" | "dm" | "dms" | "mgrs" | "utm";
                             display_icon_rotation: boolean;
                             display_stale: "Immediate" | "10 Minutes" | "30 Minutes" | "1 Hour" | "Never";
@@ -32819,114 +33823,6 @@ export interface paths {
                             body: unknown;
                             /** @enum {string} */
                             encoding?: "base64";
-                        };
-                    };
-                };
-                /** @description Error Response */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/retention": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Run a retention action */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": {
-                        action: string;
-                    };
-                };
-            };
-            responses: {
-                /** @description Successful Response */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            name: string;
-                            status: "success" | "error";
-                            deleted: number;
-                            duration: number;
-                            message?: string;
                         };
                     };
                 };
@@ -33276,6 +34172,114 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/retention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run a retention action */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        action: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            name: string;
+                            status: "success" | "error";
+                            deleted: number;
+                            duration: number;
+                            message?: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -36705,6 +37709,7 @@ export interface paths {
                             }[];
                             display_projection: "mercator" | "globe";
                             display_zoom: "always" | "conditional" | "never";
+                            display_style: "System Default" | "Light" | "Dark";
                             display_coordinate: "dd" | "dm" | "dms" | "mgrs" | "utm";
                             display_icon_rotation: boolean;
                             display_stale: "Immediate" | "10 Minutes" | "30 Minutes" | "1 Hour" | "Never";
@@ -36844,6 +37849,7 @@ export interface paths {
                             }[];
                             display_projection: "mercator" | "globe";
                             display_zoom: "always" | "conditional" | "never";
+                            display_style: "System Default" | "Light" | "Dark";
                             display_coordinate: "dd" | "dm" | "dms" | "mgrs" | "utm";
                             display_icon_rotation: boolean;
                             display_stale: "Immediate" | "10 Minutes" | "30 Minutes" | "1 Hour" | "Never";
@@ -36916,6 +37922,127 @@ export interface paths {
                 };
             };
         };
+        trace?: never;
+    };
+    "/api/user/{:username}/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Let Admins list login sessions for a given user */
+        get: {
+            parameters: {
+                query: {
+                    /** @description Limit the number of responses returned */
+                    limit: number;
+                    /** @description Iterate through "pages" of items based on the "limit" query param */
+                    page: number;
+                    /** @description Order in which results are returned based on the "sort" query param */
+                    order: "asc" | "desc";
+                    /** @description No Description */
+                    sort: "id" | "username" | "created" | "ip" | "device_type" | "browser" | "os" | "user_agent" | "enableRLS";
+                };
+                header?: never;
+                path: {
+                    /** @description No Description */
+                    ":username": string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            total: number;
+                            items: {
+                                id: number;
+                                username: string;
+                                created: string;
+                                ip: string;
+                                device_type: string;
+                                browser: string;
+                                os: string;
+                                user_agent: string;
+                                active: boolean;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/video/auth": {
@@ -38571,7 +39698,7 @@ export interface paths {
                                         /** @description The Unique ID of the creator of the CoT */
                                         uid: string;
                                         /** @description The Callsign of the creator of the CoT */
-                                        callsign: string;
+                                        callsign?: string;
                                         /** @description Time at which the CoT was created by the creator */
                                         time?: string;
                                         /** @description The Type of the creator - typically a- for things on the ground, b- for digital things, etc */
@@ -38617,6 +39744,8 @@ export interface paths {
                                             minor: number;
                                             /** @description The angle of the ellipse in degrees */
                                             angle: number;
+                                            /** @description Whether the ellipse axes should be swapped when rendered by TAK clients */
+                                            swapAxis?: boolean;
                                         };
                                     };
                                     remarks?: string;

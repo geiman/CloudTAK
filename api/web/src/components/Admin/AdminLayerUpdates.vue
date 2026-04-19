@@ -48,7 +48,9 @@
                             <th>Task</th>
                             <th>Current</th>
                             <th>Latest</th>
-                            <th class='text-end'>Action</th>
+                            <th class='text-end'>
+                                Action
+                            </th>
                         </tr>
                     </thead>
                     <tbody>
@@ -65,10 +67,20 @@
                                         @click.prevent='openLayer(layer)'
                                         v-text='layer.name'
                                     />
-                                    <span
-                                        class='subheader'
-                                        v-text='layer.parent_name || "Template Layer"'
-                                    />
+                                    <div class='d-flex flex-wrap align-items-center gap-2'>
+                                        <span
+                                            class='subheader'
+                                            v-text='layer.parent_name || "Template Layer"'
+                                        />
+                                        <TablerBadge
+                                            v-if='!layer.has_stack'
+                                            background-color='rgba(245, 158, 11, 0.2)'
+                                            border-color='rgba(245, 158, 11, 0.5)'
+                                            text-color='#d97706'
+                                        >
+                                            Stack Missing
+                                        </TablerBadge>
+                                    </div>
                                 </div>
                             </td>
                             <td v-text='layer.task_prefix' />
@@ -78,11 +90,13 @@
                             </td>
                             <td class='text-end'>
                                 <TablerButton
-                                    class='btn-primary btn-sm'
-                                    :disabled='!layer.has_update || Boolean(updating[layer.id])'
-                                    @click='updateLayer(layer)'
+                                    :class='layer.has_stack ? "btn-primary btn-sm" : "btn-warning btn-sm"'
+                                    :disabled='!canManageLayer(layer) || Boolean(updating[layer.id])'
+                                    @click='manageLayer(layer)'
                                 >
                                     <span v-if='updating[layer.id]'>Updating...</span>
+                                    <span v-else-if='!layer.has_stack && layer.has_update'>Deploy Latest</span>
+                                    <span v-else-if='!layer.has_stack'>Deploy</span>
                                     <span v-else-if='layer.has_update'>Update</span>
                                     <span v-else>Current</span>
                                 </TablerButton>
@@ -102,6 +116,7 @@ import { std } from '../../std.ts';
 import type { AdminLayerUpdate, AdminLayerUpdateList } from '../../types.ts';
 import {
     TablerAlert,
+    TablerBadge,
     TablerButton,
     TablerIconButton,
     TablerLoading,
@@ -161,6 +176,36 @@ async function updateLayer(layer: AdminLayerUpdate): Promise<void> {
     } finally {
         delete updating.value[layer.id];
     }
+}
+
+async function redeployLayer(layer: AdminLayerUpdate): Promise<void> {
+    updating.value[layer.id] = true;
+    error.value = undefined;
+
+    try {
+        await std(`/api/connection/${layer.connection ?? 'template'}/layer/${layer.id}/redeploy`, {
+            method: 'POST'
+        });
+
+        await fetchList();
+    } catch (err) {
+        error.value = err instanceof Error ? err : new Error(String(err));
+    } finally {
+        delete updating.value[layer.id];
+    }
+}
+
+async function manageLayer(layer: AdminLayerUpdate): Promise<void> {
+    if (!layer.has_stack && !layer.has_update) {
+        await redeployLayer(layer);
+        return;
+    }
+
+    await updateLayer(layer);
+}
+
+function canManageLayer(layer: AdminLayerUpdate): boolean {
+    return !layer.has_stack || layer.has_update;
 }
 
 function openLayer(layer: AdminLayerUpdate): void {

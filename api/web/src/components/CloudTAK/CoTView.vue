@@ -4,10 +4,14 @@
         :create='false'
         label='No CoT Marker'
     />
-    <template v-else>
+    <div
+        v-else
+        class='d-flex flex-column h-100'
+        style='min-height: 0;'
+    >
         <div
             :key='String(route.params.uid)'
-            class='col-12 border-bottom d-flex cloudtak-accent'
+            class='col-12 border-bottom d-flex cloudtak-accent flex-shrink-0'
             style='border-radius: 0px;'
         >
             <div class='col-12 row my-2 d-flex px-1 py-2'>
@@ -330,83 +334,39 @@
         </div>
 
         <div class='col-12 px-2 py-2'>
-            <div
-                class='btn-group w-100'
-                role='group'
+            <TablerPillGroup
+                v-model='mode'
+                :options='modeOptions'
+                :rounded='false'
+                size='default'
+                name='btn-mode'
+                padding=''
             >
-                <input
-                    id='btn-mode-info'
-                    type='radio'
-                    class='btn-check'
-                    name='btn-mode'
-                    autocomplete='off'
-                    :checked='mode === "default"'
-                    @click='mode = "default"'
-                >
-                <label
-                    for='btn-mode-info'
-                    type='button'
-                    class='btn'
-                >
+                <template #option='{ option }'>
                     <IconInfoCircle
+                        v-if='option.value === "default"'
                         :size='20'
                         stroke='1'
-                        class='cursor-pointer'
-                        @click='mode = "raw"'
                     />
-                    <span class='mx-2'>Info</span>
-                </label>
-                <template v-if='cot.is_skittle'>
-                    <input
-                        id='btn-mode-channels'
-                        type='radio'
-                        class='btn-check'
-                        name='btn-mode'
-                        autocomplete='off'
-                        :checked='mode === "channels"'
-                        @click='mode = "channels"'
-                    >
-                    <label
-                        for='btn-mode-channels'
-                        type='button'
-                        class='btn'
-                    >
-                        <IconAffiliate
-                            :size='20'
-                            stroke='1'
-                            class='cursor-pointer'
-                        />
-                        <span class='mx-2'>Channels</span>
-                    </label>
-                </template>
-                <input
-                    id='btn-mode-raw'
-                    type='radio'
-                    class='btn-check'
-                    name='btn-mode'
-                    autocomplete='off'
-                    :checked='mode === "raw"'
-                    @click='mode = "raw"'
-                >
-                <label
-                    for='btn-mode-raw'
-                    type='button'
-                    class='btn'
-                >
+                    <IconAffiliate
+                        v-else-if='option.value === "channels"'
+                        :size='20'
+                        stroke='1'
+                    />
                     <IconCode
+                        v-else
                         :size='20'
                         stroke='1'
-                        class='cursor-pointer'
                     />
-                    <span class='mx-2'>Raw</span>
-                </label>
-            </div>
+                    <span class='mx-2'>{{ option.label }}</span>
+                </template>
+            </TablerPillGroup>
         </div>
 
         <div
             v-if='mode === "default"'
-            class='overflow-auto overflow-x-hidden cot-view-properties'
-            style='height: calc(100vh - 225px)'
+            class='overflow-auto overflow-x-hidden cot-view-properties flex-grow-1'
+            style='min-height: 0;'
         >
             <div class='row g-0'>
                 <div
@@ -639,26 +599,26 @@
         </div>
         <div
             v-else-if='mode === "channels"'
-            style='height: calc(100vh - 225px)'
-            class='overflow-auto overflow-x-hidden'
+            class='overflow-auto overflow-x-hidden flex-grow-1'
+            style='min-height: 0;'
         >
             <Subscriptions :cot='cot' />
         </div>
         <div
             v-else-if='mode === "raw"'
-            style='height: calc(100vh - 225px)'
-            class='overflow-auto col-12'
+            class='overflow-auto col-12 flex-grow-1'
+            style='min-height: 0;'
         >
             <CopyField
                 mode='pre'
                 style='
                     width: calc(100% - 100px);
-                    height: calc(100vh - 225px);
+                    height: 100%;
                 '
                 :model-value='JSON.stringify(cot.as_feature(), null, 4)'
             />
         </div>
-    </template>
+    </div>
 
     <Share
         v-if='share && cot'
@@ -688,6 +648,7 @@ import {
     TablerDelete,
     TablerDropdown,
     TablerIconButton,
+    TablerPillGroup,
 } from '@tak-ps/vue-tabler';
 
 import CopyField from './util/CopyField.vue';
@@ -764,6 +725,13 @@ const units = ref({
 const username = ref<string | undefined>();
 const type = ref<COTType | undefined>();
 const mode = ref('default');
+
+const modeOptions = computed(() => {
+    const opts = [{ value: 'default', label: 'Info' }];
+    if (cot.value?.is_skittle) opts.push({ value: 'channels', label: 'Channels' });
+    opts.push({ value: 'raw', label: 'Raw' });
+    return opts;
+});
 const breadcrumbLive = ref(false);
 const remarksExpanded = ref(true);
 const bufferCotId = ref<string | null>(null);

@@ -47,6 +47,7 @@
                         <div>
                             <img
                                 :src='selected.data'
+                                class='img-thumbnail'
                                 style='width: 25px; height: auto; margin-right: 5px;'
                             >
                         </div>
@@ -95,7 +96,7 @@
                                         :size='32'
                                         stroke='1'
                                         class='ms-auto cursor-pointer mx-2'
-                                        :color='params.showFilter ? "#83b7e8" : "#ffffff"'
+                                        :color='params.showFilter ? "#83b7e8" : "currentColor"'
                                         @click.stop.prevent='params.showFilter = !params.showFilter'
                                     />
                                 </div>
@@ -131,6 +132,7 @@
                                             <img
                                                 v-tooltip='icon.name'
                                                 :src='icon.data'
+                                                class='img-thumbnail'
                                                 style='width: 25px; height: 25px; margin-right: 5px;'
                                             >
                                         </div>
@@ -206,11 +208,7 @@ const setsName = computed<string[]>(() => {
 
 watch(selected, () => {
     if (!selected.value.path) return;
-    if (selected.value.path.endsWith('.png')) {
-        emit('update:modelValue', selected.value.path);
-    } else {
-        emit('update:modelValue', selected.value.path.replace(/\.[^/.]+$/, '.png'));
-    }
+    emit('update:modelValue', selected.value.path);
 }, { deep: true });
 
 watch(params.value, async () => {
@@ -275,4 +273,5 @@ async function fetchIcons(): Promise<void> {
     list.value = await std(url) as IconList;
     loading.value.icons = false;
 }
+
 </script>

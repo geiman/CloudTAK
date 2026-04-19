@@ -238,6 +238,7 @@ export type AdminLayerUpdate = {
     current_version: string;
     latest_version: string | null;
     has_update: boolean;
+    has_stack: boolean;
     template: boolean;
     connection: number | null;
     parent_name: string | null;
@@ -251,5 +252,6 @@ export type AdminLayerUpdateList = {
 export type Config = paths["/api/config"]["get"]["responses"]["200"]["content"]["application/json"];
 export type ConfigLogin = paths["/api/config/login"]["get"]["responses"]["200"]["content"]["application/json"]
 export type ConfigMap = paths["/api/config/map"]["get"]["responses"]["200"]["content"]["application/json"]
-export type ConfigGroups = paths["/api/config/group"]["get"]["responses"]["200"]["content"]["application/json"]
+export type PasskeyList = paths['/api/login/passkey']['get']['responses']['200']['content']['application/json'];
+export type Passkey = PasskeyList['items'][0];
 

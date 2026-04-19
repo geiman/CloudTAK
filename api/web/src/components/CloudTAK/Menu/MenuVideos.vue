@@ -38,50 +38,32 @@
             </template>
         </template>
         <template #default>
-            <div
-                class='px-2 py-2 round btn-group w-100'
-                role='group'
+            <TablerPillGroup
+                v-model='mode'
+                :options='[
+                    { value: "connections", label: "Streams" },
+                    { value: "lease", label: "Leases" }
+                ]'
             >
-                <input
-                    id='connections'
-                    type='radio'
-                    class='btn-check'
-                    autocomplete='off'
-                    :checked='mode === "connections"'
-                    @click='mode = "connections"'
-                >
-                <label
-                    for='connections'
-                    type='button'
-                    class='btn btn-sm'
-                ><IconVideo
-                    v-tooltip='"Video Connections"'
-                    :size='32'
-                    stroke='1'
-                /><span class='ms-2'>Streams</span></label>
-
-                <input
-                    id='lease'
-                    type='radio'
-                    class='btn-check'
-                    autocomplete='off'
-                    :checked='mode === "lease"'
-                    @click='mode = "lease"'
-                >
-
-                <label
-                    for='lease'
-                    type='button'
-                    class='btn btn-sm'
-                ><IconServer2
-                    v-tooltip='"Video Leases"'
-                    :size='32'
-                    stroke='1'
-                /><span class='ms-2'>Leases</span></label>
-            </div>
+                <template #option='{ option }'>
+                    <IconVideo
+                        v-if='option.value === "connections"'
+                        v-tooltip='"Video Connections"'
+                        :size='32'
+                        stroke='1'
+                    />
+                    <IconServer2
+                        v-else
+                        v-tooltip='"Video Leases"'
+                        :size='32'
+                        stroke='1'
+                    />
+                    <span class='ms-2'>{{ option.label }}</span>
+                </template>
+            </TablerPillGroup>
 
             <template v-if='mode === "connections"'>
-                <div class='col-12 px-2'>
+                <div class='col-12'>
                     <TablerInput
                         v-model='connectionFilter'
                         icon='search'
@@ -105,7 +87,7 @@
                 />
                 <div
                     v-else
-                    class='col-12 d-flex flex-column gap-2 p-3'
+                    class='col-12 d-flex flex-column gap-2 py-3'
                 >
                     <StandardItem
                         v-for='connection in filteredConnections'
@@ -174,7 +156,7 @@
                 </div>
             </template>
             <template v-else-if='mode === "lease"'>
-                <div class='col-12 px-2'>
+                <div class='col-12'>
                     <TablerInput
                         v-model='leasePaging.filter'
                         icon='search'
@@ -195,7 +177,7 @@
                 />
                 <div
                     v-else
-                    class='col-12 d-flex flex-column gap-2 p-3'
+                    class='col-12 d-flex flex-column gap-2 py-3'
                 >
                     <StandardItem
                         v-for='l in leases.items'
@@ -266,10 +248,10 @@ import MenuTemplate from '../util/MenuTemplate.vue';
 import VideoLeaseModal from './Videos/VideoLeaseModal.vue';
 import EmptyInfo from '../util/EmptyInfo.vue';
 import StandardItem from '../util/StandardItem.vue';
-import { std, server } from '../../../std.ts';
+import { server } from '../../../std.ts';
 import COT from '../../../base/cot.ts';
 import ProfileConfig from '../../../base/profile.ts';
-import type { VideoLease, VideoLeaseList, VideoConnectionList } from '../../../types.ts';
+import type { VideoLease, VideoConnectionList } from '../../../types.ts';
 
 import { useMapStore } from '../../../stores/map.ts';
 import { useFloatStore } from '../../../stores/float.ts';
@@ -282,6 +264,7 @@ import {
     TablerLoading,
     TablerIconButton,
     TablerRefreshButton,
+    TablerPillGroup,
 } from '@tak-ps/vue-tabler';
 import {
     IconPlus,
@@ -320,7 +303,7 @@ const loading = ref({
 });
 const lease = ref();
 const isSystemAdmin = ref(false);
-const leases = ref<VideoLeaseList>({ total: 0, items: [] });
+const leases = ref<{ total: number, items: VideoLease[] }>({ total: 0, items: [] });
 const connections = ref<VideoConnectionList>({ videoConnections: [] });
 const videos = ref<Set<COT>>(new Set())
 
@@ -413,7 +396,10 @@ async function fetchConnections(): Promise<void> {
         lease.value = undefined;
         loading.value.connections = true;
         error.value = undefined;
-        connections.value = await std('/api/marti/video') as VideoConnectionList;
+
+        const res = await server.GET('/api/marti/video');
+        if (res.error) throw new Error(res.error.message);
+        connections.value = res.data;
     } catch (err) {
         error.value = err instanceof Error ? err : new Error(String(err));
     }
@@ -425,9 +411,10 @@ async function deleteLease(lease: VideoLease): Promise<void> {
     loading.value.main = true;
 
     try {
-        await std(`/api/video/lease/${lease.id}`, {
-            method: 'DELETE'
+        const res = await server.DELETE('/api/video/lease/{:lease}', {
+            params: { path: { ':lease': lease.id } }
         });
+        if (res.error) throw new Error(res.error.message);
 
         await fetchLeases();
 

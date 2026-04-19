@@ -29,7 +29,7 @@
         </template>
         <template #default>
             <template v-if='upload'>
-                <div class='mx-4 my-4'>
+                <div class='my-4'>
                     <Upload
                         method='PUT'
                         :url='stdurl(`/api/import`)'
@@ -41,49 +41,31 @@
                 </div>
             </template>
             <template v-else>
-                <div
-                    class='px-2 py-2 round btn-group w-100'
-                    role='group'
+                <TablerPillGroup
+                    v-model='mode'
+                    :options='[
+                        { value: "iconsets", label: "Iconsets" },
+                        { value: "icons", label: "Icons" }
+                    ]'
                 >
-                    <input
-                        id='iconsets'
-                        type='radio'
-                        class='btn-check'
-                        autocomplete='off'
-                        :checked='mode === "iconsets"'
-                        @click='mode = "iconsets"'
-                    >
-                    <label
-                        for='iconsets'
-                        type='button'
-                        class='btn btn-sm'
-                    ><IconAlbum
-                        v-tooltip='"Iconsets"'
-                        :size='32'
-                        stroke='1'
-                    /></label>
-
-                    <input
-                        id='icons'
-                        type='radio'
-                        class='btn-check'
-                        autocomplete='off'
-                        :checked='mode === "icons"'
-                        @click='mode = "icons"'
-                    >
-                    <label
-                        for='icons'
-                        type='button'
-                        class='btn btn-sm'
-                    ><IconPhoto
-                        v-tooltip='"Icons"'
-                        :size='32'
-                        stroke='1'
-                    /></label>
-                </div>
+                    <template #option='{ option }'>
+                        <IconAlbum
+                            v-if='option.value === "iconsets"'
+                            v-tooltip='"Iconsets"'
+                            :size='32'
+                            stroke='1'
+                        />
+                        <IconPhoto
+                            v-else
+                            v-tooltip='"Icons"'
+                            :size='32'
+                            stroke='1'
+                        />
+                    </template>
+                </TablerPillGroup>
 
                 <template v-if='mode === "iconsets"'>
-                    <div class='px-3 pt-3'>
+                    <div class='pt-3'>
                         <TablerInput
                             v-model='paging.filter'
                             icon='search'
@@ -104,7 +86,7 @@
                         label='No Iconsets'
                         :create='false'
                     />
-                    <div class='col-12 d-flex flex-column gap-2 p-3'>
+                    <div class='col-12 d-flex flex-column gap-2 py-3'>
                         <StandardItem
                             v-for='iconset in list.items'
                             :key='iconset.uid'
@@ -123,14 +105,24 @@
                                 </div>
 
                                 <div class='d-flex align-items-center flex-shrink-0'>
-                                    <span
+                                    <TablerBadge
                                         v-if='!iconset.username'
-                                        class='mx-3 badge border bg-blue text-white'
-                                    >Public</span>
-                                    <span
+                                        class='mx-3'
+                                        background-color='rgba(59, 130, 246, 0.25)'
+                                        border-color='rgba(59, 130, 246, 0.5)'
+                                        text-color='#2563eb'
+                                    >
+                                        Public
+                                    </TablerBadge>
+                                    <TablerBadge
                                         v-else
-                                        class='mx-3 badge border bg-red text-white'
-                                    >Private</span>
+                                        class='mx-3'
+                                        background-color='rgba(239, 68, 68, 0.2)'
+                                        border-color='rgba(239, 68, 68, 0.5)'
+                                        text-color='#dc2626'
+                                    >
+                                        Private
+                                    </TablerBadge>
                                     <TablerIconButton
                                         title='Download TAK Zip'
                                         @click.stop='download(iconset)'
@@ -184,13 +176,15 @@ import Upload from '../../util/Upload.vue';
 import IconCombineds from '../util/Icons.vue';
 import IconsetEditModal from './Iconset/EditModal.vue';
 import {
+    TablerBadge,
     TablerNone,
     TablerPager,
     TablerInput,
     TablerAlert,
     TablerLoading,
     TablerIconButton,
-    TablerRefreshButton
+    TablerRefreshButton,
+    TablerPillGroup
 } from '@tak-ps/vue-tabler';
 import {
     IconDownload,

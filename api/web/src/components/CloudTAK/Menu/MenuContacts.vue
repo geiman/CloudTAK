@@ -7,7 +7,7 @@
             />
         </template>
         <template #default>
-            <div class='col-12 px-2 py-2'>
+            <div class='col-12 py-2'>
                 <TablerInput
                     v-model='paging.filter'
                     icon='search'
@@ -24,7 +24,7 @@
                 :create='false'
             />
             <template v-else>
-                <label class='subheader mx-2'>Online</label>
+                <label class='subheader'>Online</label>
                 <TablerNone
                     v-if='visibleActiveContacts.length === 0'
                     label='No Online Contacts'
@@ -39,7 +39,7 @@
                     >
                         <SlideDownHeader
                             :model-value='opened.has(team)'
-                            :label='config.groups[team] ? config.groups[team] : team'
+                            :label='groups[team] || team'
                             @update:model-value='val => val ? opened.add(team) : opened.delete(team)'
                         >
                             <template #icon>
@@ -51,7 +51,14 @@
                             </template>
 
                             <template #right>
-                                <span class='badge rounded-pill small bg-secondary-subtle text-secondary-emphasis border border-secondary border-opacity-50 ms-auto'>{{ visibleActiveContacts.filter(c => c.team === team).length }}</span>
+                                <TablerBadge
+                                    class='rounded-pill small ms-auto'
+                                    background-color='rgba(107, 114, 128, 0.15)'
+                                    border-color='rgba(107, 114, 128, 0.3)'
+                                    text-color='#6b7280'
+                                >
+                                    {{ visibleActiveContacts.filter(c => c.team === team).length }}
+                                </TablerBadge>
                             </template>
 
                             <div class='mx-2 pt-2'>
@@ -77,7 +84,14 @@
                         label='Recently Offline'
                     >
                         <template #right>
-                            <span class='badge rounded-pill small bg-secondary-subtle text-secondary-emphasis border border-secondary border-opacity-50 ms-auto'>{{ visibleOfflineContacts.length }}</span>
+                            <TablerBadge
+                                class='rounded-pill small ms-auto'
+                                background-color='rgba(107, 114, 128, 0.15)'
+                                border-color='rgba(107, 114, 128, 0.3)'
+                                text-color='#6b7280'
+                            >
+                                {{ visibleOfflineContacts.length }}
+                            </TablerBadge>
                         </template>
 
                         <div class='mx-2 pt-2'>
@@ -114,14 +128,16 @@ import type { Ref } from 'vue';
 import { liveQuery } from 'dexie';
 import { useObservable } from '@vueuse/rxjs';
 import { from } from 'rxjs';
-import { std } from '../../../std.ts';
+import Config from '../../../base/config.ts';
+import type { FullConfig } from '../../../base/config.ts';
 import ContactManager from '../../../base/contact.ts';
-import type { Contact as ContactType, ContactList, ConfigGroups } from '../../../types.ts';
+import type { Contact as ContactType, ContactList } from '../../../types.ts';
 import { useMapStore } from '../../../stores/map.ts';
 const mapStore = useMapStore();
 import MenuTemplate from '../util/MenuTemplate.vue';
 import SlideDownHeader from '../util/SlideDownHeader.vue';
 import {
+    TablerBadge,
     TablerNone,
     TablerInput,
     TablerLoading,
@@ -138,10 +154,7 @@ const paging = ref({
     filter: ''
 });
 
-const config = ref<ConfigGroups>({
-    groups: {},
-    roles: []
-});
+const groups = ref<Record<string, string>>({});
 
 const opened = ref<Set<string>>(new Set());
 const teams = ref<Set<string>>(new Set());
@@ -165,8 +178,31 @@ watch([contacts, paging.value], async () => {
     await updateContacts();
 });
 
+const groupKeys: (keyof FullConfig)[] = [
+    'group::Yellow',
+    'group::Cyan',
+    'group::Green',
+    'group::Red',
+    'group::Purple',
+    'group::Orange',
+    'group::Blue',
+    'group::Magenta',
+    'group::White',
+    'group::Maroon',
+    'group::Dark Blue',
+    'group::Teal',
+    'group::Dark Green',
+    'group::Brown',
+];
+
 async function fetchConfig() {
-    config.value = await std('/api/config/group') as ConfigGroups;
+    const config = await Config.list(groupKeys);
+    const result: Record<string, string> = {};
+    for (const key of groupKeys) {
+        const val = config[key];
+        if (val) result[key.replace('group::', '')] = String(val);
+    }
+    groups.value = result;
 }
 
 async function updateContacts() {

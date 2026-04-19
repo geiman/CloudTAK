@@ -10,7 +10,14 @@
                 stroke='1'
             />
             <span class='fw-bold'>Pending Invites</span>
-            <span class='badge rounded-pill small bg-danger text-white ms-auto'>{{ invites.length }}</span>
+            <TablerBadge
+                class='rounded-pill small ms-auto'
+                background-color='rgba(239, 68, 68, 0.2)'
+                border-color='rgba(239, 68, 68, 0.5)'
+                text-color='#dc2626'
+            >
+                {{ invites.length }}
+            </TablerBadge>
             <IconChevronDown
                 v-if='!showInvites'
                 :size='20'
@@ -72,9 +79,9 @@ import {
     IconTrash
 } from '@tabler/icons-vue';
 import { useRouter } from 'vue-router';
-import { TablerIconButton } from '@tak-ps/vue-tabler';
+import { TablerBadge, TablerIconButton } from '@tak-ps/vue-tabler';
 import StandardItem from '../../util/StandardItem.vue';
-import { std, stdurl } from '../../../../std.ts';
+import { server } from '../../../../std.ts';
 import type { MissionInvite } from '../../../../types.ts';
 
 const props = defineProps<{
@@ -97,13 +104,18 @@ async function acceptInvite(invite: MissionInvite) {
 }
 
 async function deleteInvite(invite: MissionInvite) {
-    const url = stdurl(`/api/marti/missions/${invite.missionGuid}/invite`);
-    url.searchParams.set('type', String(invite.type));
-    url.searchParams.set('invitee', String(invite.invitee));
+    if (!invite.missionGuid || !invite.invitee || !invite.type) return;
 
-    await std(url, {
-        method: 'DELETE'
+    const res = await server.DELETE('/api/marti/missions/{:guid}/invite', {
+        params: {
+            path: { ':guid': invite.missionGuid },
+            query: {
+                type: invite.type as 'clientUid' | 'callsign' | 'userName' | 'group' | 'team',
+                invitee: invite.invitee
+            }
+        }
     });
+    if (res.error) throw new Error(res.error.message);
 
     const newInvites = props.invites.filter(i => i !== invite);
     emit('update:invites', newInvites);

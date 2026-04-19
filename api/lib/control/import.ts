@@ -1,9 +1,12 @@
 import Config from '../config.js';
+import Err from '@openaddresses/batch-error';
 import path from 'node:path';
 import S3 from '../aws/s3.js'
 import { Static } from '@sinclair/typebox';
 import type { ImportResponse } from '../types.js';
 import crypto from 'node:crypto';
+import { sql } from 'drizzle-orm';
+import { Import_Status } from '../enums.js';
 import { TAKAPI, APIAuthCertificate } from '@tak-ps/node-tak';
 
 export enum ImportSourceEnum {
@@ -70,5 +73,72 @@ export default class ImportControl {
             ...imp,
             results: []
         };
+    }
+
+    async update(
+        id: string,
+        body: {
+            status?: Import_Status;
+            error?: string;
+        }
+    ): Promise<Static<typeof ImportResponse>> {
+        const imported = await this.config.models.Import.augmented_from(id);
+
+        if (body.status && [Import_Status.EMPTY, Import_Status.PENDING].includes(body.status)) {
+            throw new Err(400, null, `Cannot set status to ${body.status}`);
+        } else if (body.status === Import_Status.RUNNING && imported.status === Import_Status.RUNNING) {
+            throw new Err(400, null, `Cannot set status to running on an import that is already running`);
+        }
+
+        const new_import = await this.config.models.Import.commit(id, {
+            ...body,
+            updated: sql`Now()`
+        });
+
+        const response = {
+            ...new_import,
+            results: imported.results
+        };
+
+        if (body.status === Import_Status.FAIL || body.status === Import_Status.SUCCESS) {
+            for (const client of this.config.wsClients.get(imported.username) || []) {
+                client.ws.send(JSON.stringify({
+                    type: 'import',
+                    properties: response
+                }))
+            }
+        }
+
+        return response;
+    }
+
+    async retry(id: string): Promise<Static<typeof ImportResponse>> {
+        const imported = await this.config.models.Import.augmented_from(id);
+
+        if (imported.status !== Import_Status.FAIL) {
+            throw new Err(400, null, 'Only failed imports can be retried');
+        }
+
+        await this.config.models.ImportResult.delete(sql`import = ${id}`);
+
+        const new_import = await this.config.models.Import.commit(id, {
+            status: Import_Status.PENDING,
+            error: null,
+            updated: sql`Now()`
+        });
+
+        return {
+            ...new_import,
+            results: []
+        };
+    }
+
+    async delete(id: string): Promise<void> {
+        const imported = await this.config.models.Import.from(id);
+
+        const ext = path.parse(imported.name).ext;
+        await S3.del(`import/${imported.id}${ext}`);
+
+        await this.config.models.Import.delete(id);
     }
 }
