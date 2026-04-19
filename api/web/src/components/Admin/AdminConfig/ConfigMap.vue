@@ -116,6 +116,7 @@ import SlideDownHeader from '../../CloudTAK/util/SlideDownHeader.vue';
 import { ref, watch, onMounted } from 'vue';
 import { server } from '../../../std.ts';
 import { validateLatLng } from '../../../base/validators.ts';
+import type { paths } from '@cloudtak/api-types';
 import BasemapSelect from '../../util/BasemapSelect.vue';
 import {
     TablerLoading,
@@ -128,6 +129,18 @@ import {
     IconDeviceFloppy,
     IconX
 } from '@tabler/icons-vue';
+
+type ConfigUpdateBody = paths['/api/config']['put']['requestBody']['content']['application/json'];
+type GroundOverlayConfigUpdateBody = ConfigUpdateBody & {
+    'map::center': string;
+    'map::zoom': number;
+    'map::bearing': number;
+    'map::pitch': number;
+    'map::basemap': number | null;
+    'map::groundoverlay::max_size_mb': number;
+    'map::groundoverlay::max_total_size_mb': number;
+    'map::groundoverlay::max_count': number;
+};
 
 const isOpen = ref<boolean>(false);
 const loading = ref<boolean>(false);
@@ -207,7 +220,7 @@ async function save() {
     loading.value = true;
     err.value = null;
     try {
-        const payload = { ...config.value };
+        const payload: GroundOverlayConfigUpdateBody = { ...config.value };
         // Save as Lng,Lat
         payload['map::center'] = payload['map::center'].split(',').reverse().join(',');
         payload['map::groundoverlay::max_size_mb'] = Number(payload['map::groundoverlay::max_size_mb']);
@@ -215,7 +228,7 @@ async function save() {
         payload['map::groundoverlay::max_count'] = Number(payload['map::groundoverlay::max_count']);
 
         const res = await server.PUT('/api/config', {
-            body: payload as any
+            body: payload as ConfigUpdateBody
         });
         if (res.error) throw new Error(res.error.message);
         edit.value = false;
