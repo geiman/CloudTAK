@@ -1,6 +1,6 @@
 <template>
     <MenuTemplate name='Settings'>
-        <div class='col-12 d-flex flex-column gap-2 p-3'>
+        <div class='col-12 d-flex flex-column gap-2 py-3'>
             <StandardItem
                 @click='router.push("/menu/settings/callsign")'
             >
@@ -54,6 +54,19 @@
                 </div>
             </StandardItem>
             <StandardItem
+                @click='router.push("/menu/settings/passkeys")'
+            >
+                <div class='d-flex align-items-center px-2 py-2'>
+                    <IconFingerprint
+                        :size='32'
+                        stroke='1'
+                    />
+                    <div class='ms-2 flex-grow-1 font-weight-bold'>
+                        Login Passkeys
+                    </div>
+                </div>
+            </StandardItem>
+            <StandardItem
                 @click='refreshApp()'
             >
                 <div class='d-flex align-items-center px-2 py-2'>
@@ -80,6 +93,7 @@ import {
     IconUserCog,
     IconAdjustments,
     IconLock,
+    IconFingerprint,
 } from '@tabler/icons-vue';
 import { useMapStore } from '../../../stores/map.ts';
 

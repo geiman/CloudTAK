@@ -164,22 +164,25 @@ export default async function router(schema: Schema, config: Config) {
                         ext: path.parse(filename).ext,
                     };
 
+                    await S3.put(`import/${imported.id}${res.ext}`, file)
+
                     await config.models.Import.commit(imported.id, {
                         status: Import_Status.PENDING,
                     });
-
-                    await S3.put(`import/${imported.id}${res.ext}`, file)
 
                     return res;
                 })())
             }).on('finish', async () => {
                 try {
+                    await Promise.all(uploads);
                     // Refetch to get updated status after commit
                     const refetchedImport = await config.models.Import.augmented_from(req.params.import);
                     res.json(refetchedImport)
                 } catch (err) {
                     Err.respond(err, res);
                 }
+            }).on('error', (err: Error) => {
+                Err.respond(err, res);
             });
 
             req.pipe(bb);
@@ -246,6 +249,8 @@ export default async function router(schema: Schema, config: Config) {
                 } catch (err) {
                     Err.respond(err, res);
                 }
+            }).on('error', (err: Error) => {
+                Err.respond(err, res);
             });
 
             req.pipe(bb);
@@ -383,30 +388,31 @@ export default async function router(schema: Schema, config: Config) {
                 if (imported.username !== user.email) throw new Err(400, null, 'You did not create this import');
             }
 
-            if (req.body.status && [Import_Status.EMPTY, Import_Status.PENDING].includes(req.body.status)) {
-                throw new Err(400, null, `Cannot set status to ${req.body.status}`);
-            } else if (req.body.status === Import_Status.RUNNING && imported.status === Import_Status.RUNNING) {
-                throw new Err(400, null, `Cannot set status to running on an import that is already running`);
-            }
+            const response = await importControl.update(req.params.import, req.body);
 
-            const new_import = await config.models.Import.commit(req.params.import, {
-                ...req.body,
-                updated: sql`Now()`
-            });
+            res.json(response);
+        } catch (err) {
+            Err.respond(err, res);
+        }
+    });
 
-            const response = {
-                ...new_import,
-                results: imported.results
-            };
+    await schema.post('/import/:import/retry', {
+        name: 'Retry Import',
+        group: 'Import',
+        description: 'Retry a failed import by resetting its status to Pending',
+        params: Type.Object({
+            import: Type.String()
+        }),
+        res: ImportResponse
+    }, async (req, res) => {
+        try {
+            const user = await Auth.as_user(config, req);
 
-            if (req.body.status === Import_Status.FAIL || req.body.status === Import_Status.SUCCESS) {
-                for (const client of config.wsClients.get(imported.username) || []) {
-                    client.ws.send(JSON.stringify({
-                        type: 'import',
-                        properties: response
-                    }))
-                }
-            }
+            const imported = await config.models.Import.augmented_from(req.params.import);
+
+            if (imported.username !== user.email && !user.is_admin()) throw new Err(400, null, 'You did not create this import');
+
+            const response = await importControl.retry(req.params.import);
 
             res.json(response);
         } catch (err) {
@@ -437,10 +443,7 @@ export default async function router(schema: Schema, config: Config) {
                 }
             }
 
-            const ext = path.parse(imported.name).ext
-            await S3.del(`import/${imported.id}${ext}`)
-
-            await config.models.Import.delete(req.params.import);
+            await importControl.delete(req.params.import);
 
             res.json({
                 status: 200,

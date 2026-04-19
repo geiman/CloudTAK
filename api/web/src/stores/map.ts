@@ -62,8 +62,10 @@ export const useMapStore = defineStore('cloudtak', {
         zoom: string;
         location: LocationState;
         locationAccuracy: number | undefined;
+        gpsCoordinates: { lat: number; lng: number } | null;
         distanceUnit: string;
         coordFormat: string;
+        defaultPointType: string;
         manualLocationMode: boolean;
         isMobileDetected: boolean;
         gpsWatchId: number | null;
@@ -127,12 +129,14 @@ export const useMapStore = defineStore('cloudtak', {
             toImport: [],
             location: LocationState.Loading,
             locationAccuracy: undefined,
+            gpsCoordinates: null,
             hasSnapping: false,
             db,
             channel: new BroadcastChannel("cloudtak"),
             zoom: 'conditional',
             distanceUnit: 'meter',
             coordFormat: 'dd',
+            defaultPointType: 'u-d-p',
             toastOffset: { x: 70, y: 60 },
             manualLocationMode: false,
             gpsWatchId: null,
@@ -622,6 +626,12 @@ export const useMapStore = defineStore('cloudtak', {
                     }
                 } else if (msg.type === WorkerMessageType.Profile_Location_Coordinates) {
                     this.locationAccuracy = msg.body.accuracy;
+                    if (msg.body.coordinates) {
+                        this.gpsCoordinates = {
+                            lng: msg.body.coordinates[0],
+                            lat: msg.body.coordinates[1]
+                        };
+                    }
                     if (!this.manualLocationMode) {
                         this.location = LocationState.Live;
                     }
@@ -753,7 +763,7 @@ export const useMapStore = defineStore('cloudtak', {
                 }, 500);
             });
 
-            // @ts-ignore Excessively Deep Types
+            // @ts-ignore Don't remove me unless npm run doc passes
             this._map = markRaw(map);
             this._draw = new DrawTool(this);
             this._icons = markRaw(new IconManager(map));
@@ -765,12 +775,19 @@ export const useMapStore = defineStore('cloudtak', {
             const loc = await this.worker.profile.location;
             this.location = loc.source;
             this.locationAccuracy = loc.accuracy;
+            if (loc.coordinates) {
+                this.gpsCoordinates = {
+                    lng: loc.coordinates[0],
+                    lat: loc.coordinates[1]
+                };
+            }
 
             await this.worker.profile.load();
 
             this.callsign = (await ProfileConfig.get('tak_callsign'))?.value || 'Unknown';
             this.zoom = (await ProfileConfig.get('display_zoom'))?.value || 'conditional';
             this.coordFormat = (await ProfileConfig.get('display_coordinate'))?.value || 'dd';
+            this.defaultPointType = (await ProfileConfig.get('tak_type'))?.value || 'u-d-p';
 
             const icon_rotation = (await ProfileConfig.get('display_icon_rotation'))?.value;
 
@@ -948,7 +965,7 @@ export const useMapStore = defineStore('cloudtak', {
                         id,
                         callsign: 'New Feature',
                         archived: true,
-                        type: 'u-d-p',
+                        type: this.defaultPointType,
                         how: 'm-g',
                         time: new Date().toISOString(),
                         start: new Date().toISOString(),
@@ -1000,7 +1017,7 @@ export const useMapStore = defineStore('cloudtak', {
                                 id,
                                 callsign: 'New Feature',
                                 archived: true,
-                                type: 'u-d-p',
+                                type: this.defaultPointType,
                                 how: 'm-g',
                                 time: new Date().toISOString(),
                                 start: new Date().toISOString(),

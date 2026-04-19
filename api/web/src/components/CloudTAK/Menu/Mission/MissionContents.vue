@@ -54,42 +54,29 @@
                 v-if='contents.length'
                 class='px-2 py-2'
             >
-                <div class='px-2 py-2 round btn-group w-100'>
-                    <input
-                        id='photos'
-                        v-model='mode'
-                        value='photos'
-                        type='radio'
-                        class='btn-check'
-                        autocomplete='off'
-                    >
-                    <label
-                        for='photos'
-                        type='button'
-                        class='btn btn-sm'
-                    ><IconPhoto
-                        class='me-1'
-                        :size='20'
-                        stroke='1'
-                    />Photos</label>
-                    <input
-                        id='files'
-                        v-model='mode'
-                        value='files'
-                        type='radio'
-                        class='btn-check'
-                        autocomplete='off'
-                    >
-                    <label
-                        for='files'
-                        type='button'
-                        class='btn btn-sm'
-                    ><IconFiles
-                        class='me-1'
-                        :size='20'
-                        stroke='1'
-                    />Files</label>
-                </div>
+                <TablerPillGroup
+                    v-model='mode'
+                    :options='[
+                        { value: "photos", label: "Photos" },
+                        { value: "files", label: "Files" }
+                    ]'
+                >
+                    <template #option='{ option }'>
+                        <IconPhoto
+                            v-if='option.value === "photos"'
+                            class='me-1'
+                            :size='20'
+                            stroke='1'
+                        />
+                        <IconFiles
+                            v-else
+                            class='me-1'
+                            :size='20'
+                            stroke='1'
+                        />
+                        {{ option.label }}
+                    </template>
+                </TablerPillGroup>
             </div>
             <TablerNone
                 v-if='!filteredContents.length'
@@ -147,7 +134,7 @@
                                 <IconDownload
                                     :size='24'
                                     stroke='1'
-                                    color='white'
+                                    color='currentColor'
                                     class='cursor-pointer'
                                 />
                             </TablerIconButton>
@@ -204,7 +191,7 @@
                                 <IconDownload
                                     :size='32'
                                     stroke='1'
-                                    color='white'
+                                    color='currentColor'
                                     class='cursor-pointer'
                                 />
                             </TablerIconButton>
@@ -223,10 +210,10 @@ import { liveQuery } from 'dexie';
 import { useObservable } from '@vueuse/rxjs';
 import type { Ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { std, stdurl } from '../../../../std.ts';
+import { std, stdurl, server } from '../../../../std.ts';
 import Subscription from '../../../../base/subscription.ts';
 import type { DBSubscriptionContent } from '../../../../base/database.ts';
-import type { Import, Attachment } from '../../../../types.ts';
+import type { Attachment } from '../../../../types.ts';
 import { useFloatStore } from '../../../../stores/float.ts';
 import {
     IconPlus,
@@ -242,6 +229,7 @@ import {
     TablerAlert,
     TablerNone,
     TablerDelete,
+    TablerPillGroup,
 } from '@tak-ps/vue-tabler';
 
 import MenuTemplate from '../../util/MenuTemplate.vue';
@@ -339,16 +327,16 @@ async function downloadFile(name: string, hash: string): Promise<void> {
 async function importFile(name: string, hash: string) {
     loading.value = true;
 
-    const imp = await std('/api/import', {
-        method: 'POST',
+    const res = await server.POST('/api/import', {
         body: {
             name: name,
             source: 'Mission',
             source_id: hash
         }
-    }) as Import;
+    });
+    if (res.error) throw new Error(res.error.message);
 
-    router.push(`/menu/imports/${imp.id}`)
+    router.push(`/menu/imports/${res.data.id}`)
 }
 
 function downloadAssetUrl(hash: string, name: string) {

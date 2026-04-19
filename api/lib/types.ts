@@ -14,6 +14,24 @@ export const LayerIncomingResponse = AugmentedLayerIncoming;
 export const LayerOutgoingResponse = AugmentedLayerOutgoing;
 export const DataResponse = AugmentedData;
 
+export const LayerUpdateManagementItemResponse = Type.Object({
+    id: Type.Integer(),
+    name: Type.String(),
+    task_prefix: Type.String(),
+    current_version: Type.String(),
+    latest_version: Type.Union([Type.Null(), Type.String()]),
+    has_update: Type.Boolean(),
+    has_stack: Type.Boolean(),
+    template: Type.Boolean(),
+    connection: Type.Union([Type.Null(), Type.Integer()]),
+    parent_name: Type.Union([Type.Null(), Type.String()]),
+});
+
+export const LayerUpdateManagementListResponse = Type.Object({
+    total: Type.Integer(),
+    items: Type.Array(LayerUpdateManagementItemResponse)
+});
+
 export const GeoJSONFeatureGeometryPoint = Type.Object({
     type: Type.Literal('Point'),
     coordinates: Type.Tuple([Type.Number(), Type.Number()])
@@ -452,6 +470,10 @@ export const FullConfig = Type.Object({
     'geofence::password': Type.String({ description: 'Geofence Server Password' }),
     'retention::enabled': Type.Boolean({ description: 'Enable scheduled retention processing' }),
     'retention::connection-feature::enabled': Type.Boolean({ description: 'Enable retention processing for connection features' }),
+    'retention::chat::enabled': Type.Boolean({ description: 'Enable retention processing for chat messages' }),
+    'retention::chat::days': Type.Integer({ description: 'Number of days to retain chat messages', minimum: 1 }),
+    'retention::import::enabled': Type.Boolean({ description: 'Enable retention processing for imports' }),
+    'retention::import::days': Type.Integer({ description: 'Number of days to retain imports', minimum: 1 }),
     'agol::enabled': Type.Boolean({ description: 'Enable ArcGIS Online Integration' }),
     'agol::auth_method': Type.String({ description: 'AGOL Auth Type', enum: ['oauth2', 'legacy'] }),
     'agol::token': Type.String({ description: 'AGOL Legacy Token' }),
@@ -496,6 +518,7 @@ export const FullConfig = Type.Object({
     'oidc::redirect': Type.String({ description: 'OIDC App Redirect URL' }),
     'oidc::scopes': Type.String({ description: 'OIDC Scopes' }),
     'oidc::logo': Type.String({ description: 'Base64 encoded PNG for OIDC Logo' }),
+    'passkey::enabled': Type.Boolean({ description: 'Enable Passkey Authentication' }),
     'provider::url': Type.String(),
     'provider::secret': Type.String(),
     'provider::client': Type.String(),
