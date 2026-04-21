@@ -229,12 +229,6 @@
                             >
                                 {{ getLeaseDescription(l) }}
                             </div>
-                            <div
-                                v-if='getLeasePublishDescription(l)'
-                                class='text-secondary small'
-                            >
-                                {{ getLeasePublishDescription(l) }}
-                            </div>
                         </div>
 
                         <div class='d-flex btn-list ms-auto'>
@@ -467,11 +461,6 @@ function getLeaseDescriptionClass(lease: VideoLease): string {
     if (expired(lease.expiration)) return 'text-red';
     if (lease.expiration === null) return 'text-blue';
     return '';
-}
-
-function getLeasePublishDescription(lease: VideoLease): string {
-    if (!lease.publish) return '';
-    return `Published via ${lease.publish_protocol.toUpperCase()}`;
 }
 
 </script>

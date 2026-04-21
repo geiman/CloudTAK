@@ -9,7 +9,7 @@ import { VideoLease } from '../lib/schema.js';
 import { randomUUID } from 'node:crypto';
 import { StandardResponse, VideoLeaseResponse } from '../lib/types.js';
 import { VideoLease_SourceType } from '../lib/enums.js';
-import ECSVideoControl, { Protocol, Protocols } from '../lib/control/video-service.js';
+import ECSVideoControl, { Protocols } from '../lib/control/video-service.js';
 import * as Default from '../lib/limits.js';
 
 export default async function router(schema: Schema, config: Config) {
@@ -174,7 +174,6 @@ export default async function router(schema: Schema, config: Config) {
                 default: false,
                 description: 'Publish stream URL to TAK Server Video Manager'
             }),
-            publish_protocol: Type.Optional(Type.Enum(Protocol)),
             share: Type.Boolean({
                 default: false,
                 description: 'Allow other users to manage lease if they are also members of the channel'
@@ -223,7 +222,6 @@ export default async function router(schema: Schema, config: Config) {
                 recording: req.body.recording,
                 share: req.body.share,
                 publish: req.body.publish,
-                publish_protocol: req.body.publish_protocol || Protocol.RTSP,
                 path: randomUUID(),
                 secure: req.body.secure,
                 connection: req.params.connectionid,
@@ -275,7 +273,6 @@ export default async function router(schema: Schema, config: Config) {
             publish: Type.Optional(Type.Boolean({
                 description: 'Publish stream URL to TAK Server Video Manager'
             })),
-            publish_protocol: Type.Optional(Type.Enum(Protocol)),
             proxy: Type.Optional(Type.String()),
         }),
         res: Type.Object({
@@ -325,7 +322,6 @@ export default async function router(schema: Schema, config: Config) {
                 recording: req.body.recording,
                 share: req.body.share,
                 publish: req.body.publish,
-                publish_protocol: req.body.publish_protocol,
                 source_id: req.body.source_id,
                 source_type: req.body.source_type,
                 source_model: req.body.source_model,

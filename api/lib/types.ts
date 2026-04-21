@@ -263,8 +263,7 @@ export const VideoLeaseResponse = createSelectSchema(schemas.VideoLease, {
     expiration: Type.Union([Type.Null(), Type.String()]),
     channel: Type.Union([Type.Null(), Type.String()]),
     proxy: Type.Union([Type.Null(), Type.String()]),
-    source_type: Type.Enum(VideoLease_SourceType),
-    publish_protocol: Type.String({ enum: ['rtsp', 'hls', 'rtmp', 'srt'] }),
+    source_type: Type.Enum(VideoLease_SourceType)
 });
 
 export const ProfileOverlayResponse = createSelectSchema(schemas.ProfileOverlay, {

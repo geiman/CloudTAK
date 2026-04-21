@@ -135,7 +135,6 @@ test('POST: api/video/lease - Create Lease', async () => {
         assert.equal(res.status, 200, 'Status 200');
         assert.ok(res.body.id, 'Lease ID returned');
         assert.equal(res.body.name, 'Test Lease', 'Name matches');
-        assert.equal(res.body.publish_protocol, 'rtsp', 'Default publish protocol is RTSP');
         leaseId = res.body.id;
         leasePath = res.body.path;
     } catch (err) {
@@ -230,14 +229,12 @@ test('POST: api/video/lease - Publish Lease via TAK v2 video API', async () => {
                 name: 'Published Lease',
                 duration: 3600,
                 publish: true,
-                publish_protocol: 'rtmp',
                 channel: 'Blue'
             }
         }, true);
 
         assert.equal(res.status, 200, 'Status 200');
         assert.ok(res.body.id, 'Lease ID returned');
-        assert.equal(res.body.publish_protocol, 'rtmp', 'Selected publish protocol is persisted');
         publishedLeaseId = res.body.id;
         publishedLeasePath = res.body.path;
 
@@ -254,7 +251,7 @@ test('POST: api/video/lease - Publish Lease via TAK v2 video API', async () => {
                     uuid: publishedLeasePath,
                     active: true,
                     alias: 'Published Lease',
-                    url: `rtmp://video.example.com:1935/${publishedLeasePath}`,
+                    url: `https://video.example.com/stream/${publishedLeasePath}/index.m3u8`,
                     macAddress: '',
                     roverPort: '-1',
                     ignoreEmbeddedKLV: '',

@@ -150,7 +150,6 @@ export const VideoLease = pgTable('video_lease', {
 
     // Publish to the TAK Server Video Config API
     publish: boolean().notNull().default(false),
-    publish_protocol: text().notNull().default('rtsp'),
     recording: boolean().notNull().default(false),
     share: boolean().notNull().default(false),
 
