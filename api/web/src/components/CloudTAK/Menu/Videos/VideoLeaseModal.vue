@@ -287,6 +287,16 @@
                         v-if='disabled'
                         class='col-12 pt-2'
                     >
+                        <div
+                            v-if='editLease.publish'
+                            class='col-12 pb-2'
+                        >
+                            <CopyField
+                                label='Published TAK Feed Protocol'
+                                :model-value='editLease.publish_protocol.toUpperCase()'
+                            />
+                        </div>
+
                         <div class='col-12 d-flex align-items-center mb-1'>
                             <label>Expiration</label>
 
@@ -453,6 +463,23 @@
                         description='Publish the non-geolocated Video Stream to the Video Manager'
                     />
                 </div>
+                <div
+                    v-if='editLease.publish'
+                    class='col-12 col-md-6'
+                >
+                    <TablerEnum
+                        v-model='editLease.publish_protocol'
+                        :options='[
+                            "rtsp",
+                            "hls",
+                            "rtmp",
+                            "srt"
+                        ]'
+                        :disabled='disabled'
+                        label='TAK Publish Protocol'
+                        description='Choose which transport CloudTAK registers with TAK Server for this lease.'
+                    />
+                </div>
                 <div class='col-12 col-md-6'>
                     <TablerToggle
                         v-model='editLease.recording'
@@ -602,6 +629,7 @@ const editLease = ref<{
     duration: string
     recording: boolean
     publish: boolean
+    publish_protocol: 'rtsp' | 'hls' | 'rtmp' | 'srt'
     share: boolean
     channel: string | null
     source_type: string
@@ -618,6 +646,7 @@ const editLease = ref<{
     channel: null,
     recording: false,
     publish: false,
+    publish_protocol: 'rtsp',
     share: true,
     source_type: 'unknown',
     source_model: '',
@@ -720,6 +749,7 @@ async function saveLease() {
                     permanent: editLease.value.duration === 'Permanent' ? true : false,
                     recording: editLease.value.recording,
                     publish: editLease.value.publish,
+                    publish_protocol: editLease.value.publish_protocol,
                     share: editLease.value.share,
                     source_type: editLease.value.source_type,
                     source_model: editLease.value.source_model,
@@ -737,6 +767,7 @@ async function saveLease() {
                     permanent: editLease.value.duration === 'Permanent' ? true : false,
                     recording: editLease.value.recording,
                     publish: editLease.value.publish,
+                    publish_protocol: editLease.value.publish_protocol,
                     share: editLease.value.share,
                     source_type: editLease.value.source_type,
                     source_model: editLease.value.source_model,
