@@ -264,7 +264,6 @@ export default class VideoServiceControl {
             connect: {
                 cert: auth.cert,
                 key: auth.key,
-                rejectUnauthorized: false,
             }
         });
     }
@@ -282,7 +281,14 @@ export default class VideoServiceControl {
         feeds: Array<Record<string, string | boolean>>;
     }> {
         const protocols = await this.protocols(lease, ProtocolPopulation.READ);
-        if (!protocols.hls) throw new Err(400, null, 'Only HLS shared video streams are supported at this time');
+        const publishProtocol = Object.values(Protocol).includes(lease.publish_protocol as Protocol)
+            ? lease.publish_protocol as Protocol
+            : Protocol.RTSP;
+        const feedProtocol = protocols[publishProtocol];
+
+        if (!feedProtocol) {
+            throw new Err(400, null, `Configured TAK publish protocol is unavailable: ${publishProtocol.toUpperCase()}`);
+        }
 
         return {
             uuid: lease.path,
@@ -294,7 +300,7 @@ export default class VideoServiceControl {
                 uuid: lease.path,
                 active: true,
                 alias: lease.name,
-                url: protocols.hls.url,
+                url: feedProtocol.url,
                 macAddress: '',
                 roverPort: '-1',
                 ignoreEmbeddedKLV: '',
@@ -594,6 +600,7 @@ export default class VideoServiceControl {
         layer?: number;
         recording: boolean;
         publish: boolean;
+        publish_protocol: Protocol;
         secure: boolean;
         share: boolean;
         channel?: string | null;
@@ -619,6 +626,7 @@ export default class VideoServiceControl {
             path: opts.path,
             recording: opts.recording,
             publish: opts.publish,
+            publish_protocol: opts.publish_protocol,
             source_id: opts.source_id,
             source_type: opts.source_type,
             source_model: opts.source_model,
@@ -762,6 +770,7 @@ export default class VideoServiceControl {
             expiration?: string | null,
             recording?: boolean,
             publish?: boolean,
+            publish_protocol?: Protocol,
             source_id: string | null | undefined;
             source_type?: VideoLease_SourceType,
             source_model?: string,
