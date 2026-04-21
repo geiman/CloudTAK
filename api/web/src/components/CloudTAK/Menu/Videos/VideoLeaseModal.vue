@@ -294,6 +294,16 @@
                 </template>
 
                 <div
+                    v-if='disabled && editLease.publish'
+                    class='col-12 pt-2'
+                >
+                    <CopyField
+                        label='Published TAK Feed Protocol'
+                        :model-value='editLease.publish_protocol.toUpperCase()'
+                    />
+                </div>
+
+                <div
                     v-if='editLease.proxy'
                     class='col-12 pt-4'
                 >
@@ -418,6 +428,23 @@
                         label='Publish to TAK Server'
                         :disabled='disabled'
                         description='Publish the non-geolocated Video Stream to the Video Manager'
+                    />
+                </div>
+                <div
+                    v-if='editLease.publish'
+                    class='col-12 col-md-6'
+                >
+                    <TablerEnum
+                        v-model='editLease.publish_protocol'
+                        :options='[
+                            "hls",
+                            "rtsp",
+                            "rtmp",
+                            "srt"
+                        ]'
+                        :disabled='disabled'
+                        label='TAK Publish Protocol'
+                        description='HLS uses the v2 TAK API with explicit group scoping. RTSP, RTMP, and SRT use the legacy TAK video path for better client compatibility.'
                     />
                 </div>
                 <div class='col-12 col-md-6'>
@@ -570,6 +597,7 @@ const editLease = ref<{
     duration: string
     recording: boolean
     publish: boolean
+    publish_protocol: 'hls' | 'rtsp' | 'rtmp' | 'srt'
     share: boolean
     channel: string | null
     source_type: string
@@ -586,6 +614,7 @@ const editLease = ref<{
     channel: null,
     recording: false,
     publish: false,
+    publish_protocol: 'hls',
     share: true,
     source_type: 'unknown',
     source_model: '',
@@ -688,6 +717,7 @@ async function saveLease() {
                     permanent: editLease.value.duration === 'Permanent' ? true : false,
                     recording: editLease.value.recording,
                     publish: editLease.value.publish,
+                    publish_protocol: editLease.value.publish_protocol,
                     share: editLease.value.share,
                     source_type: editLease.value.source_type,
                     source_model: editLease.value.source_model,
@@ -705,6 +735,7 @@ async function saveLease() {
                     permanent: editLease.value.duration === 'Permanent' ? true : false,
                     recording: editLease.value.recording,
                     publish: editLease.value.publish,
+                    publish_protocol: editLease.value.publish_protocol,
                     share: editLease.value.share,
                     source_type: editLease.value.source_type,
                     source_model: editLease.value.source_model,

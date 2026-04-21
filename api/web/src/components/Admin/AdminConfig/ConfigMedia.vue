@@ -61,6 +61,15 @@
                             placeholder='https://video.example.com'
                         />
                     </div>
+                    <div class='col-lg-12 mt-3'>
+                        <TablerInput
+                            v-model='config["video::legacy_uploader_username"]'
+                            :disabled='!edit'
+                            label='Legacy Video Uploader Username'
+                            description='Dedicated non-admin CloudTAK profile used when publishing RTSP, RTMP, or SRT feeds through the legacy TAK video endpoint.'
+                            placeholder='video-uploader@example.com'
+                        />
+                    </div>
                 </div>
             </template>
         </div>
@@ -88,6 +97,7 @@ interface MediaConfig {
     'media::url': string;
     'media::internal_url': string;
     'media::public_url': string;
+    'video::legacy_uploader_username': string;
 }
 
 const isOpen = ref<boolean>(false);
@@ -99,6 +109,7 @@ const config = ref<MediaConfig>({
     'media::url': '',
     'media::internal_url': '',
     'media::public_url': '',
+    'video::legacy_uploader_username': '',
 });
 
 onMounted(() => {
@@ -128,6 +139,7 @@ async function fetch(): Promise<void> {
             'media::url': legacy,
             'media::internal_url': internal,
             'media::public_url': publicUrl,
+            'video::legacy_uploader_username': res['video::legacy_uploader_username'] || '',
         };
     } catch (error) {
         err.value = error instanceof Error ? error : new Error(String(error));
@@ -142,6 +154,7 @@ async function save(): Promise<void> {
         const body = {
             'media::internal_url': config.value['media::internal_url'].trim(),
             'media::public_url': config.value['media::public_url'].trim(),
+            'video::legacy_uploader_username': config.value['video::legacy_uploader_username'].trim(),
         };
 
         await std(`/api/config`, {

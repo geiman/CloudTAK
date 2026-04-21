@@ -10,6 +10,7 @@ import { VideoLease_SourceType } from '../enums.js';
 import fetch from '../fetch.js';
 import { Agent } from 'undici';
 import { TAKAPI, APIAuthCertificate } from '@tak-ps/node-tak';
+import xmljs from 'xml-js';
 
 export enum ProtocolPopulation {
     TEMPLATE,
@@ -33,6 +34,15 @@ export enum Action {
     METRICS = "metrics",
     PPROF = "pprof",
 }
+
+export const TakPublishProtocolSchema = Type.Union([
+    Type.Literal(Protocol.HLS),
+    Type.Literal(Protocol.RTSP),
+    Type.Literal(Protocol.RTML),
+    Type.Literal(Protocol.SRT),
+]);
+
+export type TakPublishProtocol = 'hls' | 'rtsp' | 'rtmp' | 'srt';
 
 export const Protocols = Type.Object({
     rtmp: Type.Optional(Type.Object({
@@ -143,6 +153,7 @@ export const Configuration = Type.Object({
 
 export default class VideoServiceControl {
     config: Config;
+    static legacyUploaderLocks = new Map<string, Promise<void>>();
 
     constructor(config: Config) {
         this.config = config;
@@ -273,6 +284,247 @@ export default class VideoServiceControl {
         return new URL(pathname, String(this.config.server.api));
     }
 
+    takePublishProtocol(lease: Static<typeof VideoLeaseResponse>): TakPublishProtocol {
+        switch (lease.publish_protocol) {
+        case Protocol.RTSP:
+        case Protocol.RTML:
+        case Protocol.SRT:
+            return lease.publish_protocol;
+        case Protocol.HLS:
+        default:
+            return Protocol.HLS;
+        }
+    }
+
+    async takLegacyUploaderProfile(): Promise<Awaited<ReturnType<Config['models']['Profile']['from']>>> {
+        const { value } = await this.config.models.Setting.typed('video::legacy_uploader_username', '');
+        const username = String(value || '').trim();
+
+        if (!username) {
+            throw new Err(400, null, 'Legacy TAK video uploader username is not configured');
+        }
+
+        const profile = await this.config.models.Profile.from(username);
+
+        if (profile.system_admin) {
+            throw new Err(400, null, 'Legacy TAK video uploader must not be a system administrator');
+        }
+
+        return profile;
+    }
+
+    async takLegacyUploaderApi(): Promise<{
+        profile: Awaited<ReturnType<Config['models']['Profile']['from']>>;
+        api: TAKAPI;
+    }> {
+        const profile = await this.takLegacyUploaderProfile();
+
+        return {
+            profile,
+            api: await TAKAPI.init(
+                new URL(String(this.config.server.api)),
+                new APIAuthCertificate(profile.auth.cert, profile.auth.key)
+            )
+        };
+    }
+
+    async withLegacyUploaderLock<T>(key: string, task: () => Promise<T>): Promise<T> {
+        const previous = VideoServiceControl.legacyUploaderLocks.get(key);
+        let release: () => void = () => {};
+        const gate = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+
+        VideoServiceControl.legacyUploaderLocks.set(key, gate);
+
+        if (previous) {
+            await previous.catch(() => undefined);
+        }
+
+        try {
+            return await task();
+        } finally {
+            release();
+
+            if (VideoServiceControl.legacyUploaderLocks.get(key) === gate) {
+                VideoServiceControl.legacyUploaderLocks.delete(key);
+            }
+        }
+    }
+
+    async wait(ms: number): Promise<void> {
+        await new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    activeGroupNames(groups: Array<{
+        name: string;
+        active: boolean;
+    }>): string[] {
+        return groups
+            .filter((group) => group.active)
+            .map((group) => group.name)
+            .sort();
+    }
+
+    async verifyLegacyUploaderGroups(api: TAKAPI, expectedNames: string[]): Promise<Array<{
+        name: string;
+        direction: string;
+        created: string;
+        type: string;
+        bitpos: number;
+        active: boolean;
+        description?: string;
+    }>> {
+        const expected = [...expectedNames].sort();
+        const deadline = Date.now() + 2000;
+        let last: Array<{
+            name: string;
+            direction: string;
+            created: string;
+            type: string;
+            bitpos: number;
+            active: boolean;
+            description?: string;
+        }> | undefined;
+
+        while (Date.now() <= deadline) {
+            last = (await api.Group.list({ useCache: true })).data;
+
+            if (JSON.stringify(this.activeGroupNames(last)) === JSON.stringify(expected)) {
+                return last;
+            }
+
+            await this.wait(100);
+        }
+
+        throw new Err(500, null, `Legacy video uploader active groups did not converge to: ${expected.join(', ')}. Last active groups: ${(last ? this.activeGroupNames(last) : []).join(', ')}`);
+    }
+
+    async setLegacyUploaderGroups(api: TAKAPI, groups: Array<{
+        name: string;
+        direction: string;
+        created: string;
+        type: string;
+        bitpos: number;
+        active: boolean;
+        description?: string;
+    }>, targetNames: string[]): Promise<void> {
+        const missing = targetNames.filter((target) => !groups.some((group) => group.name === target));
+        if (missing.length) {
+            throw new Err(400, null, `Legacy uploader is not a member of TAK group(s): ${missing.join(', ')}`);
+        }
+
+        await api.Group.update(groups.map((group) => ({
+            ...group,
+            active: targetNames.includes(group.name)
+        })));
+
+        await this.verifyLegacyUploaderGroups(api, targetNames);
+    }
+
+    async withLegacyUploaderGroups<T>(lease: Static<typeof VideoLeaseResponse>, task: (api: TAKAPI) => Promise<T>): Promise<T> {
+        if (!lease.channel) throw new Err(400, null, 'Channel must be set when publish is true');
+        const targetChannel = lease.channel;
+
+        const { profile, api } = await this.takLegacyUploaderApi();
+        const lockKey = `${String(this.config.server.api)}|${profile.username}`;
+
+        return await this.withLegacyUploaderLock(lockKey, async () => {
+            const originalGroups = (await api.Group.list({ useCache: true })).data;
+            let taskErr: unknown;
+            let restoreErr: unknown;
+            let result: T | undefined;
+
+            try {
+                await this.setLegacyUploaderGroups(api, originalGroups, [targetChannel]);
+                result = await task(api);
+            } catch (err) {
+                taskErr = err;
+            } finally {
+                try {
+                    await this.setLegacyUploaderGroups(api, originalGroups, this.activeGroupNames(originalGroups));
+                } catch (err) {
+                    restoreErr = err;
+                    console.error('Failed to restore legacy uploader active groups', err);
+                }
+            }
+
+            if (taskErr) throw taskErr;
+            if (restoreErr) throw restoreErr;
+            if (result === undefined) throw new Err(500, null, 'Legacy uploader task returned no result');
+
+            return result;
+        });
+    }
+
+    parseLegacyVideoFeedList(xml: string): Array<{
+        id: number;
+        uuid: string;
+    }> {
+        const parsed = xmljs.xml2js(xml, { compact: true }) as {
+            videoConnections?: {
+                feed?: Array<Record<string, { _text?: string }>> | Record<string, { _text?: string }>;
+            };
+        };
+
+        const rawFeeds = parsed.videoConnections?.feed;
+        const feeds = Array.isArray(rawFeeds)
+            ? rawFeeds
+            : rawFeeds
+                ? [rawFeeds]
+                : [];
+
+        return feeds
+            .map((feed) => ({
+                id: Number(feed.id?._text),
+                uuid: String(feed.uid?._text || ''),
+            }))
+            .filter((feed) => Number.isFinite(feed.id) && feed.uuid.length > 0);
+    }
+
+    async legacyTakVideoFeedByUUID(api: TAKAPI, uuid: string): Promise<{
+        id: number;
+        uuid: string;
+    } | undefined> {
+        const url = this.takVideoUrl('/Marti/vcm');
+        const xml = await api.fetch(url, { method: 'GET' }) as string;
+        return this.parseLegacyVideoFeedList(xml).find((feed) => feed.uuid === uuid);
+    }
+
+    async legacyTakVideoConnectionPayload(lease: Static<typeof VideoLeaseResponse>): Promise<URLSearchParams> {
+        const protocols = await this.protocols(lease, ProtocolPopulation.READ);
+        const publishProtocol = this.takePublishProtocol(lease);
+        const feedProtocol = protocols[publishProtocol];
+
+        if (!feedProtocol) {
+            throw new Err(400, null, `Configured TAK publish protocol is unavailable: ${publishProtocol.toUpperCase()}`);
+        }
+
+        const feedUrl = new URL(feedProtocol.url);
+        const payload = new URLSearchParams();
+
+        payload.set('uuid', lease.path);
+        payload.set('active', 'on');
+        payload.set('alias', lease.name);
+        payload.set('protocol', feedUrl.protocol.replace(/:$/, ''));
+        payload.set('address', feedUrl.hostname);
+        payload.set('port', feedUrl.port || this.defaultPort(feedUrl.protocol));
+        payload.set('path', `${feedUrl.pathname}${feedUrl.search}`);
+        payload.set('preferredMacAddress', '');
+        payload.set('roverPort', '-1');
+        payload.set('timeout', '5000');
+        payload.set('buffer', '');
+        payload.set('latitude', '');
+        payload.set('longitude', '');
+        payload.set('fov', '');
+        payload.set('heading', '');
+        payload.set('range', '');
+        payload.set('thumbnail', '');
+        payload.set('classification', '');
+
+        return payload;
+    }
+
     async takVideoConnectionPayload(lease: Static<typeof VideoLeaseResponse>): Promise<{
         uuid: string;
         active: boolean;
@@ -282,7 +534,9 @@ export default class VideoServiceControl {
         feeds: Array<Record<string, string | boolean>>;
     }> {
         const protocols = await this.protocols(lease, ProtocolPopulation.READ);
-        if (!protocols.hls) throw new Err(400, null, 'Only HLS shared video streams are supported at this time');
+        const feedProtocol = protocols.hls;
+
+        if (!feedProtocol) throw new Err(400, null, 'Configured TAK publish protocol is unavailable: HLS');
 
         return {
             uuid: lease.path,
@@ -294,7 +548,7 @@ export default class VideoServiceControl {
                 uuid: lease.path,
                 active: true,
                 alias: lease.name,
-                url: protocols.hls.url,
+                url: feedProtocol.url,
                 macAddress: '',
                 roverPort: '-1',
                 ignoreEmbeddedKLV: '',
@@ -315,6 +569,23 @@ export default class VideoServiceControl {
 
     async publishTakVideoFeed(lease: Static<typeof VideoLeaseResponse>): Promise<void> {
         if (!lease.channel) throw new Err(400, null, 'Channel must be set when publish is true');
+
+        const publishProtocol = this.takePublishProtocol(lease);
+
+        if (publishProtocol !== Protocol.HLS) {
+            await this.withLegacyUploaderGroups(lease, async (api) => {
+                const existing = await this.legacyTakVideoFeedByUUID(api, lease.path);
+                const url = this.takVideoUrl('/Marti/vcu');
+                if (existing) url.searchParams.set('feedId', String(existing.id));
+
+                await api.fetch(url, {
+                    method: 'POST',
+                    body: await this.legacyTakVideoConnectionPayload(lease),
+                });
+            });
+
+            return;
+        }
 
         const auth = await this.takAuthForLease(lease);
         const dispatcher = this.takVideoDispatcher(auth);
@@ -342,6 +613,25 @@ export default class VideoServiceControl {
     }
 
     async deleteTakVideoFeed(lease: Static<typeof VideoLeaseResponse>): Promise<void> {
+        const publishProtocol = this.takePublishProtocol(lease);
+
+        if (publishProtocol !== Protocol.HLS) {
+            await this.withLegacyUploaderGroups(lease, async (api) => {
+                const existing = await this.legacyTakVideoFeedByUUID(api, lease.path);
+                if (!existing) return;
+
+                const url = this.takVideoUrl('/Marti/vcm');
+                url.searchParams.set('id', String(existing.id));
+
+                const res = await api.fetch(url, { method: 'DELETE' }, true);
+                if (!res.ok && res.status !== 404) {
+                    throw new Err(res.status, null, 'Failed to delete TAK legacy video feed');
+                }
+            });
+
+            return;
+        }
+
         const auth = await this.takAuthForLease(lease);
         const dispatcher = this.takVideoDispatcher(auth);
 
@@ -594,6 +884,7 @@ export default class VideoServiceControl {
         layer?: number;
         recording: boolean;
         publish: boolean;
+        publish_protocol: TakPublishProtocol;
         secure: boolean;
         share: boolean;
         channel?: string | null;
@@ -619,6 +910,7 @@ export default class VideoServiceControl {
             path: opts.path,
             recording: opts.recording,
             publish: opts.publish,
+            publish_protocol: opts.publish_protocol,
             source_id: opts.source_id,
             source_type: opts.source_type,
             source_model: opts.source_model,
@@ -762,6 +1054,7 @@ export default class VideoServiceControl {
             expiration?: string | null,
             recording?: boolean,
             publish?: boolean,
+            publish_protocol?: TakPublishProtocol,
             source_id: string | null | undefined;
             source_type?: VideoLease_SourceType,
             source_model?: string,

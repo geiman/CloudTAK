@@ -33,5 +33,6 @@ export const FullConfigDefaults: Partial<Static<typeof FullConfig>> = {
     'media::url': '',
     'media::internal_url': '',
     'media::public_url': '',
+    'video::legacy_uploader_username': '',
     'external::applications': [],
 };

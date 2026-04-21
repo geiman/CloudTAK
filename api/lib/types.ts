@@ -281,7 +281,13 @@ export const VideoLeaseResponse = createSelectSchema(schemas.VideoLease, {
     expiration: Type.Union([Type.Null(), Type.String()]),
     channel: Type.Union([Type.Null(), Type.String()]),
     proxy: Type.Union([Type.Null(), Type.String()]),
-    source_type: Type.Enum(VideoLease_SourceType)
+    source_type: Type.Enum(VideoLease_SourceType),
+    publish_protocol: Type.Union([
+        Type.Literal('hls'),
+        Type.Literal('rtsp'),
+        Type.Literal('rtmp'),
+        Type.Literal('srt'),
+    ]),
 });
 
 export const ProfileOverlayResponse = createSelectSchema(schemas.ProfileOverlay, {
@@ -486,6 +492,7 @@ export const FullConfig = Type.Object({
     'media::url': Type.String({ description: 'Legacy base URL for Media Service' }),
     'media::internal_url': Type.String({ description: 'Internal base URL for Media Service API calls' }),
     'media::public_url': Type.String({ description: 'Public base URL for Media Service playback and metadata' }),
+    'video::legacy_uploader_username': Type.String({ description: 'Dedicated non-admin CloudTAK profile username used for legacy TAK video publishing' }),
     'map::center': Type.String({ description: 'Map Center Coordinates (lng,lat)' }),
     'map::pitch': Type.Integer({ description: 'Default Map Pitch Angle', minimum: 0, maximum: 90 }),
     'map::bearing': Type.Integer({ description: 'Default Map Bearing', minimum: 0, maximum: 360 }),
