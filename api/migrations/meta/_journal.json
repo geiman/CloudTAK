@@ -1177,13 +1177,6 @@
       "when": 1775836800000,
       "tag": "0167_grounded_sprite",
       "breakpoints": true
-    },
-    {
-      "idx": 168,
-      "version": "7",
-      "when": 1776744000000,
-      "tag": "0168_publish_protocol",
-      "breakpoints": true
     }
   ]
 }

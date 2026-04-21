@@ -12842,7 +12842,7 @@ export interface paths {
                     /** @description Order in which results are returned based on the "sort" query param */
                     order: "asc" | "desc";
                     /** @description No Description */
-                    sort: "id" | "name" | "created" | "updated" | "username" | "connection" | "layer" | "source_id" | "source_type" | "source_model" | "publish" | "publish_protocol" | "recording" | "share" | "ephemeral" | "channel" | "expiration" | "path" | "stream_user" | "stream_pass" | "read_user" | "read_pass" | "proxy" | "enableRLS";
+                    sort: "id" | "name" | "created" | "updated" | "username" | "connection" | "layer" | "source_id" | "source_type" | "source_model" | "publish" | "recording" | "share" | "ephemeral" | "channel" | "expiration" | "path" | "stream_user" | "stream_pass" | "read_user" | "read_pass" | "proxy" | "enableRLS";
                     /** @description Filter results by a human readable name field */
                     filter: string;
                 };
@@ -12875,7 +12875,6 @@ export interface paths {
                                 source_type: "unknown" | "fixed" | "vehicle" | "screenshare" | "personal" | "rotor" | "fixedwing" | "uas-rotor" | "uas-fixedwing";
                                 source_model: string;
                                 publish: boolean;
-                                publish_protocol: "rtsp" | "hls" | "rtmp" | "srt";
                                 recording: boolean;
                                 share: boolean;
                                 ephemeral: boolean;
@@ -12990,7 +12989,6 @@ export interface paths {
                          * @default false
                          */
                         publish: boolean;
-                        publish_protocol?: "rtsp" | "hls" | "rtmp" | "srt";
                         /**
                          * @description Allow other users to manage lease if they are also members of the channel
                          * @default false
@@ -13029,7 +13027,6 @@ export interface paths {
                                 source_type: "unknown" | "fixed" | "vehicle" | "screenshare" | "personal" | "rotor" | "fixedwing" | "uas-rotor" | "uas-fixedwing";
                                 source_model: string;
                                 publish: boolean;
-                                publish_protocol: "rtsp" | "hls" | "rtmp" | "srt";
                                 recording: boolean;
                                 share: boolean;
                                 ephemeral: boolean;
@@ -13262,7 +13259,6 @@ export interface paths {
                                 source_type: "unknown" | "fixed" | "vehicle" | "screenshare" | "personal" | "rotor" | "fixedwing" | "uas-rotor" | "uas-fixedwing";
                                 source_model: string;
                                 publish: boolean;
-                                publish_protocol: "rtsp" | "hls" | "rtmp" | "srt";
                                 recording: boolean;
                                 share: boolean;
                                 ephemeral: boolean;
@@ -13492,7 +13488,6 @@ export interface paths {
                         recording?: boolean;
                         /** @description Publish stream URL to TAK Server Video Manager */
                         publish?: boolean;
-                        publish_protocol?: "rtsp" | "hls" | "rtmp" | "srt";
                         proxy?: string;
                     };
                 };
@@ -13517,7 +13512,6 @@ export interface paths {
                                 source_type: "unknown" | "fixed" | "vehicle" | "screenshare" | "personal" | "rotor" | "fixedwing" | "uas-rotor" | "uas-fixedwing";
                                 source_model: string;
                                 publish: boolean;
-                                publish_protocol: "rtsp" | "hls" | "rtmp" | "srt";
                                 recording: boolean;
                                 share: boolean;
                                 ephemeral: boolean;
@@ -38356,7 +38350,6 @@ export interface paths {
                                 source_type: "unknown" | "fixed" | "vehicle" | "screenshare" | "personal" | "rotor" | "fixedwing" | "uas-rotor" | "uas-fixedwing";
                                 source_model: string;
                                 publish: boolean;
-                                publish_protocol: "rtsp" | "hls" | "rtmp" | "srt";
                                 recording: boolean;
                                 share: boolean;
                                 ephemeral: boolean;
@@ -38473,7 +38466,6 @@ export interface paths {
                          * @default false
                          */
                         publish: boolean;
-                        publish_protocol?: "rtsp" | "hls" | "rtmp" | "srt";
                         /**
                          * @description Allow other users to manage lease if they are also members of the channel
                          * @default false
@@ -38511,7 +38503,6 @@ export interface paths {
                             source_type: "unknown" | "fixed" | "vehicle" | "screenshare" | "personal" | "rotor" | "fixedwing" | "uas-rotor" | "uas-fixedwing";
                             source_model: string;
                             publish: boolean;
-                            publish_protocol: "rtsp" | "hls" | "rtmp" | "srt";
                             recording: boolean;
                             share: boolean;
                             ephemeral: boolean;
@@ -38632,7 +38623,6 @@ export interface paths {
                             source_type: "unknown" | "fixed" | "vehicle" | "screenshare" | "personal" | "rotor" | "fixedwing" | "uas-rotor" | "uas-fixedwing";
                             source_model: string;
                             publish: boolean;
-                            publish_protocol: "rtsp" | "hls" | "rtmp" | "srt";
                             recording: boolean;
                             share: boolean;
                             ephemeral: boolean;
@@ -38829,7 +38819,6 @@ export interface paths {
                         recording?: boolean;
                         /** @description Publish stream URL to TAK Server Video Manager */
                         publish?: boolean;
-                        publish_protocol?: "rtsp" | "hls" | "rtmp" | "srt";
                         /** @description Allow other users to manage lease if they are also members of the channel */
                         share?: boolean;
                         /** @description System Admins can create non-expiring leases */
@@ -38857,7 +38846,6 @@ export interface paths {
                             source_type: "unknown" | "fixed" | "vehicle" | "screenshare" | "personal" | "rotor" | "fixedwing" | "uas-rotor" | "uas-fixedwing";
                             source_model: string;
                             publish: boolean;
-                            publish_protocol: "rtsp" | "hls" | "rtmp" | "srt";
                             recording: boolean;
                             share: boolean;
                             ephemeral: boolean;
