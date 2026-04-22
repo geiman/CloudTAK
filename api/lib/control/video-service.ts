@@ -725,19 +725,31 @@ export default class VideoServiceControl {
         const publishProtocol = this.takePublishProtocol(lease);
 
         if (publishProtocol !== Protocol.HLS) {
-            await this.withLegacyUploaderGroups(lease, async (api) => {
-                const existing = await this.legacyTakVideoFeedByUUID(api, lease.path);
-                if (!existing) return;
+            const existing = await this.withLegacyUploaderGroups(lease, async (api) => {
+                return await this.legacyTakVideoFeedByUUID(api, lease.path);
+            });
 
+            if (!existing) return;
+
+            const auth = await this.takAuthForLease(lease);
+            const dispatcher = this.takVideoDispatcher(auth);
+
+            try {
                 const url = this.takVideoUrl('/Marti/vcm');
                 url.searchParams.set('id', String(existing.id));
 
-                const res = await api.fetch(url, { method: 'DELETE' }, true);
+                const res = await fetch(url, {
+                    method: 'DELETE',
+                    dispatcher,
+                });
+
                 if (!res.ok && res.status !== 404) {
                     const body = await res.text();
                     throw new Err(res.status, null, `Failed to delete TAK legacy video feed (id=${existing.id}, uuid=${lease.path}): ${body || `HTTP ${res.status}`}`);
                 }
-            });
+            } finally {
+                await dispatcher.close();
+            }
 
             return;
         }
