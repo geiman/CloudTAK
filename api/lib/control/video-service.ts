@@ -731,7 +731,7 @@ export default class VideoServiceControl {
 
             if (!existing) return;
 
-            const auth = await this.takAuthForLease(lease);
+            const auth = this.config.serverCert();
             const dispatcher = this.takVideoDispatcher(auth);
 
             try {
