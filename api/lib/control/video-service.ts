@@ -434,7 +434,7 @@ export default class VideoServiceControl {
             const originalGroups = (await api.Group.list({ useCache: true })).data;
             let taskErr: unknown;
             let restoreErr: unknown;
-            let result: T | undefined;
+            let result: T;
 
             try {
                 await this.setLegacyUploaderGroups(api, originalGroups, [targetChannel]);
@@ -452,7 +452,6 @@ export default class VideoServiceControl {
 
             if (taskErr) throw taskErr;
             if (restoreErr) throw restoreErr;
-            if (result === undefined) throw new Err(500, null, 'Legacy uploader task returned no result');
 
             return result;
         });
