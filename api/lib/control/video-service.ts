@@ -612,6 +612,115 @@ export default class VideoServiceControl {
         }
     }
 
+    async deleteMediaPath(pathid: string): Promise<void> {
+        const video = await this.settings();
+        if (!video.configured) throw new Err(400, null, 'Media Integration is not configured');
+
+        const headers = this.headers(video.token);
+        const url = new URL(`/path/${pathid}`, video.internal_url);
+        if (!url.port) url.port = '9997';
+
+        const res = await fetch(url, {
+            method: 'DELETE',
+            headers: Object.fromEntries(headers.entries()),
+        });
+
+        if (!res.ok && res.status !== 404) {
+            throw new Err(res.status, null, await res.text());
+        }
+    }
+
+    async upsertMediaPath(pathid: string, opts: {
+        source?: string | null;
+        record: boolean;
+    }): Promise<void> {
+        const video = await this.settings();
+        if (!video.configured) throw new Err(400, null, 'Media Integration is not configured');
+
+        const headers = this.headers(video.token);
+        headers.append('Content-Type', 'application/json');
+
+        const payload = {
+            name: pathid,
+            source: opts.source,
+            record: opts.record,
+        };
+
+        try {
+            await this.path(pathid);
+
+            const url = new URL(`/path/${pathid}`, video.internal_url);
+            if (!url.port) url.port = '9997';
+
+            const res = await fetch(url, {
+                method: 'PATCH',
+                headers: Object.fromEntries(headers.entries()),
+                body: JSON.stringify(payload),
+            });
+
+            if (!res.ok) throw new Err(500, null, await res.text());
+        } catch (err) {
+            if (!(err instanceof Err) || err.status !== 404) {
+                throw err;
+            }
+
+            const url = new URL('/path', video.internal_url);
+            if (!url.port) url.port = '9997';
+
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: Object.fromEntries(headers.entries()),
+                body: JSON.stringify(payload),
+            });
+
+            if (!res.ok) {
+                const text = await res.text();
+
+                if (text.includes('path already exists')) {
+                    const patchUrl = new URL(`/path/${pathid}`, video.internal_url);
+                    if (!patchUrl.port) patchUrl.port = '9997';
+
+                    const patchRes = await fetch(patchUrl, {
+                        method: 'PATCH',
+                        headers: Object.fromEntries(headers.entries()),
+                        body: JSON.stringify(payload),
+                    });
+
+                    if (!patchRes.ok) throw new Err(500, null, await patchRes.text());
+                } else {
+                    throw new Err(500, null, text);
+                }
+            }
+        }
+    }
+
+    async rollbackGeneratedLease(lease: Static<typeof VideoLeaseResponse>, opts: {
+        deleteTakFeed: boolean;
+        deleteMediaPath: boolean;
+    }): Promise<void> {
+        if (opts.deleteTakFeed && lease.publish) {
+            try {
+                await this.deleteTakVideoFeed(lease);
+            } catch (err) {
+                console.error('Failed to roll back TAK video feed after lease create error', err);
+            }
+        }
+
+        if (opts.deleteMediaPath) {
+            try {
+                await this.deleteMediaPath(lease.path);
+            } catch (err) {
+                console.error('Failed to roll back media path after lease create error', err);
+            }
+        }
+
+        try {
+            await this.config.models.VideoLease.delete(lease.id);
+        } catch (err) {
+            console.error('Failed to roll back lease record after lease create error', err);
+        }
+    }
+
     async deleteTakVideoFeed(lease: Static<typeof VideoLeaseResponse>): Promise<void> {
         const publishProtocol = this.takePublishProtocol(lease);
 
@@ -893,8 +1002,6 @@ export default class VideoServiceControl {
         const video = await this.settings();
         if (!video.configured) throw new Err(400, null, 'Media Integration is not configured');
 
-        const headers = this.headers(video.token);
-
         if (opts.username && opts.connection) {
             throw new Err(400, null, 'Either username or connection must be set but not both');
         } else if (opts.share && !opts.channel) {
@@ -923,70 +1030,60 @@ export default class VideoServiceControl {
         });
 
         await this.updateSecure(lease, opts.secure);
+        let mediaPathCreated = false;
+        let takFeedPublished = false;
 
-        const url = new URL(`/path`, video.internal_url);
-        if (!url.port) url.port = '9997';
+        try {
+            if (lease.proxy) {
+                try {
+                    const proxy = new URL(lease.proxy);
 
-        headers.append('Content-Type', 'application/json');
+                    // Check for HLS Errors
+                    if (['http:', 'https:'].includes(proxy.protocol)) {
+                        const res = await fetch(proxy);
 
-        if (lease.publish) {
-            try {
-                await this.publishTakVideoFeed(lease);
-            } catch (err) {
-                console.error(err);
-            }
-        }
-
-        if (lease.proxy) {
-            try {
-                const proxy = new URL(lease.proxy);
-
-                // Check for HLS Errors
-                if (['http:', 'https:'].includes(proxy.protocol)) {
-                    const res = await fetch(proxy);
-
-                    if (res.status === 404) {
-                        throw new Err(400, null, 'External Video Server reports Video Stream not found');
-                    } else if (!res.ok) {
-                        throw new Err(res.status, null, `External Video Server failed stream video - HTTP Error ${res.status}, ${await res.text()}`);
-                    }
-                } else {
-                    const res = await fetch(url, {
-                        method: 'POST',
-                        headers: Object.fromEntries(headers.entries()),
-                        body: JSON.stringify({
-                            name: lease.path,
+                        if (res.status === 404) {
+                            throw new Err(400, null, 'External Video Server reports Video Stream not found');
+                        } else if (!res.ok) {
+                            throw new Err(res.status, null, `External Video Server failed stream video - HTTP Error ${res.status}, ${await res.text()}`);
+                        }
+                    } else {
+                        await this.upsertMediaPath(lease.path, {
                             source: lease.proxy,
                             record: lease.recording,
-                        })
-                    })
-
-                    if (!res.ok) throw new Err(500, null, await res.text())
+                        });
+                        mediaPathCreated = true;
+                    }
+                } catch (err) {
+                    if (err instanceof Err) {
+                        throw err;
+                    // @ts-expect-error code is not defined in type
+                    } else if (err instanceof TypeError && err.code === 'ERR_INVALID_URL') {
+                        throw new Err(400, null, 'Invalid Video Stream URL');
+                    } else {
+                        throw new Err(500, err instanceof Error ? err : new Error(String(err)), 'Failed to generate proxy stream');
+                    }
                 }
-            } catch (err) {
-                if (err instanceof Err) {
-                    throw err;
-                // @ts-expect-error code is not defined in type
-                } else if (err instanceof TypeError && err.code === 'ERR_INVALID_URL') {
-                    throw new Err(400, null, 'Invalid Video Stream URL');
-                } else {
-                    throw new Err(500, err instanceof Error ? err : new Error(String(err)), 'Failed to generate proxy stream');
-                }
-            }
-        } else {
-            const res = await fetch(url, {
-                method: 'POST',
-                headers: Object.fromEntries(headers.entries()),
-                body: JSON.stringify({
-                    name: lease.path,
+            } else {
+                await this.upsertMediaPath(lease.path, {
                     record: lease.recording,
-                })
-            })
+                });
+                mediaPathCreated = true;
+            }
 
-            if (!res.ok) throw new Err(500, null, await res.text())
+            if (lease.publish) {
+                await this.publishTakVideoFeed(lease);
+                takFeedPublished = true;
+            }
+
+            return lease;
+        } catch (err) {
+            await this.rollbackGeneratedLease(lease, {
+                deleteTakFeed: takFeedPublished,
+                deleteMediaPath: mediaPathCreated,
+            });
+            throw err;
         }
-
-        return lease;
     }
 
     /**
@@ -1118,49 +1215,10 @@ export default class VideoServiceControl {
             console.error(err);
         }
 
-        try {
-            await this.path(lease.path);
-
-            const url = new URL(`/path/${lease.path}`, video.internal_url);
-            if (!url.port) url.port = '9997';
-
-            const headers = this.headers(video.token);
-            headers.append('Content-Type', 'application/json');
-
-            const res = await fetch(url, {
-                method: 'PATCH',
-                headers: Object.fromEntries(headers.entries()),
-                body: JSON.stringify({
-                    name: lease.path,
-                    source: lease.proxy,
-                    record: lease.recording,
-                }),
-            })
-
-            if (!res.ok) throw new Err(500, null, await res.text())
-        } catch (err) {
-            if (err instanceof Err && err.status === 404) {
-                const url = new URL(`/path`, video.internal_url);
-                if (!url.port) url.port = '9997';
-
-                const headers = this.headers(video.token);
-                headers.append('Content-Type', 'application/json');
-
-                const res = await fetch(url, {
-                    method: 'POST',
-                    headers: Object.fromEntries(headers.entries()),
-                    body: JSON.stringify({
-                        name: lease.path,
-                        source: lease.proxy,
-                        record: lease.recording,
-                    }),
-                })
-
-                if (!res.ok) throw new Err(500, null, await res.text())
-            } else {
-                throw err;
-            }
-        }
+        await this.upsertMediaPath(lease.path, {
+            source: lease.proxy,
+            record: lease.recording,
+        });
 
         return lease;
     }
@@ -1228,8 +1286,6 @@ export default class VideoServiceControl {
 
         if (!video.configured) throw new Err(400, null, 'Media Integration is not configured');
 
-        const headers = this.headers(video.token);
-
         const lease = await this.from(leaseid, opts);
 
         if (opts.connection && lease.connection !== opts.connection) {
@@ -1240,13 +1296,7 @@ export default class VideoServiceControl {
 
         await this.config.models.VideoLease.delete(leaseid);
 
-        const url = new URL(`/path/${lease.path}`, video.internal_url);
-        if (!url.port) url.port = '9997';
-
-        await fetch(url, {
-            method: 'DELETE',
-            headers: Object.fromEntries(headers.entries()),
-        })
+        await this.deleteMediaPath(lease.path);
 
         if (lease.publish) {
             try {
