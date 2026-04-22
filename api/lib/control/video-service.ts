@@ -734,7 +734,8 @@ export default class VideoServiceControl {
 
                 const res = await api.fetch(url, { method: 'DELETE' }, true);
                 if (!res.ok && res.status !== 404) {
-                    throw new Err(res.status, null, 'Failed to delete TAK legacy video feed');
+                    const body = await res.text();
+                    throw new Err(res.status, null, `Failed to delete TAK legacy video feed (id=${existing.id}, uuid=${lease.path}): ${body || `HTTP ${res.status}`}`);
                 }
             });
 
