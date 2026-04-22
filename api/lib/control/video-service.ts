@@ -1294,17 +1294,13 @@ export default class VideoServiceControl {
             throw new Err(400, null, `Lease does not belong to user ${opts.username}`);
         }
 
-        await this.config.models.VideoLease.delete(leaseid);
+        if (lease.publish) {
+            await this.deleteTakVideoFeed(lease);
+        }
 
         await this.deleteMediaPath(lease.path);
 
-        if (lease.publish) {
-            try {
-                await this.deleteTakVideoFeed(lease);
-            } catch (err) {
-                console.error(err);
-            }
-        }
+        await this.config.models.VideoLease.delete(leaseid);
 
         return;
     }
