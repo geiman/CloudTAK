@@ -360,10 +360,11 @@ export default class VideoServiceControl {
         name: string;
         active: boolean;
     }>): string[] {
-        return groups
-            .filter((group) => group.active)
-            .map((group) => group.name)
-            .sort();
+        return [...new Set(
+            groups
+                .filter((group) => group.active)
+                .map((group) => group.name)
+        )].sort();
     }
 
     async verifyLegacyUploaderGroups(api: TAKAPI, expectedNames: string[]): Promise<Array<{
