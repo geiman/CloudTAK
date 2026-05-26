@@ -41,6 +41,12 @@
             :create='false'
         />
         <template v-else>
+            <TablerInlineAlert
+                v-if='err'
+                severity='danger'
+                title='Icon Not Found'
+                :description='err.message'
+            />
             <div class='d-flex align-items-center'>
                 <template v-if='selected.name'>
                     <div class='d-flex align-items-center'>
@@ -85,23 +91,20 @@
                         </template>
                         <template #dropdown>
                             <div
-                                class='card'
+                                class='py-1'
                                 style='min-width: 300px;'
                             >
-                                <div class='card-header d-flex align-items-center'>
-                                    <h3 class='card-title'>
-                                        Icons
-                                    </h3>
+                                <div class='px-3 pt-2 pb-1 d-flex align-items-center fw-bold'>
+                                    Icons
                                     <IconSearch
-                                        :size='32'
+                                        :size='20'
                                         stroke='1'
-                                        class='ms-auto cursor-pointer mx-2'
+                                        class='ms-auto cursor-pointer'
                                         :color='params.showFilter ? "#83b7e8" : "currentColor"'
                                         @click.stop.prevent='params.showFilter = !params.showFilter'
                                     />
                                 </div>
-
-                                <div class='card-body row g-2'>
+                                <div class='px-2 pb-2 row g-2'>
                                     <div class='col-12'>
                                         <TablerEnum
                                             v-model='params.iconset'
@@ -127,13 +130,13 @@
                                             v-for='icon of list.items'
                                             :key='icon.id'
                                             class='col-auto cursor-pointer'
-                                            @click='selected = icon'
+                                            @click='selected = icon; err = null'
                                         >
                                             <img
                                                 v-tooltip='icon.name'
                                                 :src='icon.data'
                                                 class='img-thumbnail'
-                                                style='width: 25px; height: 25px; margin-right: 5px;'
+                                                style='width: 40px; height: 40px; margin-right: 5px;'
                                             >
                                         </div>
                                     </div>
@@ -149,7 +152,7 @@
 
 <script setup lang="ts">
 import { ref, watch, computed, onMounted } from 'vue';
-import { std, stdurl } from '../../std.ts';
+import { server } from '../../std.ts';
 import {
     IconInfoSquare,
     IconTrash,
@@ -157,6 +160,7 @@ import {
     IconPhotoSearch
 } from '@tabler/icons-vue';
 import {
+    TablerInlineAlert,
     TablerHelp,
     TablerEnum,
     TablerNone,
@@ -186,6 +190,7 @@ const emit = defineEmits<{
 }>();
 
 const help = ref(false);
+const err = ref<Error | null>(null);
 
 const loading = ref({
     iconset: true,
@@ -201,6 +206,8 @@ const params = ref({
 const selected = ref<Partial<Icon>>({});
 const sets = ref<Iconset[]>([]);
 const list = ref<IconList>({ total: 0, items: [] });
+
+const ICON_FILE_SUFFIX = /\.(png|svg)$/i;
 
 const setsName = computed<string[]>(() => {
     return sets.value.map((set) => set.name);
@@ -230,6 +237,17 @@ function removeIcon(): void {
     emit('update:modelValue', '');
 }
 
+function normalizeIconPath(path: string): string {
+    let normalized = path;
+
+    if (normalized.includes(':')) {
+        const splitAt = normalized.indexOf(':');
+        normalized = `${normalized.slice(0, splitAt)}/${normalized.slice(splitAt + 1)}`;
+    }
+
+    return normalized.replace(ICON_FILE_SUFFIX, '');
+}
+
 async function fetchSelected(): Promise<void> {
     if (
         props.modelValue
@@ -239,22 +257,51 @@ async function fetchSelected(): Promise<void> {
             || props.modelValue.split('/').length === 3
         )
     ) {
-        let path = props.modelValue;
-
-        if (path.includes(':')) path = path.split(':').join('/') + '.png';
+        const path = normalizeIconPath(props.modelValue);
 
         const iconset = path.split('/')[0];
         const icon = path.split('/').splice(1).join('/');
 
-        selected.value = await std(`/api/iconset/${iconset}/icon/${encodeURIComponent(icon)}`) as Icon;
+        const { data, error } = await server.GET('/api/iconset/{:iconset}/icon/{:icon}', {
+            params: {
+                path: {
+                    ':iconset': iconset,
+                    ':icon': icon
+                }
+            }
+        });
+
+        if (error) {
+            if (error.status === 404) {
+                err.value = new Error(error.message);
+                return;
+            }
+            throw new Error(error.message);
+        }
+        if (!data) return;
+
+        err.value = null;
+        selected.value = data;
     }
 }
 
 async function fetchIconsets(): Promise<void> {
     loading.value.iconset = true;
-    const url = stdurl('/api/iconset');
-    url.searchParams.set('limit', '50');
-    sets.value = (await std(url) as { total: number; items: Iconset[] }).items;
+    const { data, error } = await server.GET('/api/iconset', {
+        params: {
+            query: {
+                limit: 50,
+                page: 0,
+                order: 'asc',
+                sort: 'name',
+                filter: ''
+            }
+        }
+    });
+
+    if (error) throw new Error(error.message);
+
+    sets.value = data?.items || [];
     if (sets.value.length) {
         params.value.iconset = sets.value[0].name;
     }
@@ -263,14 +310,25 @@ async function fetchIconsets(): Promise<void> {
 
 async function fetchIcons(): Promise<void> {
     loading.value.icons = true;
-    const url = stdurl('/api/icon');
-    url.searchParams.set('limit', '1000');
-    if (params.value.iconset) {
-        const match = sets.value.find((set) => set.name === params.value.iconset);
-        if (match) url.searchParams.set('iconset', match.uid);
-    }
-    url.searchParams.set('filter', params.value.filter);
-    list.value = await std(url) as IconList;
+    const iconset = params.value.iconset
+        ? sets.value.find((set) => set.name === params.value.iconset)?.uid
+        : undefined;
+
+    const { data, error } = await server.GET('/api/icon', {
+        params: {
+            query: {
+                limit: 1000,
+                page: 0,
+                order: 'asc',
+                iconset,
+                filter: params.value.filter
+            }
+        }
+    });
+
+    if (error) throw new Error(error.message);
+
+    list.value = data || { total: 0, items: [] };
     loading.value.icons = false;
 }
 

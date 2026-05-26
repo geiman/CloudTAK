@@ -18,21 +18,24 @@ import { usePermissionStore } from './modules/permissions.ts';
 import * as Comlink from 'comlink';
 import AtlasWorker from '../workers/atlas.ts?worker&url';
 import COT from '../base/cot.ts';
-import type { DatabaseType } from '../base/database.ts';
-import { db } from '../base/database.ts';
+import type { DatabaseType } from '../database.ts';
+import { db } from '../database.ts';
 import { WorkerMessageType, LocationState } from '../base/events.ts';
 import type { WorkerMessage } from '../base/events.ts';
 import Overlay from '../base/overlay.ts';
 import Subscription from '../base/subscription.ts';
 import { std, stdurl } from '../std.js';
-import mapgl from 'maplibre-gl'
+import * as mapgl from 'maplibre-gl'
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-csp-worker.js?url'
 import type Atlas from '../workers/atlas.ts';
 import { CloudTAKTransferHandler } from '../base/handler.ts';
 import ProfileConfig from '../base/profile.ts';
 import Config from '../base/config.ts';
+import { clearLocationWatch, supportsLocationRequests, watchLocation } from '../base/capacitor.ts';
 
-import type { ProfileOverlay, ProfileOverlayList, Basemap, APIList, Feature, ConfigMap } from '../types.ts';
+import type { ProfileOverlay, ProfileOverlayList, Basemap, APIList, Feature } from '../types.ts';
 import type { LngLat, LngLatLike, Point, MapMouseEvent, MapTouchEvent, MapGeoJSONFeature, GeoJSONSource } from 'maplibre-gl';
+import type { CallbackID } from '@capacitor/geolocation';
 
 export type TAKNotification = { type: string; name: string; body: string; url: string; created: string; }
 
@@ -68,7 +71,7 @@ export const useMapStore = defineStore('cloudtak', {
         defaultPointType: string;
         manualLocationMode: boolean;
         isMobileDetected: boolean;
-        gpsWatchId: number | null;
+        gpsWatchId: CallbackID | null;
         tokenExpiry: number | null;
         lastUpdateCOTErrorSignature: string | null;
 
@@ -82,12 +85,10 @@ export const useMapStore = defineStore('cloudtak', {
         _rawWorker: Worker;
         worker: Comlink.Remote<Atlas>;
         mission: Subscription | undefined;
-        mapConfig: ConfigMap;
+        terrainEnabled: boolean;
         container?: HTMLElement;
-        hasTerrain: boolean;
         hasSnapping: boolean;
         hasNoChannels: boolean;
-        isTerrainEnabled: boolean;
         isLoaded: boolean;
         isOpen: boolean;
         isOnline: boolean;
@@ -144,9 +145,8 @@ export const useMapStore = defineStore('cloudtak', {
             lastUpdateCOTErrorSignature: null,
             isMobileDetected: false,
             locked: [],
-            hasTerrain: false,
+            terrainEnabled: false,
             hasNoChannels: false,
-            isTerrainEnabled: false,
             isOpen: false,
             isLoaded: false,
             isOnline: navigator.onLine,
@@ -158,13 +158,6 @@ export const useMapStore = defineStore('cloudtak', {
                 mode: undefined,
                 feats: [],
                 x: 0, y: 0,
-            },
-            mapConfig: {
-                center: '-100,40',
-                zoom: 4,
-                pitch: 0,
-                bearing: 0,
-                basemap: null
             },
             radial: {
                 mode: undefined,
@@ -239,11 +232,7 @@ export const useMapStore = defineStore('cloudtak', {
             }
             if (this._boundOnVisibilityChange) document.removeEventListener('visibilitychange', this._boundOnVisibilityChange);
 
-            // Clean up GPS watch
-            if (this.gpsWatchId !== null) {
-                navigator.geolocation.clearWatch(this.gpsWatchId);
-                this.gpsWatchId = null;
-            }
+            await this.stopGPSWatch();
 
             if (this._map) {
                 try {
@@ -347,33 +336,39 @@ export const useMapStore = defineStore('cloudtak', {
 
             return null;
         },
-        listTerrain: async function(): Promise<APIList<Basemap>> {
-            // Courtesy add terrain data
-            const burl = stdurl('/api/basemap');
-            burl.searchParams.set('type', 'raster-dem');
-            burl.searchParams.set('limit', '1');
-            const basemaps = await std(burl) as APIList<Basemap>;
-
-            return basemaps;
-        },
-
         // TODO: Convert to overlay
         addTerrain: async function(): Promise<void> {
-            const basemaps = await this.listTerrain();
-            if (basemaps.items.length && !this.map.getSource('-2')) {
-                this.map.addSource('-2', {
-                    type: 'raster-dem',
-                    url: String(stdurl(`/api/basemap/${basemaps.items[0].id}/tiles?token=${localStorage.token}`))
-                })
+            const cfg = await Config.list(['map::terrain'], { defaults: { 'map::terrain': null } });
+            const terrainId = cfg['map::terrain'] ? Number(cfg['map::terrain']) : null;
+            if (!terrainId) return;
+            if (this.map.getSource('-2')) return;
 
-                this.map.setTerrain({
-                    source: '-2',
-                    exaggeration: 1.5
-                });
+            const burl = stdurl(`/api/basemap/${terrainId}`);
+            const terrain = await std(burl) as Basemap;
 
-                this.isTerrainEnabled = true;
-            } else {
-                this.hasTerrain = false;
+            if (terrain.type !== 'raster-dem') {
+                throw new Error(`Terrain basemap ${terrainId} is not a raster-dem type`);
+            }
+
+            const source: { type: 'raster-dem'; url: string; tileSize?: number; encoding?: 'mapbox' | 'terrarium' } = {
+                type: 'raster-dem',
+                url: String(stdurl(`/api/basemap/${terrain.id}/tiles?token=${localStorage.token}`))
+            };
+
+            if (terrain.tilesize) source.tileSize = terrain.tilesize;
+            if (terrain.encoding) source.encoding = terrain.encoding;
+
+            this.map.addSource('-2', source);
+
+            this.map.setTerrain({
+                source: '-2',
+                exaggeration: 1.5
+            });
+
+            this.terrainEnabled = true;
+
+            if (this.map.getPitch() === 0) {
+                this.map.easeTo({ pitch: 45 });
             }
         },
 
@@ -381,19 +376,23 @@ export const useMapStore = defineStore('cloudtak', {
             this.map.setTerrain(null);
             this.map.removeSource('-2');
 
-            this.isTerrainEnabled = false;
+            this.terrainEnabled = false;
+
+            this.map.easeTo({ pitch: 0 });
         },
 
-        returnHome: function(): void {
-            const flyTo = {
-                zoom: this.mapConfig.zoom,
-                pitch: this.mapConfig.pitch,
-                bearing: this.mapConfig.bearing,
-                center: this.mapConfig.center.split(',').map(Number) as LngLatLike,
+        returnHome: async function(): Promise<void> {
+            const cfg = await Config.list(
+                ['map::center', 'map::zoom', 'map::pitch', 'map::bearing'],
+                { defaults: { 'map::center': '-100,40', 'map::zoom': 4, 'map::pitch': 0, 'map::bearing': 0 } }
+            );
+            this.map.flyTo({
+                zoom: Number(cfg['map::zoom']),
+                pitch: Number(cfg['map::pitch']),
+                bearing: Number(cfg['map::bearing']),
+                center: String(cfg['map::center']).split(',').map(Number) as LngLatLike,
                 speed: Infinity
-            };
-
-            this.map.flyTo(flyTo);
+            });
         },
 
         /**
@@ -659,50 +658,51 @@ export const useMapStore = defineStore('cloudtak', {
             }
 
             const permissionStore = usePermissionStore();
+            let startedGPSWatchFromPermissionSubscription = false;
             await permissionStore.initializePermissionSubscriptions(() => {
-                this.startGPSWatch();
+                startedGPSWatchFromPermissionSubscription = true;
+                void this.startGPSWatch();
             });
 
-            if (permissionStore.permissions.location !== 'unsupported') {
-                this.startGPSWatch();
+            if (
+                permissionStore.permissions.location !== 'unsupported'
+                && !startedGPSWatchFromPermissionSubscription
+            ) {
+                await this.startGPSWatch();
             }
 
-            const sprites = await IconManager.sprites();
+            const sprites = IconManager.defaultSprite();
+
+            let initCenter = '-100,40';
+            let initZoom = 4;
+            let initPitch = 0;
+            let initBearing = 0;
 
             try {
-                const mapConfig = await Config.list([
+                const cfg = await Config.list([
                     'map::center',
                     'map::zoom',
                     'map::pitch',
                     'map::bearing',
-                    'map::basemap'
+                    'map::basemap',
+                    'map::terrain'
                 ], {
                     defaults: {
                         'map::center': '-100,40',
                         'map::zoom': 4,
                         'map::pitch': 0,
                         'map::bearing': 0,
-                        'map::basemap': null
+                        'map::basemap': null,
+                        'map::terrain': null
                     }
                 });
 
-                this.mapConfig = {
-                    center: String(mapConfig['map::center']),
-                    zoom: Number(mapConfig['map::zoom']),
-                    pitch: Number(mapConfig['map::pitch']),
-                    bearing: Number(mapConfig['map::bearing']),
-                    basemap: mapConfig['map::basemap'] ? Number(mapConfig['map::basemap']) : null
-                };
+                initCenter = String(cfg['map::center']);
+                initZoom = Number(cfg['map::zoom']);
+                initPitch = Number(cfg['map::pitch']);
+                initBearing = Number(cfg['map::bearing']);
             } catch (err) {
                 console.error('Failed to load map configuration, using defaults', err);
-
-                this.mapConfig = {
-                    center: '-100,40',
-                    zoom: 4,
-                    pitch: 0,
-                    bearing: 0,
-                    basemap: null
-                };
             }
 
             const init: mapgl.MapOptions = {
@@ -710,10 +710,10 @@ export const useMapStore = defineStore('cloudtak', {
                 hash: true,
                 attributionControl: {},
                 fadeDuration: 0,
-                zoom: this.mapConfig.zoom,
-                pitch: this.mapConfig.pitch,
-                bearing: this.mapConfig.bearing,
-                center: this.mapConfig.center.split(',').map(Number) as LngLatLike,
+                zoom: initZoom,
+                pitch: initPitch,
+                bearing: initBearing,
+                center: initCenter.split(',').map(Number) as LngLatLike,
                 maxPitch: 85,
                 style: {
                     version: 8,
@@ -736,6 +736,7 @@ export const useMapStore = defineStore('cloudtak', {
 
             if (!init.style || typeof init.style === 'string') throw new Error('init.style must be an object');
 
+            mapgl.setWorkerUrl(maplibreWorkerUrl);
             const map = new mapgl.Map(init);
 
             // Add scale control
@@ -753,7 +754,10 @@ export const useMapStore = defineStore('cloudtak', {
                     map.setProjection({ type: "globe" });
                 }
 
-                await this.icons.updateImages();
+                void this.icons.hydrate()
+                    .catch((error: unknown) => {
+                        console.error('Failed to hydrate iconsets after map idle', error);
+                    });
 
                 await this.initOverlays();
 
@@ -763,10 +767,11 @@ export const useMapStore = defineStore('cloudtak', {
                 }, 500);
             });
 
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
             // @ts-ignore Don't remove me unless npm run doc passes
             this._map = markRaw(map);
             this._draw = new DrawTool(this);
-            this._icons = markRaw(new IconManager(map));
+            this._icons = markRaw(new IconManager(map, this.worker));
             this._menu = markRaw(new MenuManager(this));
             await (this._menu as MenuManager).init();
             this._bottomBar = this._bottomBar || markRaw(new BottomBarManager());
@@ -804,16 +809,45 @@ export const useMapStore = defineStore('cloudtak', {
             this.isOpen = await this.worker.conn.isOpen;
 
         },
-        startGPSWatch: function(): void {
-            if (!("geolocation" in navigator)) return;
-
-            // Clear existing watch if any
-            if (this.gpsWatchId !== null) {
-                navigator.geolocation.clearWatch(this.gpsWatchId);
+        stopGPSWatch: async function(): Promise<void> {
+            if (this.gpsWatchId === null) {
+                return;
             }
 
-            this.gpsWatchId = navigator.geolocation.watchPosition((position) => {
-                if (!this.manualLocationMode) {
+            const watchId = this.gpsWatchId;
+            this.gpsWatchId = null;
+
+            try {
+                await clearLocationWatch(watchId);
+            } catch (err) {
+                console.warn('Failed to clear location watch', err);
+            }
+        },
+        startGPSWatch: async function(): Promise<void> {
+            if (!supportsLocationRequests()) return;
+
+            await this.stopGPSWatch();
+
+            try {
+                this.gpsWatchId = await watchLocation({
+                    maximumAge: 0,
+                    timeout: 1500,
+                    enableHighAccuracy: true
+                }, (position, err) => {
+                    if (err) {
+                        const geolocationError = err as { code?: number };
+
+                        if (geolocationError.code !== 0) {
+                            console.error('Location Error', err);
+                        }
+
+                        return;
+                    }
+
+                    if (!position || this.manualLocationMode) {
+                        return;
+                    }
+
                     this.locationAccuracy = position.coords.accuracy;
 
                     this.channel.postMessage({
@@ -823,17 +857,11 @@ export const useMapStore = defineStore('cloudtak', {
                             altitude: position.coords.altitude,
                             coordinates: [ position.coords.longitude, position.coords.latitude ]
                         }
-                    })
-                }
-            }, (err) => {
-                if (err.code !== 0) {
-                    console.error('Location Error', err);
-                }
-            }, {
-                maximumAge: 0,
-                timeout: 1500,
-                enableHighAccuracy: true
-            });
+                    });
+                });
+            } catch (err) {
+                console.error('Failed to start location watch', err);
+            }
         },
         initOverlays: async function() {
             if (!this.map) throw new Error('Cannot initLayers before map has loaded');
@@ -971,7 +999,7 @@ export const useMapStore = defineStore('cloudtak', {
                         start: new Date().toISOString(),
                         stale: new Date(Date.now() + 2 * (60 * 60 * 1000)).toISOString(),
                         center: [ e.lngLat.lng, e.lngLat.lat ],
-                        'marker-color': '#00ff00',
+                        'marker-color': this.defaultPointType === 'u-d-p' ? '#00ff00' : undefined,
                         'marker-opacity': 1
                     },
                     geometry: {
@@ -1076,7 +1104,6 @@ export const useMapStore = defineStore('cloudtak', {
             url.searchParams.set('order', 'asc');
             url.searchParams.set('limit', '100');
             const profileOverlays = await std(url) as ProfileOverlayList;
-            this.hasTerrain = profileOverlays.available.terrain;
             this.hasSnapping = profileOverlays.available.snapping;
 
             const hasBasemap = profileOverlays.items.some((o: ProfileOverlay) => {
@@ -1087,9 +1114,12 @@ export const useMapStore = defineStore('cloudtak', {
             if (!hasBasemap) {
                 let defaultBasemap: Basemap | null = null;
 
-                if (this.mapConfig.basemap) {
+                const basemapCfg = await Config.list(['map::basemap'], { defaults: { 'map::basemap': null } });
+                const basemapId = basemapCfg['map::basemap'] ? Number(basemapCfg['map::basemap']) : null;
+
+                if (basemapId) {
                     try {
-                        const burl = stdurl(`/api/basemap/${this.mapConfig.basemap}`);
+                        const burl = stdurl(`/api/basemap/${basemapId}`);
                         defaultBasemap = await std(burl) as Basemap;
                     } catch (err) {
                         console.warn('Failed to load configured basemap:', err);
@@ -1107,29 +1137,56 @@ export const useMapStore = defineStore('cloudtak', {
                 }
 
                 if (defaultBasemap) {
-                    const basemap = await Overlay.create({
-                        name: defaultBasemap.name,
-                        pos: -1,
-                        type: 'raster',
-                        url: String(stdurl(`/api/basemap/${defaultBasemap.id}/tiles`)),
-                        mode: 'basemap',
-                        mode_id: String(defaultBasemap.id)
-                    });
+                    // Default basemap creation hits /api/profile/overlay
+                    // (POST + PATCH) and the upstream /tiles endpoint. Any
+                    // of those can transiently fail; treat as non-fatal so
+                    // the rest of map initialization still proceeds.
+                    try {
+                        const basemap = await Overlay.create({
+                            name: defaultBasemap.name,
+                            pos: -1,
+                            type: 'raster',
+                            url: String(stdurl(`/api/basemap/${defaultBasemap.id}/tiles`)),
+                            mode: 'basemap',
+                            mode_id: String(defaultBasemap.id)
+                        });
 
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    (this.overlays as any[]).push(basemap);
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        (this.overlays as any[]).push(basemap);
+                    } catch (err) {
+                        console.error('Failed to create default basemap overlay:', err);
+                    }
                 }
             }
 
-            // Parallelize Overlay Creation
-            const overlayPromises = profileOverlays.items.map(item =>
+            // Parallelize Overlay Creation. Use allSettled so a single
+            // overlay whose /tiles endpoint fails (404, network blip,
+            // upstream outage) does not prevent every other overlay -- and
+            // the rest of map init -- from completing. Failed entries are
+            // logged and dropped; Overlay.init also records the error on
+            // the overlay instance so the MenuOverlays UI can surface it.
+            const overlayResults = await Promise.allSettled(profileOverlays.items.map(item =>
                 Overlay.create(item as ProfileOverlay, { skipSave: true, skipLayers: true })
-            );
+            ));
 
-            const newOverlays = await Promise.all(overlayPromises);
+            const newOverlays: Overlay[] = [];
+            for (let i = 0; i < overlayResults.length; i++) {
+                const result = overlayResults[i];
+                if (result.status === 'fulfilled') {
+                    newOverlays.push(result.value);
+                } else {
+                    const item = profileOverlays.items[i];
+                    console.error(`Failed to create overlay ${item?.id} (${item?.name}):`, result.reason);
+                }
+            }
 
             for (const overlay of newOverlays) {
-                await overlay.addLayers();
+                try {
+                    await overlay.addLayers();
+                } catch (err) {
+                    overlay._error = err instanceof Error ? err : new Error(String(err));
+                    console.error(`Failed to add layers for overlay ${overlay.id} (${overlay.name}):`, err);
+                }
             }
 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1138,33 +1195,37 @@ export const useMapStore = defineStore('cloudtak', {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             (this.overlays as any[]).push(await Overlay.internal({
                 id: -1,
-                name: 'CoT Icons',
+                name: 'Map Features',
                 type: 'geojson',
             }));
 
             // Data Syncs are specially loaded as they are dynamic
-            // Parallelize Mission Loading
+            // Mission loading is fire-and-forget so logs/changes/features
+            // do not block the rest of map initialization. Each overlay is
+            // marked as `loading` while its mission data is being fetched
+            // and the maplibre source/layer + overlay entry are already in
+            // place from the steps above.
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const missionOverlays = (this.overlays as any[]).filter((overlay: Overlay) => overlay.mode === 'mission' && overlay.mode_id);
-            const missionPromises = missionOverlays.map(async (overlay: Overlay) => {
-                    const source = map.getSource(String(overlay.id));
-                    if (!source) return;
+            for (const overlay of missionOverlays) {
+                const source = map.getSource(String(overlay.id));
+                if (!source) continue;
 
-                    try {
-                        const sub = await this.loadMission(overlay.mode_id!, {
-                            reload: true
-                        });
+                overlay.loading = true;
 
-                        if (sub && overlay.active) {
-                            await this.makeActiveMission(sub);
-                        }
-                    } catch (err) {
-                        console.error('Failed to load Mission', err)
-                        overlay._error = err instanceof Error ? err : new Error(String(err));
+                this.loadMission(overlay.mode_id!, {
+                    reload: true
+                }).then(async (sub) => {
+                    if (sub && overlay.active) {
+                        await this.makeActiveMission(sub);
                     }
+                }).catch((err) => {
+                    console.error('Failed to load Mission', err);
+                    overlay._error = err instanceof Error ? err : new Error(String(err));
+                }).finally(() => {
+                    overlay.loading = false;
                 });
-
-            await Promise.all(missionPromises);
+            }
 
             this.isLoaded = true;
 

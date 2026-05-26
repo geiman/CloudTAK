@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 import { Busboy } from '@fastify/busboy';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
-import { Type, Static } from '@sinclair/typebox'
+import { Type, Static } from '@sinclair/typebox';
 import { sql } from 'drizzle-orm';
 import S3 from '../lib/aws/s3.js';
 import { CoTParser, FileShare, DataPackage } from '@tak-ps/node-cot';
@@ -12,16 +12,113 @@ import { fromProtocol } from '../lib/factory-basemap.js';
 import { StandardResponse } from '../lib/types.js';
 import Schema from '@openaddresses/batch-schema';
 import Err from '@openaddresses/batch-error';
-import Auth, { AuthUserAccess }  from '../lib/auth.js';
+import Auth, { AuthUserAccess } from '../lib/auth.js';
 import Config from '../lib/config.js';
 import { Basemap as BasemapParser } from '@tak-ps/node-cot';
 import { Content } from '@tak-ps/node-tak/lib/api/files';
 import { Package } from '@tak-ps/node-tak/lib/api/package';
-import { TAKAPI, APIAuthCertificate, } from '@tak-ps/node-tak';
+import { TAKAPI, APIAuthCertificate } from '@tak-ps/node-tak';
 import {
     MissionOptions,
 } from '@tak-ps/node-tak/lib/api/mission';
 import stream2buffer from '../lib/stream.js';
+import { PackageResponse } from './types.js';
+
+async function activeChannelNames(config: Config, email: string, api: TAKAPI): Promise<Set<string>> {
+    const groups = await api.Group.list({ useCache: true });
+    const activeBitpos = await config.conns.activeChannels(email, api);
+
+    return new Set(
+        groups.data
+            .filter(group => activeBitpos.has(group.bitpos))
+            .map(group => group.name),
+    );
+}
+
+function packageMetadataTime(entry: Record<string, string>): number {
+    if (!entry.Time) return Number.NEGATIVE_INFINITY;
+
+    const numeric = Number(entry.Time);
+    if (!Number.isNaN(numeric)) return numeric;
+
+    const parsed = Date.parse(entry.Time);
+    return Number.isNaN(parsed) ? Number.NEGATIVE_INFINITY : parsed;
+}
+
+async function packageChannelNames(api: TAKAPI, pkg: Static<typeof Package>): Promise<Set<string>> {
+    const url = new URL('/Marti/api/files/metadata', api.url);
+    url.searchParams.append('missionPackage', 'true');
+    url.searchParams.append('name', pkg.Name);
+
+    const res = await api.fetch(url, {
+        method: 'GET',
+    }) as {
+        data?: Array<Record<string, string>>;
+    };
+
+    const match = (res.data || [])
+        .filter(entry => entry.Hash === pkg.Hash)
+        .reduce<Record<string, string> | undefined>((latest, entry) => {
+            if (!latest) return entry;
+            return packageMetadataTime(entry) >= packageMetadataTime(latest) ? entry : latest;
+        }, undefined);
+
+    if (!match || !match.Groups) return new Set();
+
+    return new Set(
+        match.Groups
+            .split(',')
+            .map(group => group.trim())
+            .filter(Boolean),
+    );
+}
+
+function packageSummary(uid: string, packages: Array<Static<typeof Package>>): Static<typeof PackageResponse> {
+    const sorted = [...packages].sort((a, b) => {
+        return new Date(a.SubmissionDateTime).getTime() - new Date(b.SubmissionDateTime).getTime();
+    });
+
+    const latest = sorted[sorted.length - 1];
+    const expiration = latest.EXPIRATION === undefined || latest.EXPIRATION === null
+        ? null
+        : !isNaN(Number(latest.EXPIRATION))
+                ? Number(latest.EXPIRATION)
+                : latest.EXPIRATION;
+
+    return {
+        uid,
+        name: latest.Name,
+        keywords: latest.Keywords || [],
+        hash: latest.Hash,
+        size: !isNaN(Number(latest.Size)) ? Number(latest.Size) : 0,
+        created: latest.SubmissionDateTime,
+        expiration,
+        username: latest.SubmissionUser,
+        channels: [],
+        items: sorted,
+    };
+}
+
+async function packageSummaryWithChannels(api: TAKAPI, uid: string, packages: Array<Static<typeof Package>>): Promise<Static<typeof PackageResponse>> {
+    const summary = packageSummary(uid, packages);
+    const latest = summary.items[summary.items.length - 1];
+
+    return {
+        ...summary,
+        channels: Array.from(await packageChannelNames(api, latest)),
+    };
+}
+
+function packageExpirationForUpdate(value: string | number | null | undefined): number | undefined {
+    if (value === undefined || value === null) return undefined;
+    if (typeof value === 'number') return value;
+
+    const trimmed = value.trim();
+    if (!trimmed.length) return undefined;
+
+    const parsed = Number(trimmed);
+    return Number.isNaN(parsed) ? undefined : parsed;
+}
 
 export default async function router(schema: Schema, config: Config) {
     await schema.post('/marti/package', {
@@ -32,14 +129,17 @@ export default async function router(schema: Schema, config: Config) {
             name: Type.Optional(Type.String({})),
             groups: Type.Optional(Type.Union([
                 Type.Array(Type.String()),
-                Type.String()
+                Type.String(),
             ])),
             keywords: Type.Optional(Type.Union([
                 Type.Array(Type.String()),
-                Type.String()
+                Type.String(),
             ])),
         }),
-        res: Package
+        body: {
+            'multipart/form-data': true,
+        },
+        res: Package,
     }, async (req, res) => {
         try {
             const user = await Auth.as_user(config, req);
@@ -52,14 +152,16 @@ export default async function router(schema: Schema, config: Config) {
             let keywords: string[] | undefined = undefined;
             let groups: string[] | undefined = undefined;
             if (req.query.groups && typeof req.query.groups === 'string') {
-                groups = [ req.query.groups ];
-            } else if (req.query.groups && Array.isArray(req.query.groups)) {
+                groups = [req.query.groups];
+            }
+            else if (req.query.groups && Array.isArray(req.query.groups)) {
                 groups = req.query.groups;
             }
 
             if (req.query.keywords && typeof req.query.keywords === 'string') {
-                keywords = [ req.query.keywords ];
-            } else if (req.query.groups && Array.isArray(req.query.keywords)) {
+                keywords = [req.query.keywords];
+            }
+            else if (req.query.groups && Array.isArray(req.query.keywords)) {
                 keywords = req.query.keywords;
             }
 
@@ -68,11 +170,11 @@ export default async function router(schema: Schema, config: Config) {
             if (contentType && contentType.startsWith('multipart/form-data')) {
                 const bb = new Busboy({
                     headers: {
-                        'content-type': contentType
+                        'content-type': contentType,
                     },
                     limits: {
-                        files: 1
-                    }
+                        files: 1,
+                    },
                 });
 
                 let singleFile: Promise<DataPackage> | undefined = undefined;
@@ -103,7 +205,8 @@ export default async function router(schema: Schema, config: Config) {
                             return await DataPackage.parse(input, {
                                 name: safeName,
                             });
-                        } catch (err) {
+                        }
+                        catch (err) {
                             console.error('ok - treating as unique file (not a DataPackage)', err);
 
                             const pkg = new DataPackage(id, id);
@@ -139,24 +242,27 @@ export default async function router(schema: Schema, config: Config) {
                         await pkg.destroy();
 
                         const pkgres = await api.Package.list({
-                            uid: hash
+                            uid: hash,
                         });
 
                         if (!pkgres.results.length) throw new Err(404, null, 'Package not found');
 
                         handled = true;
                         res.json(pkgres.results[0]);
-                    } catch (err) {
+                    }
+                    catch (err) {
                         respond(err);
                     }
                 });
 
                 req.pipe(bb);
-            } else {
+            }
+            else {
                 throw new Err(400, null, 'Unsupported Content-Type');
             }
-        } catch (err) {
-             Err.respond(err, res);
+        }
+        catch (err) {
+            Err.respond(err, res);
         }
     });
 
@@ -167,53 +273,53 @@ export default async function router(schema: Schema, config: Config) {
         body: Type.Object({
             type: Type.Optional(Type.Literal('FeatureCollection')),
             name: Type.Optional(Type.String({
-                description: 'Data Package Name'
+                description: 'Data Package Name',
             })),
             public: Type.Boolean({
                 default: false,
-                description: 'Should the Data Package be a public package, if so it will be published to the Data Package list'
+                description: 'Should the Data Package be a public package, if so it will be published to the Data Package list',
             }),
             groups: Type.Optional(Type.Array(Type.String(), {
-                description: 'Channels that the Data Package should be shared with, use in conjunction with public=true'
+                description: 'Channels that the Data Package should be shared with, use in conjunction with public=true',
             })),
             keywords: Type.Array(Type.String(), {
                 default: [],
-                description: 'Hash Tags to assign to the package'
+                description: 'Hash Tags to assign to the package',
             }),
             destinations: Type.Array(Type.Object({
                 uid: Type.Optional(Type.String({
-                    description: 'A User UID to share the package with'
+                    description: 'A User UID to share the package with',
                 })),
                 group: Type.Optional(Type.String({
-                    description: 'A Channel/Group to share the package with'
+                    description: 'A Channel/Group to share the package with',
                 })),
                 mission: Type.Optional(Type.String({
-                    description: 'A Mission GUID to share the package with, note the user must be actively subscribed to the Mission'
-                }))
+                    description: 'A Mission GUID to share the package with, note the user must be actively subscribed to the Mission',
+                })),
             }), {
                 default: [],
-                description: 'A list of destinations to automatically share the data package with'
+                description: 'A list of destinations to automatically share the data package with',
             }),
             assets: Type.Array(Type.Object({
                 type: Type.Literal('profile'),
-                id: Type.String()
+                id: Type.String(),
             }), {
-                default: []
+                default: [],
             }),
             basemaps: Type.Array(Type.Number(), {
                 default: [],
-                description: 'A list of CloudTAK basemap IDs to include in the package'
+                description: 'A list of CloudTAK basemap IDs to include in the package',
             }),
             features: Type.Array(Type.Object({
                 id: Type.String(),
                 type: Type.Literal('Feature'),
                 properties: Type.Any(),
-                geometry: Type.Any()
+                geometry: Type.Any(),
             }), {
-                default: []
-            })
+                default: [],
+            }),
         }),
-        res: Content
+        res: Content,
     }, async (req, res) => {
         try {
             const user = await Auth.as_user(config, req);
@@ -242,7 +348,7 @@ export default async function router(schema: Schema, config: Config) {
                     }
                 }
 
-                await pkg.addCoT(await CoTParser.from_geojson(feat))
+                await pkg.addCoT(await CoTParser.from_geojson(feat));
             }
 
             for (const basemapid of req.body.basemaps) {
@@ -261,11 +367,11 @@ export default async function router(schema: Schema, config: Config) {
                         tileUpdate: { _text: 'None' },
                         url: { _text: fromProtocol(basemap.protocol, basemap).proxyShare(config) },
                         backgroundColor: { _text: '#000000' },
-                    }
+                    },
                 })).to_xml();
 
                 await pkg.addFile(xml, {
-                    name: `basemap-${basemap.id}.xml`
+                    name: `basemap-${basemap.id}.xml`,
                 });
             }
 
@@ -278,7 +384,7 @@ export default async function router(schema: Schema, config: Config) {
                 if (attachment.length < 1 || !attachment[0].Key) continue;
                 await pkg.addFile(await S3.get(attachment[0].Key), {
                     name: path.parse(attachment[0].Key).base,
-                    attachment: uid
+                    attachment: uid,
                 });
             }
 
@@ -290,11 +396,11 @@ export default async function router(schema: Schema, config: Config) {
                 }
 
                 await pkg.addFile(await S3.get(`profile/${user.email}/${file.id}${path.parse(file.name).ext}`), {
-                    name: file.name
+                    name: file.name,
                 });
             }
 
-            const out = await pkg.finalize()
+            const out = await pkg.finalize();
 
             const { size } = await fsp.stat(out);
 
@@ -308,7 +414,7 @@ export default async function router(schema: Schema, config: Config) {
                     creatorUid,
                     hash,
                     keywords: req.body.keywords,
-                    groups: req.body.groups
+                    groups: req.body.groups,
                 }, fs.createReadStream(out));
 
                 // TODO Ask ARA for a Content endpoint to lookup by hash to mirror upload API
@@ -321,12 +427,16 @@ export default async function router(schema: Schema, config: Config) {
                     PrimaryKey: hash,
                     Hash: hash,
                     CreatorUid: creatorUid,
-                    Name: pkg.settings.name
-                }
-            } else {
+                    Name: pkg.settings.name,
+                };
+            }
+            else {
+                // DataPackage.finalize() always materializes a TAK-compatible ZIP archive,
+                // even though the private upload name is the extensionless package hash.
                 content = await api.Files.upload({
                     name: hash,
                     contentLength: size,
+                    contentType: 'application/zip',
                     keywords: req.body.keywords,
                     creatorUid,
                 }, fs.createReadStream(out));
@@ -336,8 +446,8 @@ export default async function router(schema: Schema, config: Config) {
 
             if (
                 client
-                    && req.body.destinations.length
-                    && req.body.destinations.filter((d) => !d.mission).length
+                && req.body.destinations.length
+                && req.body.destinations.filter(d => !d.mission).length
             ) {
                 const url = new URL(config.server.api);
                 const configs = await config.models.ProfileConfig.from(profile.username);
@@ -350,32 +460,32 @@ export default async function router(schema: Schema, config: Config) {
                     // iTAK currently doesn't support DNS - Ref: https://issues.tak.gov/projects/ITAK/issues/ITAK-57
                     senderUrl: `https://${(await dns.lookup(url.hostname)).address}:${url.port}/Marti/sync/content?hash=${content.Hash}`,
                     sha256: content.Hash,
-                    sizeInBytes: size
+                    sizeInBytes: size,
                 });
 
                 if (!cot.raw.event.detail) cot.raw.event.detail = {};
                 cot.raw.event.detail.marti = {
                     dest: req.body.destinations
-                        .filter((d) => !d.mission)
+                        .filter(d => !d.mission)
                         .map((dest) => {
                             return { _attributes: dest };
-                        })
-                }
+                        }),
+                };
 
                 client.tak.write([cot], { stripFlow: true });
             }
 
-            if (req.body.destinations.length && req.body.destinations.filter((d) => d.mission).length) {
+            if (req.body.destinations.length && req.body.destinations.filter(d => d.mission).length) {
                 const api = await TAKAPI.init(new URL(String(config.server.api)), new APIAuthCertificate(auth.cert, auth.key));
 
-                const guids = req.body.destinations.filter((d) => d.mission).map((d) => d.mission) as string[];
+                const guids = req.body.destinations.filter(d => d.mission).map(d => d.mission) as string[];
 
                 const ovs = new Map();
                 (await config.models.ProfileOverlay.list({
                     where: sql`
                         username = ${user.email}
                         AND mode = 'mission'
-                    `
+                    `,
                 })).items.map(o => ovs.set(o.mode_id, o));
 
                 for (const guid of guids) {
@@ -385,21 +495,22 @@ export default async function router(schema: Schema, config: Config) {
 
                     const opts: Static<typeof MissionOptions> = req.headers['missionauthorization']
                         ? { token: String(req.headers['missionauthorization']) }
-                        : await config.conns.subscription(user.email, guid)
+                        : await config.conns.subscription(user.email, guid);
 
                     await api.Mission.upload(
                         guid,
                         user.email,
                         fs.createReadStream(out),
-                        opts
+                        opts,
                     );
                 }
             }
 
-            res.json(content)
+            res.json(content);
 
             await pkg.destroy();
-        } catch (err) {
+        }
+        catch (err) {
             Err.respond(err, res);
         }
     });
@@ -411,7 +522,7 @@ export default async function router(schema: Schema, config: Config) {
         query: Type.Object({
             filter: Type.String({
                 description: 'Filter packages by name',
-                default: ''
+                default: '',
             }),
             impersonate: Type.Optional(Type.Union([
                 Type.Boolean({ description: 'List all of the given resource, regardless of ACL' }),
@@ -420,32 +531,8 @@ export default async function router(schema: Schema, config: Config) {
         }),
         res: Type.Object({
             total: Type.Integer(),
-            items: Type.Array(Type.Object({
-                uid: Type.String({
-                    description: 'UID of the package'
-                }),
-                name: Type.String({
-                    description: 'Name of the latest package version'
-                }),
-                hash: Type.String({
-                    description: 'Hash of the latest package version'
-                }),
-                size: Type.Integer({
-                    description: 'Size of the latest package version in bytes'
-                }),
-                username: Type.Optional(Type.String({
-                    description: 'Submission User of the latest package version'
-                })),
-                created: Type.String({
-                    format: 'date-time',
-                    description: 'Submission DateTime of the latest package version'
-                }),
-                keywords: Type.Array(Type.String({
-                    description: 'Keywords of the latest package version'
-                })),
-                items: Type.Array(Package)
-            }))
-        })
+            items: Type.Array(PackageResponse),
+        }),
     }, async (req, res) => {
         try {
             let auth;
@@ -457,10 +544,12 @@ export default async function router(schema: Schema, config: Config) {
                 if (typeof req.query.impersonate === 'string' && req.query.impersonate !== 'true') {
                     const profile = await config.models.Profile.from(req.query.impersonate);
                     auth = profile.auth;
-                } else {
+                }
+                else {
                     auth = config.serverCert();
                 }
-            } else {
+            }
+            else {
                 const user = await Auth.as_user(config, req);
                 auth = (await config.models.Profile.from(user.email)).auth;
             }
@@ -469,7 +558,7 @@ export default async function router(schema: Schema, config: Config) {
 
             const pkg = await api.Package.list({
                 tool: 'public',
-                name: req.query.filter || undefined
+                name: req.query.filter || undefined,
             });
 
             const byUID: Map<string, Static<typeof Package>[]> = new Map();
@@ -479,29 +568,21 @@ export default async function router(schema: Schema, config: Config) {
             }
 
             const items = [];
-            for (const [ uid, packages ] of byUID.entries()) {
-                packages.sort((a, b) => {
-                    return new Date(a.SubmissionDateTime).getTime() - new Date(b.SubmissionDateTime).getTime();
-                });
-
-                items.push({
-                    uid,
-                    name: packages[packages.length - 1].Name,
-                    keywords: packages[packages.length - 1].Keywords || [],
-                    hash: packages[packages.length - 1].Hash,
-                    size: !isNaN(Number(packages[packages.length - 1].Size)) ? Number(packages[packages.length -1].Size) : 0,
-                    created: packages[packages.length - 1].SubmissionDateTime,
-                    username: packages[packages.length - 1].SubmissionUser,
-                    items: packages
-                });
+            for (const [uid, packages] of byUID.entries()) {
+                items.push(packageSummary(uid, packages));
             }
+
+            items.sort((a, b) => {
+                return new Date(b.created).getTime() - new Date(a.created).getTime();
+            });
 
             res.json({
                 total: pkg.resultCount,
-                items
+                items,
             });
-        } catch (err) {
-             Err.respond(err, res);
+        }
+        catch (err) {
+            Err.respond(err, res);
         }
     });
 
@@ -515,31 +596,9 @@ export default async function router(schema: Schema, config: Config) {
             will have the same UID but multiple hash values with the latest having the most recent submission date
         `,
         params: Type.Object({
-            uid: Type.String()
+            uid: Type.String(),
         }),
-        res: Type.Object({
-            uid: Type.String({
-                description: 'UID of the package'
-            }),
-            name: Type.String({
-                description: 'Name of the latest package version'
-            }),
-            hash: Type.String({
-                description: 'Hash of the latest package version'
-            }),
-            size: Type.Integer({
-                description: 'Size of the latest package version in bytes'
-            }),
-            username: Type.Optional(Type.String({
-                description: 'Submission User of the latest package version'
-            })),
-            created: Type.String({
-                format: 'date-time',
-                description: 'Submission DateTime of the latest package version'
-            }),
-            keywords: Type.Array(Type.String()),
-            items: Type.Array(Package)
-        })
+        res: PackageResponse,
     }, async (req, res) => {
         try {
             const user = await Auth.as_user(config, req);
@@ -547,27 +606,138 @@ export default async function router(schema: Schema, config: Config) {
             const api = await TAKAPI.init(new URL(String(config.server.api)), new APIAuthCertificate(auth.cert, auth.key));
 
             const pkg = await api.Package.list({
-                uid: req.params.uid
+                uid: req.params.uid,
             });
 
             if (!pkg.results.length) throw new Err(404, null, 'Package not found');
 
-            pkg.results.sort((a, b) => {
-                return new Date(a.SubmissionDateTime).getTime() - new Date(b.SubmissionDateTime).getTime();
+            res.json(await packageSummaryWithChannels(api, req.params.uid, pkg.results));
+        }
+        catch (err) {
+            Err.respond(err, res);
+        }
+    });
+
+    await schema.patch('/marti/package/:uid', {
+        name: 'Update Package',
+        group: 'MartiPackages',
+        description: 'Helper API to update the latest package metadata',
+        params: Type.Object({
+            uid: Type.String(),
+        }),
+        body: Type.Object({
+            channels: Type.Optional(Type.Array(Type.String(), {
+                description: 'Channels to assign to the latest package version',
+            })),
+            keywords: Type.Optional(Type.Array(Type.String(), {
+                description: 'Keywords to assign to the latest package version',
+            })),
+            expiration: Type.Optional(Type.Integer({
+                description: 'Expiration as a Unix timestamp in seconds, use -1 to clear expiration',
+            })),
+        }),
+        res: PackageResponse,
+    }, async (req, res) => {
+        try {
+            const user = await Auth.as_user(config, req);
+
+            if (req.body.channels === undefined && req.body.keywords === undefined && req.body.expiration === undefined) {
+                throw new Err(400, null, 'Must provide channels, keywords or expiration');
+            }
+
+            const auth = config.serverCert();
+            const api = await TAKAPI.init(
+                new URL(String(config.server.api)),
+                new APIAuthCertificate(auth.cert, auth.key),
+            );
+
+            const pkgs = await api.Package.list({
+                uid: req.params.uid,
             });
 
-            res.json({
+            if (!pkgs.results.length) {
+                throw new Err(404, null, 'Package not found');
+            }
+
+            const current = packageSummary(req.params.uid, pkgs.results);
+            const latest = current.items[current.items.length - 1];
+
+            if (user.access !== AuthUserAccess.ADMIN) {
+                const profile = await config.models.Profile.from(user.email);
+                const userApi = await TAKAPI.init(
+                    new URL(String(config.server.api)),
+                    new APIAuthCertificate(profile.auth.cert, profile.auth.key),
+                );
+
+                const [userChannels, packageChannels] = await Promise.all([
+                    activeChannelNames(config, user.email, userApi),
+                    packageChannelNames(userApi, latest),
+                ]);
+
+                const hasChannelAccess = Array.from(packageChannels).some((channel) => {
+                    return userChannels.has(channel);
+                });
+
+                if (!hasChannelAccess) {
+                    throw new Err(403, null, 'Insufficient Access to update Package');
+                }
+            }
+
+            if (req.body.channels !== undefined) {
+                const content = await api.Files.download(latest.Hash);
+
+                try {
+                    await api.Files.uploadPackage({
+                        name: latest.Name,
+                        creatorUid: latest.CreatorUid || latest.SubmissionUser || user.email,
+                        hash: latest.Hash,
+                        keywords: req.body.keywords ?? latest.Keywords,
+                        mimetype: latest.MIMEType,
+                        groups: req.body.channels,
+                    }, content);
+                }
+                catch (err) {
+                    if (!content.destroyed && !content.readableEnded) {
+                        if (content.destroy) {
+                            content.destroy(err instanceof Error ? err : new Error(String(err)));
+                        }
+                        else if (content.resume) {
+                            content.resume();
+                        }
+                    }
+
+                    throw err;
+                }
+
+                const expiration = req.body.expiration !== undefined
+                    ? req.body.expiration
+                    : packageExpirationForUpdate(current.expiration);
+
+                if (expiration !== undefined) {
+                    await api.Files.update(latest.Hash, {
+                        expiration,
+                    });
+                }
+            }
+            else {
+                await api.Files.update(latest.Hash, {
+                    keywords: req.body.keywords,
+                    expiration: req.body.expiration,
+                });
+            }
+
+            const updated = await api.Package.list({
                 uid: req.params.uid,
-                name: pkg.results[pkg.results.length - 1].Name,
-                hash: pkg.results[pkg.results.length - 1].Hash,
-                size: !isNaN(Number(pkg.results[pkg.results.length - 1].Size)) ? Number(pkg.results[pkg.results.length -1].Size) : 0,
-                keywords: pkg.results[pkg.results.length - 1].Keywords || [],
-                created: pkg.results[pkg.results.length - 1].SubmissionDateTime,
-                username: pkg.results[pkg.results.length - 1].SubmissionUser,
-                items: pkg.results
             });
-        } catch (err) {
-             Err.respond(err, res);
+
+            if (!updated.results.length) {
+                throw new Err(404, null, 'Package not found');
+            }
+
+            res.json(await packageSummaryWithChannels(api, req.params.uid, updated.results));
+        }
+        catch (err) {
+            Err.respond(err, res);
         }
     });
 
@@ -576,13 +746,13 @@ export default async function router(schema: Schema, config: Config) {
         group: 'MartiPackages',
         description: 'Helper API to delete a package',
         params: Type.Object({
-            uid: Type.String()
+            uid: Type.String(),
         }),
         query: Type.Object({
             hash: Type.Optional(Type.String()),
-            impersonate: Type.Optional(Type.Union([Type.Boolean(), Type.String()]))
+            impersonate: Type.Optional(Type.Union([Type.Boolean(), Type.String()])),
         }),
-        res: StandardResponse
+        res: StandardResponse,
     }, async (req, res) => {
         try {
             const user = await Auth.as_user(config, req);
@@ -591,11 +761,11 @@ export default async function router(schema: Schema, config: Config) {
 
             const api = await TAKAPI.init(
                 new URL(String(config.server.api)),
-                new APIAuthCertificate(auth.cert, auth.key)
+                new APIAuthCertificate(auth.cert, auth.key),
             );
 
             const pkgs = await api.Package.list({
-                uid: req.params.uid
+                uid: req.params.uid,
             });
 
             if (!pkgs.results.length) {
@@ -610,7 +780,8 @@ export default async function router(schema: Schema, config: Config) {
 
             if (req.query.impersonate) {
                 await Auth.as_user(config, req, { admin: true });
-            } else if (
+            }
+            else if (
                 pkg.SubmissionUser !== user.email
                 && user.access !== AuthUserAccess.ADMIN
             ) {
@@ -621,10 +792,11 @@ export default async function router(schema: Schema, config: Config) {
 
             res.json({
                 status: 200,
-                message: 'Package Deleted'
+                message: 'Package Deleted',
             });
-        } catch (err) {
-             Err.respond(err, res);
+        }
+        catch (err) {
+            Err.respond(err, res);
         }
     });
 }

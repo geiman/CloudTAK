@@ -19,6 +19,7 @@ import type { GeoJSONFeatureId } from 'maplibre-gl'
 import type COT from '../../base/cot.ts';
 import Filter from '../../base/filter.ts';
 import { OriginMode } from '../../base/cot.ts';
+import { createCircleEllipseShape } from '../../base/cot/ellipse.ts';
 import { std, stdurl, server } from '../../std.ts';
 import type { Feature, FeatureCollection } from '../../types.ts';
 import type { paths } from '@cloudtak/api-types';
@@ -308,7 +309,7 @@ export default class DrawTool {
                     this.removeFeature(id);
                     this.stop();
 
-                    if (!this.lasso.overlay || this.lasso.overlay === "CoT Icons") {
+                    if (!this.lasso.overlay || this.lasso.overlay === "Map Features") {
                         const touching = await this.mapStore.worker.db.touching(feat.geometry as Polygon);
 
                         for (const cot of touching.values()) {
@@ -396,21 +397,13 @@ export default class DrawTool {
 
                         const radius = storeFeat.properties.radiusKilometers ? (Number(storeFeat.properties.radiusKilometers) * 1000) : 100;
 
-                        feat.properties.shape = {
-                            ellipse: {
-                                major: radius,
-                                minor: radius,
-                                angle: 360
-                            }
-                        };
+                        feat.properties.shape = createCircleEllipseShape(radius);
                     } else if (this.mode === DrawToolMode.POINT) {
                         feat.properties.type = this.point.type
                         feat.properties["marker-opacity"] = 1;
 
                         if (this.point.type === 'u-d-p') {
                             feat.properties["marker-color"] = '#00FF00';
-                        } else {
-                            feat.properties["marker-color"] = '#FFFFFF';
                         }
                     }
 
@@ -471,7 +464,7 @@ export default class DrawTool {
 
         this.lasso = {
             loading: false,
-            overlay: 'CoT Icons'
+            overlay: 'Map Features'
         }
     }
 
@@ -729,9 +722,7 @@ export default class DrawTool {
                 } else if (this.mode === DrawToolMode.CIRCLE) {
                     feat.properties.type = 'u-d-c-c';
                     const radius = drawn.properties.radiusKilometers ? (Number(drawn.properties.radiusKilometers) * 1000) : 100;
-                    feat.properties.shape = {
-                        ellipse: { major: radius, minor: radius, angle: 360 }
-                    };
+                    feat.properties.shape = createCircleEllipseShape(radius);
                 } else if (this.mode === DrawToolMode.POINT) {
                     feat.properties.type = this.point.type;
                     feat.properties["marker-opacity"] = 1;

@@ -10,14 +10,147 @@
 
 ## Version History
 
-### Deprecation Notice
+### Deprecation Notices
 
-- `v12.85.0` Moved the Layer Incoming `groups` property to the Style Object for increased flexibility in desination management
-  This array has been retained but in the next major release it will be removed
-- `v12.115.0` Added the ability to set Basemap Protocol with the default being zxy. This will be a required field in v13
-- `v12.126.0` Migrate to the base `/api/config` -> `/api/config/group` will be retired in the next major version
+None at this time, but any breaking changes will be prefaced with a deprecation notice in the previous major version to allow users to prepare for the change
 
 ### Pending Release
+
+### v13.3.0 - 2026-05-22
+
+- :rocket: Allow an API user to set contentHashes or entryUid - Closes: https://github.com/dfpc-coe/CloudTAK/pull/1441
+
+### v13.2.0 - 2026-05-22
+
+- :rocket: Hide Copy button on Cursor Coordinates - Closes: #1450
+- :rocket: Add Style Lints for all backend components
+
+### v13.1.1 - 2026-05-21
+
+- :bug: CSP rules prevented `blob:` loaded images
+
+### v13.1.0 - 2026-05-21
+
+- :tada: Update CoTView to use a new Offline native Icon Selection component
+- :rocket: Update MenuIconsets to be fully offline
+- :rocket: Add inline error message if an icon cannot be found
+- :bug: Fix 2525C icons displaying in the UI
+
+### v13.0.2 - 2026-05-20
+
+- :bug: Ensure Derived-Types is present in PMTiles Dockerfile Context
+
+### v13.0.1 - 2026-05-20
+
+- :bug: Add `application-autoscaling.amazonaws.com` Service Role as it is not included in the AWS GovCloud Partition
+
+### v13.0.0 - 2026-05-20
+
+> [!WARNING]
+> If running CloudTAK in an AWS environment with supplied CloudFormation Templates,
+> the deploy must be conducted in two steps due to the migration of API Gateway from
+> V1 to V2
+>
+> Comment out the PMTiles object in `cloudformation/CloudTAK.template.js`
+> Deploy with deploy update <stackname>
+> Uncomment the PMTiles object in `cloudformation/CloudTAK.template.js`
+> Deploy with deploy update <stackname>
+>
+> Note all ETLs that use `etl-base` must be updated to `>= 10.6.0`
+>
+> Breaking Changes:
+> - `v12.85.0` Moved the Layer Incoming `groups` property to the Style Object for increased flexibility in desination management
+>   This array has been retained but in the next major release it will be removed
+> - `v12.115.0` Added the ability to set Basemap Protocol with the default being zxy. This will be a required field in v13
+> - `v12.126.0` Migrate to the base `/api/config` -> `/api/config/group` will be retired in the next major version
+
+
+- :rocket: Bind internal dockerfile services to localhost
+- :tada: Add initial elevation API Endpoints in the PMTiles Service
+- :tada: Move Palette options to exist under the Mission Template section
+- :tada: Add support for storing `encoding` in a Basemap Terrain entry
+- :rocket: Surface custom tileSize when parsing from a remote TileJSON
+- :bug: Fix generation of Maroon Contact Colour - Closes: https://github.com/dfpc-coe/CloudTAK/issues/1442
+- :rocket: Allow Admins to delete any Video Lease - Closes: https://github.com/dfpc-coe/CloudTAK/issues/1438
+- :tada: Allow Admins to choose a default terrain source
+- :rocket: Improve consistency of BasemapSelect component
+
+### v12.138.2 - 2026-05-03
+
+- :arrow_up: Update TerraDraw and Core Deps
+- :rocket: Reset Basemap Visibility on change - Closes: #1433
+
+### v12.138.1 - 2026-04-29
+
+- :bug: Fix `name` field of iconsets imported via old importer
+
+### v12.138.0 - 2026-04-29
+
+- :rocket: Add automatic events scaling in AWS environments
+- :rocket: More tightly scope S3 Access permissions
+
+### v12.137.0 - 2026-04-28
+
+- :rocket: Allow modifying circles by parametric editing of the radius and center point for better mobile support
+- :bug: Add `cloudformation:ListStacks` for ETL Dashboard
+
+### v12.136.0 - 2026-04-28
+
+- :bug: AWS released an incompatible xm-builder version: Ref: https://github.com/aws/aws-sdk-js-v3/issues/7967
+
+### v12.135.0 - 2026-04-28
+
+- :tada: Introduce CapacitorJS to allow for native mobile builds of CloudTAK
+- :arrow_up: Remove `showdown` in VueTabler in favor of marked for better performance and security
+- :arrow_up: Remove `moment` in favour of native `Date` and `Intl` APIs for better performance and smaller bundle size
+- :rocket: Show an expiry and near expiry badge on the Admin Connections page
+- :rocket: Migrate numerous `std()` calls to `server()` for stronger typed network IO
+- :rocket: Compute `enable_geofence` option in database for more efficient geofence lookup
+- :rocket: Sync Geofences with Tile38 Server if it is connected
+
+### v12.134.0 - 2026-04-24
+
+- :tada: Allow editing group membership for Data Packages
+- :rocket: Use consistent Inline* components for editing common properties
+- :bug: Ensure Content-Type is set on private file shares - Closes: https://github.com/dfpc-coe/CloudTAK/pull/1423 Closes: https://github.com/dfpc-coe/CloudTAK/issues/1421
+
+### v12.133.0 - 2026-04-24
+
+- :rocket: Fix bugs in spritesheet loading
+- :rocket: Allow editing keywords in a Mission
+- :bug: Fix bug related to importing XML documents
+- :tada: Allow changing channels on a mission sync
+
+### v12.132.0 - 2026-04-23
+
+- :bug: Fix Service Worker Upgrade notification persisting after upgrade until hard refresh
+- :tada: Rewrite the Admin tasks API to combine hosted versions and deployment info as well as ETL config
+- :rocket: Allow downloading ETL Config to a JSON file
+- :rocket: Allow uploading ETL Config from a JSON file
+
+### v12.131.0 - 2026-04-23
+
+- :bug: Fix bug where service worker could become corrupted and prevent an update
+- :bug: Fix bug where default icons could fail to load
+
+### v12.130.0 - 2026-04-22
+
+- :rocket: Store Icons offline for 2-3x faster reload time
+
+### v12.129.0 - 2026-04-21
+
+- :rocket: Load Data Sync asynchronously when loading main map
+- :bug: Fix task selection when creating an ETL Layer
+
+### v12.128.0 - 2026-04-21
+
+- :rocket: Add ability to edit Data Package keywords and hash
+- :tada: Add ability to share profile files with other users
+- :rocket: Improve Folder Management of Features Menu
+- :tada: Add Folder Management of Files Menu
+- :rocket: Add Generic Folder Management Component
+- :bug: Improve large file handling support
+- :bug: Fix Service Worker Update message on Admin Console
 
 ### v12.127.3 - 2026-04-19
 
@@ -94,8 +227,8 @@
 
 - :bug: Ensure that downloaded attachments are not only displayed correctly but downloaded via the download manager and not just opened in a new tab - Closes: https://github.com/dfpc-coe/CloudTAK/issues/1391
 - :bug: Don't infinitely create alerts when a user activates the alert functionality
-- :bug: Don't infinitely show toasts when a user activates the alert functionality 
-- :rocket: Show a nice pulsing alert icon when an alert is present in the notifications list 
+- :bug: Don't infinitely show toasts when a user activates the alert functionality
+- :rocket: Show a nice pulsing alert icon when an alert is present in the notifications list
 
 ### v12.118.0 - 2026-04-07
 

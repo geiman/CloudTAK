@@ -21,7 +21,6 @@
                 <TablerInput
                     v-model='config.name'
                     label='Name'
-                    @submit='submitRings'
                 />
             </div>
 
@@ -31,7 +30,6 @@
                 :edit='true'
                 :hover='true'
                 :modes='["dd"]'
-                @submit='submitRings'
             />
 
             <div class='mx-2 border my-2'>
@@ -128,7 +126,7 @@
 import { v4 as randomUUID } from 'uuid';
 import { ref, toRaw, computed, onMounted } from 'vue'
 import Coordinate from '../util/Coordinate.vue';
-import PropertyDistance from '../util/PropertyDistance.vue';
+import PropertyDistance from '../Property/PropertyDistance.vue';
 import ProfileConfig from '../../../base/profile.ts';
 import Ellipse from '@turf/ellipse'
 import {

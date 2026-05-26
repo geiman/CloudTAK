@@ -1,13 +1,14 @@
-import Icon from './icon.ts';
 import { v4 as randomUUID } from 'uuid';
 import { std } from '../std.ts';
-import { db } from './database.ts';
+import { db } from '../database.ts';
 import { liveQuery } from 'dexie';
 import { bbox } from '@turf/bbox'
 import { length } from '@turf/length'
-import { isEqual } from '@react-hookz/deep-equal';
+import { isEqual } from '@ver0/deep-equal';
 import { WorkerMessageType } from'./events.ts'
 import pointOnFeature from '@turf/point-on-feature';
+import { applyEllipseMutation } from './cot/ellipse.ts';
+import type { COTMutation, COTUpdate } from './cot/types.ts';
 import type { Feature, Subscription } from '../types.ts'
 import type {
     BBox as GeoJSONBBox,
@@ -46,6 +47,23 @@ export const RENDERED_PROPERTIES = [
     'circle-radius',
     'circle-opacity'
 ]
+
+const COT_MUTATIONS: COTMutation[] = [
+    applyEllipseMutation
+];
+
+function applyCOTMutations(
+    current: Feature,
+    update: COTUpdate
+): COTUpdate {
+    let next = update;
+
+    for (const mutation of COT_MUTATIONS) {
+        next = mutation({ current, update: next }) || next;
+    }
+
+    return next;
+}
 
 export default class COT {
     id: string;
@@ -154,15 +172,13 @@ export default class COT {
      * Update the COT and return a boolean as to whether the COT needs to be re-rendered
      */
     async update(
-        update: {
-            path?: string,
-            properties?: Feature["properties"],
-            geometry?: Feature["geometry"]
-        },
+        update: COTUpdate,
         opts?: {
             skipSave?: boolean;
         }
     ): Promise<boolean> {
+        update = applyCOTMutations(this.as_feature(), update);
+
         if (this._remote) {
             if (update.path) this._path = update.path;
             if (update.properties) this._properties = update.properties;
@@ -214,8 +230,19 @@ export default class COT {
                 }
             }
 
+            const updatedCenter = update.properties && Array.isArray(update.properties.center)
+                ? update.properties.center
+                : undefined;
             if (update.geometry || !this._properties.center || (this._properties.center[0] === 0 && this._properties.center[1] === 0)) {
-                this._properties.center = pointOnFeature(this._geometry).geometry.coordinates;
+                if (updatedCenter && updatedCenter.length >= 2) {
+                    this._properties.center = updatedCenter;
+                } else {
+                    this._properties.center = pointOnFeature(this._geometry).geometry.coordinates;
+
+                    if (this._geometry.type === 'Point' && this._geometry.coordinates.length > 2) {
+                        this._properties.center[2] = this._geometry.coordinates[2];
+                    }
+                }
             }
 
             if (this.origin.mode === OriginMode.CONNECTION) {
@@ -508,6 +535,10 @@ export default class COT {
         }
 
         if (type.includes('Point')) {
+            if (properties.icon && properties.icon.startsWith('COT_MAPPING_2525C')) {
+                delete properties.icon;
+            }
+
             if (properties.group) {
                 properties['icon-opacity'] = 0;
 
@@ -550,10 +581,10 @@ export default class COT {
                     properties.icon = properties.icon.replace(/.png$/, '');
                 }
 
-                if (!await Icon.has(properties.icon)) {
-                    console.warn(`No Icon for: ${properties.icon} fallback to ${properties.type}`);
-                    properties.icon = `${properties.type}`;
-                }
+                // Resolution happens via MapLibre's `styleimagemissing` handler
+                // (see IconManager.onStyleImageMissing). Iconset icons are
+                // loaded from Dexie on demand and unknown ids fall back to a
+                // generic point bitmap, so no preflight check is required.
             } else if (properties.milsym && !isNaN(Number(properties.milsym.id))) {
                 properties.icon = `2525D:${properties.milsym.id}`;
             } else {

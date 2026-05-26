@@ -80,6 +80,7 @@
 
                             <Keywords
                                 :keywords='pkg.keywords.filter((k) => k && k.trim() !== "missionpackage")'
+                                tone='accent'
                             />
 
                             <div class='text-secondary small d-flex flex-wrap align-items-center gap-2'>
@@ -143,7 +144,7 @@ onMounted(async () => {
     await fetchList();
 });
 
-watch(paging.value, async () => {
+watch(() => paging.value.filter, async () => {
     await fetchList();
 });
 
@@ -162,17 +163,21 @@ async function fetchList() {
         });
 
         if (res.error) {
-            loading.value = false;
-            error.value = Error(res.error.message);
-            return;
+            throw new Error(res.error.message || 'Failed to load data packages');
         }
+
+        if (!res.data) throw new Error('Failed to load data packages');
 
         list.value = res.data;
     } catch (err) {
+        list.value = {
+            total: 0,
+            items: []
+        };
         error.value = err instanceof Error ? err : new Error(String(err));
+    } finally {
+        loading.value = false;
     }
-
-    loading.value = false;
 }
 </script>
 

@@ -26,6 +26,8 @@ export default class Overlay {
     _error?: Error;
     _loaded: boolean;
 
+    loading: boolean;
+
     id: number;
     name: string;
     active: boolean;
@@ -40,6 +42,7 @@ export default class Overlay {
     visible: boolean;
     mode: string;
     mode_id: string | null;
+    encoding: 'mapbox' | 'terrarium' | null;
 
     actions: ProfileOverlay["actions"];
 
@@ -139,7 +142,7 @@ export default class Overlay {
     }
 
     constructor(
-        overlay: ProfileOverlay,
+        overlay: ProfileOverlay & { encoding?: 'mapbox' | 'terrarium' | null },
         opts: {
             internal?: boolean;
         } = {}
@@ -148,6 +151,8 @@ export default class Overlay {
         this._internal = opts.internal || false;
         this._clickable = [];
         this._loaded = false;
+
+        this.loading = false;
 
         this.id = overlay.id;
         this.name = overlay.name;
@@ -166,6 +171,7 @@ export default class Overlay {
         this.visible = overlay.visible;
         this.mode = overlay.mode;
         this.mode_id = overlay.mode_id || null;
+        this.encoding = overlay.encoding || null;
         this.url = overlay.url;
         this.styles = overlay.styles as Array<LayerSpecification>;
         this.token = overlay.token;
@@ -222,6 +228,13 @@ export default class Overlay {
     async addLayers(before?: string): Promise<void> {
         const mapStore = useMapStore();
 
+        // If init() failed to register the source (e.g. a /tiles fetch
+        // 404'd), skip layer registration. addLayer would otherwise throw
+        // "source ... not found" and break the rest of map setup.
+        if (this._error || !mapStore.map.getSource(String(this.id))) {
+            return;
+        }
+
         for (const l of this.styles) {
             if (before) {
                 mapStore.map.addLayer(l, before);
@@ -230,11 +243,20 @@ export default class Overlay {
             }
         }
 
-        // The above doesn't set vis/opacity initially
-        await this.update({
-            opacity: this.opacity,
-            visible: this.visible
-        })
+        // The above doesn't set vis/opacity initially - apply directly
+        // without round-tripping through update()/save() which would PATCH
+        // the server with unchanged values.
+        for (const l of this.styles) {
+            if (this.type === 'raster') {
+                mapStore.map.setPaintProperty(l.id, 'raster-opacity', Number(this.opacity));
+            }
+            mapStore.map.setLayoutProperty(l.id, 'visibility', this.visible ? 'visible' : 'none');
+        }
+
+        // Update attribution if this is a basemap
+        if (this.mode === 'basemap') {
+            await mapStore.updateAttribution();
+        }
 
         for (const click of this._clickable) {
             const hoverIds = new Set<string>();
@@ -304,23 +326,41 @@ export default class Overlay {
             const url = stdurl(this.url);
             url.searchParams.set('token', localStorage.token);
 
-            const tileJSON = await std(url.toString()) as TileJSON
+            // A failed /tiles lookup (network blip, expired token, deleted
+            // basemap upstream, etc.) must NOT abort map initialization or
+            // every other overlay disappears with it. Capture the error on
+            // the overlay so MenuOverlays.vue surfaces an "Issue" badge,
+            // and skip addSource so addLayers later no-ops cleanly.
+            try {
+                const tileJSON = await std(url.toString()) as TileJSON
 
-            if (!mapStore.map.getSource(String(this.id))) {
-                mapStore.map.addSource(String(this.id), {
-                    ...tileJSON,
-                    type: 'raster',
-                });
+                if (!mapStore.map.getSource(String(this.id))) {
+                    mapStore.map.addSource(String(this.id), {
+                        ...tileJSON,
+                        type: 'raster',
+                    });
+                }
+            } catch (err) {
+                this._error = err instanceof Error ? err : new Error(String(err));
+                console.error(`Failed to load raster tiles for overlay ${this.id} (${this.name}):`, err);
             }
         } else if (this.type === 'vector' && this.url) {
             const url = stdurl(this.url);
             url.searchParams.set('token', localStorage.token);
 
             if (!mapStore.map.getSource(String(this.id))) {
-                mapStore.map.addSource(String(this.id), {
-                    type: 'vector',
-                    url: String(url)
-                });
+                // MapLibre resolves the vector TileJSON lazily on first tile
+                // request, so addSource itself does not throw on a bad URL.
+                // Still wrap defensively for parity with the raster branch.
+                try {
+                    mapStore.map.addSource(String(this.id), {
+                        type: 'vector',
+                        url: String(url)
+                    });
+                } catch (err) {
+                    this._error = err instanceof Error ? err : new Error(String(err));
+                    console.error(`Failed to add vector source for overlay ${this.id} (${this.name}):`, err);
+                }
             }
         } else if (this.type === 'geojson') {
             if (!mapStore.map.getSource(String(this.id))) {
@@ -367,11 +407,9 @@ export default class Overlay {
         }
 
         if (this.iconset) {
-            try {
-                mapStore.icons.addIconset(this.iconset);
-            } catch (err) {
+            mapStore.icons.addIconset(this.iconset).catch((err: unknown) => {
                 console.error('Error adding iconset', this.iconset, err);
-            }
+            });
         }
 
         if (this.type === 'vector' && this. mode !== 'basemap' && opts.clickable === undefined) {
@@ -408,7 +446,9 @@ export default class Overlay {
         }
 
         if (this.iconset) {
-            mapStore.icons.removeIconset(this.iconset);
+            mapStore.icons.removeIconset(this.iconset).catch((err: unknown) => {
+                console.error('Error removing iconset', this.iconset, err);
+            });
         }
 
         if (mapStore.map.getStyle().sources[String(this.id)]) {
@@ -428,6 +468,7 @@ export default class Overlay {
             visible?: boolean;
             mode?: string;
             mode_id?: string;
+            encoding?: 'mapbox' | 'terrarium' | null;
             url?: string;
             token?: string;
             styles?: Array<LayerSpecification>;
@@ -450,10 +491,11 @@ export default class Overlay {
             this.styles = [];
         }
 
-        if (overlay.opacity) this.opacity = overlay.opacity;
-        if (overlay.visible) this.visible = overlay.visible;
+        if (overlay.opacity !== undefined) this.opacity = overlay.opacity;
+        if (overlay.visible !== undefined) this.visible = overlay.visible;
         if (overlay.mode) this.mode = overlay.mode;
         if (overlay.mode_id) this.mode_id = overlay.mode_id || null;
+        if (overlay.encoding !== undefined) this.encoding = overlay.encoding;
         if (overlay.url) this.url = overlay.url;
         if (overlay.token) this.token = overlay.token;
         if (overlay.styles) {
@@ -514,23 +556,28 @@ export default class Overlay {
         pos?: number;
         visible?: boolean;
         opacity?: number;
+        encoding?: 'mapbox' | 'terrarium' | null;
     }): Promise<void> {
         const mapStore = useMapStore();
 
-        if (body.opacity !== undefined) {
+        let changed = false;
+
+        if (body.opacity !== undefined && body.opacity !== this.opacity) {
             this.opacity = body.opacity;
             for (const l of this.styles) {
                 if (this.type === 'raster') {
                     mapStore.map.setPaintProperty(l.id, 'raster-opacity', Number(this.opacity))
                 }
             }
+            changed = true;
         }
 
-        if (body.visible !== undefined) {
+        if (body.visible !== undefined && body.visible !== this.visible) {
             this.visible = body.visible;
             for (const l of this.styles) {
                 mapStore.map.setLayoutProperty(l.id, 'visibility', this.visible ? 'visible' : 'none');
             }
+            changed = true;
         }
 
         // Update attribution if this is a basemap
@@ -538,11 +585,19 @@ export default class Overlay {
             await mapStore.updateAttribution();
         }
 
-        if (body.pos !== undefined) {
+        if (body.pos !== undefined && body.pos !== this.pos) {
             this.pos = body.pos;
+            changed = true;
         }
 
-        await this.save();
+        if (body.encoding !== undefined && body.encoding !== this.encoding) {
+            this.encoding = body.encoding;
+            changed = true;
+        }
+
+        if (changed) {
+            await this.save();
+        }
     }
 
     async save(): Promise<void> {
@@ -564,6 +619,7 @@ export default class Overlay {
                 mode_id: this.mode_id,
                 url: this.url,
                 visible: this.visible,
+                encoding: this.encoding,
                 styles: dropStyles ? [] : this.styles
             }
         })

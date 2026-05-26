@@ -18,9 +18,6 @@
             />
             <span class='text-white small'>
                 A new version of CloudTAK is ready
-                <template v-if='updatedSW.version && updatedSW.version !== version'>
-                    &mdash; v{{ version }} &rarr; v{{ updatedSW.version }}
-                </template>
             </span>
             <button
                 class='btn btn-sm btn-success py-0'
@@ -180,7 +177,7 @@ import {
     IconSettings,
     IconRefresh,
 } from '@tabler/icons-vue';
-import { version } from '../package.json';
+import { StatusBar } from '@capacitor/status-bar';
 import Loading from './components/Loading.vue';
 import {
     TablerBadge,
@@ -190,27 +187,30 @@ import MissionInviteModal from './components/CloudTAK/Menu/Mission/MissionInvite
 import ChannelChangeModal from './components/CloudTAK/Menu/ChannelChangeModal.vue';
 import { WorkerMessageType } from './base/events.ts';
 import type { WorkerMessage } from './base/events.ts';
-import { db } from './base/database.ts';
-import { getCurrentEntryBuildId } from './base/service-worker.ts';
+import { isNativePlatform, supportsServiceWorker } from './base/capacitor.ts';
+import { db } from './database.ts';
+import { getPageServiceWorkerBuildId, markUpdateRequestedByThisTab } from './base/service-worker.ts';
 import { useMapStore } from './stores/map.ts';
 
 const router = useRouter();
 const route = useRoute();
 const mapStore = useMapStore();
-const currentBuildId = getCurrentEntryBuildId();
 
 const loginLogo = ref<string>();
 const loginName = ref<string>();
 
 const updateAvailable = ref(false);
-const updatedSW = ref<{ version: string | null; build: string | null }>({ version: null, build: null });
 const pendingRegistration = ref<ServiceWorkerRegistration | null>(null);
 
 const applyUpdate = () => {
     const waiting = pendingRegistration.value?.waiting;
     if (waiting) {
+        // Tell service-worker.ts that THIS tab initiated the update, so its
+        // controllerchange handler auto-reloads us. Other tabs will see the
+        // same controllerchange, not find this flag, and surface their own
+        // prompt instead of silently reloading.
+        markUpdateRequestedByThisTab();
         waiting.postMessage('SKIP_WAITING');
-        // controllerchange handler in main.ts will reload the page
     } else {
         window.location.reload();
     }
@@ -218,10 +218,6 @@ const applyUpdate = () => {
 
 const onSwUpdateAvailable = (e: Event) => {
     const detail = (e as CustomEvent).detail;
-    updatedSW.value = {
-        version: detail.version,
-        build: detail.build
-    };
     pendingRegistration.value = detail.registration;
     updateAvailable.value = true;
 };
@@ -271,6 +267,18 @@ function onSystemThemeChange(): void {
     }
 }
 
+async function configureStatusBar(): Promise<void> {
+    if (!isNativePlatform()) {
+        return;
+    }
+
+    try {
+        await StatusBar.setOverlaysWebView({ overlay: false });
+    } catch (err) {
+        console.warn('Failed to configure native status bar overlay', err);
+    }
+}
+
 const navShown = computed<boolean>(() => {
     if (!route || !route.name) {
         return false;
@@ -308,9 +316,11 @@ onMounted(async () => {
         error.value = e.reason instanceof Error ? e.reason : new Error(String(e.reason));
     });
 
-    if ('serviceWorker' in navigator) {
+    if (supportsServiceWorker()) {
         window.addEventListener('sw:update-available', onSwUpdateAvailable);
     }
+
+    await configureStatusBar();
 
     applyTheme();
     displayStyleSub = liveQuery(() => db.profile.get('display_style')).subscribe((entry) => {
@@ -373,8 +383,10 @@ onMounted(async () => {
         }
     }
 
-    if ('serviceWorker' in navigator) {
+    if (supportsServiceWorker()) {
         navigator.serviceWorker.getRegistrations().then(async (registrations) => {
+            const currentBuildId = getPageServiceWorkerBuildId();
+
             for (const registration of registrations) {
                 registration.update().catch((err) => {
                     console.debug('Failed to update ServiceWorker (likely unregistered):', err);
@@ -385,11 +397,6 @@ onMounted(async () => {
                 for (const reg of registrations) {
                     // Prefer a waiting worker (new version ready to activate)
                     if (reg.waiting) {
-                        const u = new URL(reg.waiting.scriptURL);
-                        updatedSW.value = {
-                            version: u.searchParams.get('v'),
-                            build: u.searchParams.get('build')
-                        };
                         pendingRegistration.value = reg;
                         updateAvailable.value = true;
                         break;
@@ -397,13 +404,22 @@ onMounted(async () => {
 
                     // Fall back to detecting an active SW whose build differs from
                     // the currently loaded page (e.g. another tab triggered activation).
+                    //
+                    // IMPORTANT: only compare build fingerprints, not the `?v=`
+                    // package.json version param. The `?v=` value is whatever
+                    // `package.json` happened to be when the *previous* page
+                    // called `register()` for this worker, not what is actually
+                    // deployed. After a SKIP_WAITING + auto-reload, the freshly
+                    // loaded page imports a *newer* `package.json` than the
+                    // value baked into `reg.active.scriptURL`, so a version
+                    // comparison spuriously re-shows the update banner with no
+                    // pending worker present. The build fingerprint is derived
+                    // from deployed asset filenames and is the source of truth.
                     const worker = reg.active;
                     if (worker?.scriptURL) {
                         const u = new URL(worker.scriptURL);
                         const swBuild = u.searchParams.get('build');
-                        const swVersion = u.searchParams.get('v');
-                        if ((swVersion && swVersion !== version) || (swBuild && swBuild !== currentBuildId)) {
-                            updatedSW.value = { version: swVersion, build: swBuild };
+                        if (currentBuildId && swBuild && swBuild !== currentBuildId) {
                             updateAvailable.value = true;
                         }
                         break;

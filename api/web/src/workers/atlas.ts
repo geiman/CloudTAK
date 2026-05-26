@@ -9,8 +9,9 @@ import AtlasProfile from './atlas-profile.ts';
 import type { ProfileLocationState } from './atlas-profile.ts';
 import AtlasDatabase from './atlas-database.ts';
 import AtlasConnection from './atlas-connection.ts';
+import AtlasIcons from './atlas-icons.ts';
 import { CloudTAKTransferHandler } from '../base/handler.ts';
-import { db } from '../base/database.ts';
+import { db } from '../database.ts';
 
 export default class Atlas {
     channel: BroadcastChannel;
@@ -22,6 +23,7 @@ export default class Atlas {
     db = Comlink.proxy(new AtlasDatabase(this));
     conn = Comlink.proxy(new AtlasConnection(this));
     profile = Comlink.proxy(new AtlasProfile(this));
+    icons = Comlink.proxy(new AtlasIcons(this));
 
     constructor() {
         this.channel = new BroadcastChannel('cloudtak');
@@ -70,6 +72,12 @@ export default class Atlas {
             await db.config.put({ key: 'token', value: authToken });
 
             this.username = await this.profile.init();
+
+            void this.icons.hydrate()
+                .catch((err: unknown) => {
+                    console.error('Failed to hydrate iconsets after startup', err);
+                });
+
             await this.conn.connect(this.username)
 
             await this.db.init();

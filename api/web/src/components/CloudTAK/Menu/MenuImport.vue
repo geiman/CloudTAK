@@ -45,86 +45,87 @@
             >
                 <div class='row gy-3 gx-0 gx-lg-3'>
                     <div class='col-12'>
-                        <div class='card h-100 cloudtak-bg text-white border border-light-subtle shadow-sm'>
-                            <div class='card-body d-flex flex-column gap-4'>
-                                <div class='d-flex align-items-center gap-3'>
-                                    <div class='flex-grow-1'>
-                                        <p class='text-uppercase text-white-50 small mb-1'>
-                                            Import
-                                        </p>
-                                        <div class='d-flex align-items-center gap-3'>
-                                            <Status
-                                                :dark='true'
-                                                :status='imported.status'
-                                            />
-                                            <h2
-                                                class='h4 mb-0 text-break'
-                                                v-text='imported.name'
-                                            />
-                                        </div>
+                        <TablerBorder
+                            class='cloudtak-bg text-white'
+                            gap='lg'
+                        >
+                            <div class='d-flex align-items-center gap-3'>
+                                <div class='flex-grow-1'>
+                                    <p class='text-uppercase text-white-50 small mb-1'>
+                                        Import
+                                    </p>
+                                    <div class='d-flex align-items-center gap-3'>
+                                        <Status
+                                            :dark='true'
+                                            :status='imported.status'
+                                        />
+                                        <h2
+                                            class='h4 mb-0 text-break'
+                                            v-text='imported.name'
+                                        />
                                     </div>
                                 </div>
+                            </div>
 
-                                <div class='row gy-3 gx-0 gx-sm-3'>
-                                    <div class='col-12'>
-                                        <small class='text-uppercase text-white-50 d-block mb-1'>Import Type</small>
-                                        <p
-                                            class='text-start text-white p-0 text-decoration-none text-break'
-                                            v-text='imported.source + ": " + imported.source_id'
-                                        />
-                                    </div>
+                            <div class='row gy-3 gx-0 gx-sm-3'>
+                                <div class='col-12'>
+                                    <small class='text-uppercase text-white-50 d-block mb-1'>Import Type</small>
+                                    <p
+                                        class='text-start text-white p-0 text-decoration-none text-break'
+                                        v-text='imported.source + ": " + imported.source_id'
+                                    />
+                                </div>
 
-                                    <div class='col-12 col-lg-6'>
-                                        <small class='text-uppercase text-white-50 d-block'>Created</small>
-                                        <p
-                                            class='text-white mb-0 text-break'
-                                            v-text='timeDiff(imported.created)'
-                                        />
-                                    </div>
-                                    <div class='col-12 col-lg-6'>
-                                        <small class='text-uppercase text-white-50 d-block'>Updated</small>
-                                        <p
-                                            class='text-white mb-0 text-break'
-                                            v-text='timeDiff(imported.updated)'
-                                        />
-                                    </div>
+                                <div class='col-12 col-lg-6'>
+                                    <small class='text-uppercase text-white-50 d-block'>Created</small>
+                                    <p
+                                        class='text-white mb-0 text-break'
+                                        v-text='timeDiff(imported.created)'
+                                    />
+                                </div>
+                                <div class='col-12 col-lg-6'>
+                                    <small class='text-uppercase text-white-50 d-block'>Updated</small>
+                                    <p
+                                        class='text-white mb-0 text-break'
+                                        v-text='timeDiff(imported.updated)'
+                                    />
+                                </div>
                                     
-                                    <div
-                                        v-if='imported.status === "Empty"'
-                                        class='col-12'
-                                    >
-                                        <TablerNone :create='false' />
-                                    </div>
+                                <div
+                                    v-if='imported.status === "Empty"'
+                                    class='col-12'
+                                >
+                                    <TablerNone :create='false' />
+                                </div>
 
-                                    <div
-                                        v-else-if='loading.run'
-                                        class='col-12'
-                                    >
-                                        <TablerLoading desc='Running Import' />
-                                    </div>
+                                <div
+                                    v-else-if='loading.run'
+                                    class='col-12'
+                                >
+                                    <TablerLoading desc='Running Import' />
+                                </div>
 
+                                <div
+                                    v-else-if='imported.status === "Fail"'
+                                    class='col-12'
+                                >
                                     <div
-                                        v-else-if='imported.status === "Fail"'
-                                        class='col-12'
+                                        class='alert alert-danger d-flex align-items-center'
+                                        role='alert'
                                     >
-                                        <div
-                                            class='alert alert-danger d-flex align-items-center'
-                                            role='alert'
-                                        >
-                                            <IconAlertTriangle class='me-2' />
-                                            <div>
-                                                <h4 class='alert-heading h5'>
-                                                    Import Error
-                                                </h4>
-                                                <p class='mb-0 text-break text-danger-emphasis'>
-                                                    {{ imported.error }}
-                                                </p>
-                                            </div>
+                                        <IconAlertTriangle class='me-2' />
+                                        <div>
+                                            <h4 class='alert-heading h5'>
+                                                Import Error
+                                            </h4>
+                                            <p class='mb-0 text-break text-danger-emphasis'>
+                                                {{ imported.error }}
+                                            </p>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                        </TablerBorder>
                     </div>
                     
                     <div class='col-12'>
@@ -192,13 +193,14 @@
 <script setup lang='ts'>
 import { ref, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { std, stdurl, server } from '../../../../src/std.ts';
+import { server } from '../../../../src/std.ts';
 import type { Import } from '../../../../src/types.ts';
 import Status from '../../util/StatusDot.vue';
 import timeDiff from '../../../timediff.ts';
 import {
     TablerNone,
     TablerAlert,
+    TablerBorder,
     TablerDelete,
     TablerLoading,
     TablerIconButton,
@@ -244,21 +246,58 @@ onUnmounted(() => {
     }
 });
 
+function downloadBlob(blob: Blob, response: Response, fallbackName: string): void {
+    const contentDisposition = response.headers.get('Content-Disposition');
+    let name = fallbackName;
+
+    if (contentDisposition) {
+        const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(contentDisposition);
+        if (matches?.[1]) {
+            name = matches[1].replace(/['"]/g, '');
+        }
+    }
+
+    const fileUrl = URL.createObjectURL(new File([blob], name));
+    const link = document.createElement('a');
+    link.href = fileUrl;
+    link.download = name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(fileUrl);
+}
+
 async function downloadImport() {
-    const url = stdurl(`/api/import/${route.params.import}/raw`)
-    url.searchParams.set('token', localStorage.token);
-    url.searchParams.set('download', String(true));
-    await std(url, {
-        download: true
-    })
+    const res = await server.GET('/api/import/{:import}/raw', {
+        params: {
+            path: {
+                ':import': String(route.params.import)
+            },
+            query: {
+                token: localStorage.token,
+                download: true
+            }
+        },
+        parseAs: 'blob'
+    });
+
+    if (res.error) throw new Error(res.error.message);
+
+    downloadBlob(res.data, res.response, `import-${String(route.params.import)}`);
 }
 
 async function retryImport() {
     loading.value.initial = true;
 
     try {
-        const url = stdurl(`/api/import/${route.params.import}/retry`);
-        await std(url, { method: 'POST' });
+        const res = await server.POST('/api/import/{:import}/retry', {
+            params: {
+                path: {
+                    ':import': String(route.params.import)
+                }
+            }
+        });
+        if (res.error) throw new Error(res.error.message);
 
         loading.value.run = true;
         interval.value = setInterval(async () => {

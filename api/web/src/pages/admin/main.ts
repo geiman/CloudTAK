@@ -1,11 +1,15 @@
 import { createApp } from 'vue'
 import * as VueRouter from 'vue-router'
 import { createPinia } from 'pinia'
+import { version } from '../../../package.json'
+import { initServiceWorker } from '../../base/service-worker.ts';
 
 import 'floating-vue/dist/style.css'
 import FloatingVue from 'floating-vue'
 
 import App from '../../App.vue'
+
+initServiceWorker(version);
 
 const router = VueRouter.createRouter({
     history: VueRouter.createWebHistory(),
@@ -96,36 +100,21 @@ const router = VueRouter.createRouter({
                 name: 'admin-mission-template-log',
                 component: () => import('../../components/Admin/AdminMissionTemplateLog.vue')
             },{
-                path: 'palette',
-                name: 'admin-palettes',
-                component: () => import('../../components/Admin/AdminPalettes.vue')
-            },{
-                path: 'palette/:palette',
-                name: 'admin-palette',
+                path: 'template/:template/palette/:palette',
+                name: 'admin-mission-template-palette',
                 component: () => import('../../components/Admin/AdminPalette.vue')
             },{
-                path: 'palette/:palette/feature/:feature',
-                name: 'admin-palette-feature',
+                path: 'template/:template/palette/:palette/feature/:feature',
+                name: 'admin-mission-template-palette-feature',
                 component: () => import('../../components/Admin/AdminPaletteFeature.vue')
             },{
                 path: 'tasks',
                 name: 'admin-tasks',
-                component: () => import('../../components/Admin/AdminTasks.vue'),
-                children: [{
-                    path: '',
-                    name: 'admin-tasks-default',
-                    redirect: () => {
-                        return { name: 'admin-tasks-registered' };
-                    }
-                },{
-                    path: 'registered',
-                    name: 'admin-tasks-registered',
-                    component: () => import('../../components/Admin/Tasks/AdminTasks.vue')
-                },{
-                    path: 'raw',
-                    name: 'admin-tasks-raw',
-                    component: () => import('../../components/Admin/Tasks/AdminRawTasks.vue')
-                }]
+                component: () => import('../../components/Admin/Tasks/AdminTasks.vue')
+            },{
+                path: 'tasks/:task',
+                name: 'admin-task',
+                component: () => import('../../components/Admin/Tasks/AdminTask.vue')
             },{
                 path: 'server',
                 name: 'admin-server',

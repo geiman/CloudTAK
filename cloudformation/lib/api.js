@@ -167,10 +167,23 @@ export default {
                         },{
                             Effect: 'Allow',
                             Resource: [
-                                cf.join(['arn:', cf.partition, ':s3:::', cf.ref('AssetBucket')]),
+                                cf.join(['arn:', cf.partition, ':s3:::', cf.ref('AssetBucket')])
+                            ],
+                            Action: [
+                                's3:ListBucket'
+                            ]
+                        },{
+                            Effect: 'Allow',
+                            Resource: [
                                 cf.join(['arn:', cf.partition, ':s3:::', cf.ref('AssetBucket'), '/*'])
                             ],
-                            Action: '*'
+                            Action: [
+                                's3:GetObject',
+                                's3:PutObject',
+                                's3:DeleteObject',
+                                's3:AbortMultipartUpload',
+                                's3:ListMultipartUploadParts'
+                            ]
                         },{
                             Effect: 'Allow',
                             Action: [
@@ -223,6 +236,12 @@ export default {
                             Resource: [
                                 cf.join(['arn:', cf.partition, ':sns:', cf.region, ':', cf.accountId, ':', cf.stackName, '-*'])
                             ]
+                        },{
+                            Effect: 'Allow',
+                            Action: [
+                                'cloudformation:ListStacks'
+                            ],
+                            Resource: '*'
                         },{
                             Effect: 'Allow',
                             Action: [

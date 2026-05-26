@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
-import { primaryKey } from "drizzle-orm/pg-core";
-import { Static } from '@sinclair/typebox'
+import { primaryKey } from 'drizzle-orm/pg-core';
+import { Static } from '@sinclair/typebox';
 import type { StyleContainer } from './style.js';
 import type { FilterContainer } from './filter.js';
 import type { PaletteFeatureStyle } from './palette.js';
@@ -11,9 +11,10 @@ import { Layer_Config } from './models/Layer.js';
 import {
     Layer_Priority,
     Import_Status,
+    BasemapTerrain_Encoding,
     Basemap_Type, Basemap_Format, Basemap_Scheme, VideoLease_SourceType, BasicGeometryType, Basemap_Protocol,
-} from  './enums.js';
-import { boolean, uuid, numeric, integer, timestamp, pgTable, serial, varchar, text, unique, index } from 'drizzle-orm/pg-core';
+} from './enums.js';
+import { bigint, boolean, uuid, numeric, integer, timestamp, pgTable, serial, varchar, text, unique, index } from 'drizzle-orm/pg-core';
 
 /** Internal Tables for Postgis for use with drizzle-kit push:pg */
 export const SpatialRefSys = pgTable('spatial_ref_sys', {
@@ -21,7 +22,7 @@ export const SpatialRefSys = pgTable('spatial_ref_sys', {
     auth_name: varchar({ length: 256 }),
     auth_srid: integer(),
     srtext: varchar({ length: 2048 }),
-    proj4text: varchar({ length: 2048 })
+    proj4text: varchar({ length: 2048 }),
 });
 
 export const Palette = pgTable('palette', {
@@ -29,6 +30,8 @@ export const Palette = pgTable('palette', {
     name: text().notNull(),
     created: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
     updated: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
+
+    template: uuid().notNull().references(() => MissionTemplate.id),
 });
 
 export const PaletteFeature = pgTable('palette_feature', {
@@ -38,7 +41,7 @@ export const PaletteFeature = pgTable('palette_feature', {
     name: text().notNull(),
     palette: uuid().notNull().references(() => Palette.uuid),
     type: text().$type<BasicGeometryType>().notNull(),
-    style: jsonb().$type<Static<typeof PaletteFeatureStyle>>().notNull().default({})
+    style: jsonb().$type<Static<typeof PaletteFeatureStyle>>().notNull().default({}),
 });
 
 export const MissionTemplate = pgTable('mission_template', {
@@ -62,7 +65,7 @@ export const MissionTemplateLog = pgTable('mission_template_log', {
 
     template: uuid().notNull().references(() => MissionTemplate.id),
 
-    schema: jsonb().notNull()
+    schema: jsonb().notNull(),
 });
 
 /** ==== END ==== */
@@ -87,7 +90,7 @@ export const ProfileSetting = pgTable('profile_settings',
         key: text().notNull(),
         value: text().notNull().default(''),
     },
-    (table) => ({
+    table => ({
         pk: primaryKey({
             columns: [table.username, table.key],
         }),
@@ -108,6 +111,16 @@ export const ProfileFile = pgTable('profile_files', {
         size: number;
     }>>().notNull().default([]),
 });
+
+export const ProfileFileChannel = pgTable('profile_file_channel', {
+    id: serial().primaryKey(),
+    created: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
+    updated: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
+    file: uuid().notNull().references(() => ProfileFile.id, { onDelete: 'cascade' }),
+    channel: bigint({ mode: 'bigint' }).notNull(),
+}, table => ({
+    file_channel_idx: unique().on(table.file, table.channel),
+}));
 
 export const ProfileChatroom = pgTable('profile_chatroom', {
     id: text().primaryKey(),
@@ -131,7 +144,7 @@ export const ProfileChat = pgTable('profile_chats', {
     sender_callsign: text().notNull(),
     sender_uid: text().notNull(),
     message_id: text().notNull(),
-    message: text().notNull()
+    message: text().notNull(),
 });
 
 export const VideoLease = pgTable('video_lease', {
@@ -177,9 +190,9 @@ export const ProfileVideo = pgTable('profile_videos', {
     username: text().notNull().references(() => Profile.username),
 }, (table) => {
     return {
-        username_idx: index("profile_videos_username_idx").on(table.username),
-    }
-})
+        username_idx: index('profile_videos_username_idx').on(table.username),
+    };
+});
 
 export const ProfileFeature = pgTable('profile_features', {
     id: text().notNull(),
@@ -188,15 +201,15 @@ export const ProfileFeature = pgTable('profile_features', {
     username: text().notNull().references(() => Profile.username),
     enabled_geofence: boolean().notNull().default(false),
     properties: jsonb().notNull().default({}),
-    geometry: geometry({ type: GeometryType.GeometryZ, srid: 4326 }).notNull()
+    geometry: geometry({ type: GeometryType.GeometryZ, srid: 4326 }).notNull(),
 }, (table) => {
     return {
         pk: primaryKey({
-            columns: [table.username, table.id]
+            columns: [table.username, table.id],
         }),
-        username_idx: index("profile_features_username_idx").on(table.username),
-    }
-})
+        username_idx: index('profile_features_username_idx').on(table.username),
+    };
+});
 
 export const BasemapSource = pgTable('basemaps_source', {
     uuid: uuid().notNull().default(sql`gen_random_uuid()`),
@@ -204,7 +217,7 @@ export const BasemapSource = pgTable('basemaps_source', {
     type: text().notNull(),
 
     url: text().notNull(),
-    auth: jsonb().notNull().default({})
+    auth: jsonb().notNull().default({}),
 });
 
 export const Basemap = pgTable('basemaps', {
@@ -236,18 +249,18 @@ export const Basemap = pgTable('basemaps', {
     frequency: integer(),
     scheme: text().$type<Basemap_Scheme>().notNull().default(Basemap_Scheme.XYZ),
     overlay: boolean().notNull().default(false),
-    tilejson: text()
+    tilejson: text(),
 }, (table) => {
     return {
-        username_idx: index("basemaps_username_idx").on(table.username),
-    }
+        username_idx: index('basemaps_username_idx').on(table.username),
+    };
 });
 
 export const BasemapRaster = pgTable('basemaps_raster', {
     id: serial().primaryKey(),
     basemap: integer().notNull().references(() => Basemap.id, { onDelete: 'cascade' }),
-}, (table) => ({
-    basemap_idx: unique().on(table.basemap)
+}, table => ({
+    basemap_idx: unique().on(table.basemap),
 }));
 
 export const BasemapVector = pgTable('basemaps_vector', {
@@ -259,15 +272,16 @@ export const BasemapVector = pgTable('basemaps_vector', {
     snapping_enabled: boolean().notNull().default(false),
     title: text().notNull().default('callsign'),
     snapping_layer: text(),
-}, (table) => ({
-    basemap_idx: unique().on(table.basemap)
+}, table => ({
+    basemap_idx: unique().on(table.basemap),
 }));
 
 export const BasemapTerrain = pgTable('basemaps_terrain', {
     id: serial().primaryKey(),
     basemap: integer().notNull().references(() => Basemap.id, { onDelete: 'cascade' }),
-}, (table) => ({
-    basemap_idx: unique().on(table.basemap)
+    encoding: text().notNull().$type<BasemapTerrain_Encoding>().default(BasemapTerrain_Encoding.MAPBOX),
+}, table => ({
+    basemap_idx: unique().on(table.basemap),
 }));
 
 export const Errors = pgTable('errors', {
@@ -276,8 +290,8 @@ export const Errors = pgTable('errors', {
     updated: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
     username: text().notNull().references(() => Profile.username),
     message: text().notNull(),
-    trace: text()
-})
+    trace: text(),
+});
 
 export const Import = pgTable('imports', {
     id: text().primaryKey(),
@@ -289,7 +303,7 @@ export const Import = pgTable('imports', {
     username: text().notNull().references(() => Profile.username),
     source: text().notNull().default('Upload'),
     source_id: text(),
-    config: jsonb().notNull().default({})
+    config: jsonb().notNull().default({}),
 });
 
 export const ImportResult = pgTable('import_result', {
@@ -310,9 +324,9 @@ export const Task = pgTable('tasks', {
     name: text().notNull(),
     logo: text(),
     repo: text(),
-    readme: text()
-}, (t) => ({
-    unq: unique().on(t.prefix)
+    readme: text(),
+}, t => ({
+    unq: unique().on(t.prefix),
 }));
 
 export const Iconset = pgTable('iconsets', {
@@ -336,10 +350,9 @@ export const Iconset = pgTable('iconsets', {
     spritesheet_json: jsonb(),
 }, (table) => {
     return {
-        username_idx: index("iconsets_username_idx").on(table.username),
-    }
+        username_idx: index('iconsets_username_idx').on(table.username),
+    };
 });
-
 
 export const Icon = pgTable('icons', {
     id: serial().primaryKey(),
@@ -352,7 +365,7 @@ export const Icon = pgTable('icons', {
     iconset: text().notNull().references(() => Iconset.uid),
     type2525b: text(),
     data: text().notNull(),
-    path: text().notNull()
+    path: text().notNull(),
 });
 
 export const Connection = pgTable('connections', {
@@ -366,7 +379,7 @@ export const Connection = pgTable('connections', {
     description: text().notNull().default(''),
     enabled: boolean().notNull().default(true),
     features: boolean().notNull().default(false),
-    auth: jsonb().$type<Static<typeof ConnectionAuth>>().notNull()
+    auth: jsonb().$type<Static<typeof ConnectionAuth>>().notNull(),
 });
 
 export const ConnectionFeature = pgTable('connection_features', {
@@ -376,16 +389,16 @@ export const ConnectionFeature = pgTable('connection_features', {
     enabled_geofence: boolean().notNull().default(false),
     connection: integer().notNull().references(() => Connection.id),
     properties: jsonb().notNull().default({}),
-    geometry: geometry({ type: GeometryType.GeometryZ, srid: 4326 }).notNull()
+    geometry: geometry({ type: GeometryType.GeometryZ, srid: 4326 }).notNull(),
 }, (table) => {
     return {
         pk: primaryKey({
-            columns: [table.connection, table.id]
+            columns: [table.connection, table.id],
         }),
-        connection_idx: index("connection_features_connection_idx").on(table.connection),
-        connection_layer_idx: index("connection_features_connection_layer_idx").on(table.connection, table.layer),
-    }
-})
+        connection_idx: index('connection_features_connection_idx').on(table.connection),
+        connection_layer_idx: index('connection_features_connection_layer_idx').on(table.connection, table.layer),
+    };
+});
 
 export const Data = pgTable('data', {
     id: serial().primaryKey(),
@@ -399,8 +412,8 @@ export const Data = pgTable('data', {
     mission_role: text().notNull().default('MISSION_SUBSCRIBER'),
     mission_token: text(),
     mission_groups: text().array().notNull().default([]),
-    assets: jsonb().$type<Array<string>>().notNull().default(["*"]),
-    connection: integer().notNull().references(() => Connection.id)
+    assets: jsonb().$type<Array<string>>().notNull().default(['*']),
+    connection: integer().notNull().references(() => Connection.id),
 });
 
 export const Layer = pgTable('layers', {
@@ -424,8 +437,8 @@ export const Layer = pgTable('layers', {
     alarm_period: integer().notNull().default(30),
     alarm_evals: integer().notNull().default(5),
     alarm_points: integer().notNull().default(4),
-}, (t) => ({
-    unq: unique().on(t.connection, t.name)
+}, t => ({
+    unq: unique().on(t.connection, t.name),
 }));
 
 export const LayerOutgoing = pgTable('layers_outgoing', {
@@ -488,7 +501,7 @@ export const ConnectionToken = pgTable('connection_tokens', {
 export const FusionType = pgTable('fusion_type', {
     id: serial().primaryKey(),
     name: text().notNull(),
-    schema: jsonb().notNull()
+    schema: jsonb().notNull(),
 });
 
 export const ProfileFusionSource = pgTable('profile_fusion', {
@@ -506,7 +519,6 @@ export const ProfileToken = pgTable('profile_tokens', {
     name: text().notNull(),
     token: text().primaryKey(),
 });
-
 
 export const ProfileInterest = pgTable('profile_interests', {
     id: serial().primaryKey(),
@@ -563,7 +575,7 @@ export const ProfileOverlay = pgTable('profile_overlays', {
     styles: jsonb().$type<Array<unknown>>().notNull().default([]),
     mode: text().notNull(),
     mode_id: text(), // Used for Data not for Profile
-    url: text().notNull()
-}, (t) => ({
-    unq: unique().on(t.username, t.url)
+    url: text().notNull(),
+}, t => ({
+    unq: unique().on(t.username, t.url),
 }));

@@ -109,23 +109,13 @@
         "query": false,
         "res": true
     },
-    "GET /config/group": {
-        "body": false,
-        "query": false,
-        "res": true
-    },
-    "GET /config/map": {
-        "body": false,
-        "query": false,
-        "res": true
-    },
     "GET /connection/:connectionid/asset": {
         "body": false,
         "query": false,
         "res": true
     },
     "POST /connection/:connectionid/asset": {
-        "body": false,
+        "body": true,
         "query": false,
         "res": true
     },
@@ -150,7 +140,7 @@
         "res": true
     },
     "POST /connection/:connectionid/data/:dataid/asset": {
-        "body": false,
+        "body": true,
         "query": false,
         "res": true
     },
@@ -504,6 +494,56 @@
         "query": false,
         "res": true
     },
+    "GET /import": {
+        "body": false,
+        "query": true,
+        "res": true
+    },
+    "POST /import": {
+        "body": true,
+        "query": false,
+        "res": true
+    },
+    "PUT /import/:import": {
+        "body": true,
+        "query": false,
+        "res": true
+    },
+    "PUT /import": {
+        "body": true,
+        "query": false,
+        "res": true
+    },
+    "GET /import/:import": {
+        "body": false,
+        "query": false,
+        "res": true
+    },
+    "GET /import/:import/raw": {
+        "body": false,
+        "query": true,
+        "res": false
+    },
+    "POST /import/:import/result": {
+        "body": true,
+        "query": false,
+        "res": true
+    },
+    "PATCH /import/:import": {
+        "body": true,
+        "query": false,
+        "res": true
+    },
+    "POST /import/:import/retry": {
+        "body": false,
+        "query": false,
+        "res": true
+    },
+    "DELETE /import/:import": {
+        "body": false,
+        "query": false,
+        "res": true
+    },
     "GET /iconset": {
         "body": false,
         "query": true,
@@ -568,56 +608,6 @@
         "body": false,
         "query": true,
         "res": false
-    },
-    "GET /import": {
-        "body": false,
-        "query": true,
-        "res": true
-    },
-    "POST /import": {
-        "body": true,
-        "query": false,
-        "res": true
-    },
-    "PUT /import/:import": {
-        "body": false,
-        "query": false,
-        "res": true
-    },
-    "PUT /import": {
-        "body": false,
-        "query": false,
-        "res": true
-    },
-    "GET /import/:import": {
-        "body": false,
-        "query": false,
-        "res": true
-    },
-    "GET /import/:import/raw": {
-        "body": false,
-        "query": true,
-        "res": false
-    },
-    "POST /import/:import/result": {
-        "body": true,
-        "query": false,
-        "res": true
-    },
-    "PATCH /import/:import": {
-        "body": true,
-        "query": false,
-        "res": true
-    },
-    "POST /import/:import/retry": {
-        "body": false,
-        "query": false,
-        "res": true
-    },
-    "DELETE /import/:import": {
-        "body": false,
-        "query": false,
-        "res": true
     },
     "GET /layer": {
         "body": false,
@@ -880,7 +870,7 @@
         "res": true
     },
     "POST /marti/package": {
-        "body": false,
+        "body": true,
         "query": true,
         "res": true
     },
@@ -896,6 +886,11 @@
     },
     "GET /marti/package/:uid": {
         "body": false,
+        "query": false,
+        "res": true
+    },
+    "PATCH /marti/package/:uid": {
+        "body": true,
         "query": false,
         "res": true
     },
@@ -1014,52 +1009,52 @@
         "query": false,
         "res": true
     },
-    "GET /palette": {
+    "GET /template/mission/:mission/palette": {
         "body": false,
         "query": true,
         "res": true
     },
-    "GET /palette/:palette": {
+    "GET /template/mission/:mission/palette/:palette": {
         "body": false,
         "query": false,
         "res": true
     },
-    "POST /palette": {
+    "POST /template/mission/:mission/palette": {
         "body": true,
         "query": false,
         "res": true
     },
-    "PATCH /palette/:palette": {
+    "PATCH /template/mission/:mission/palette/:palette": {
         "body": true,
         "query": false,
         "res": true
     },
-    "DELETE /palette/:palette": {
+    "DELETE /template/mission/:mission/palette/:palette": {
         "body": false,
         "query": false,
         "res": true
     },
-    "GET /palette/:palette/feature": {
+    "GET /template/mission/:mission/palette/:palette/feature": {
         "body": false,
         "query": true,
         "res": true
     },
-    "GET /palette/:palette/feature/:feature": {
+    "GET /template/mission/:mission/palette/:palette/feature/:feature": {
         "body": false,
         "query": false,
         "res": true
     },
-    "POST /palette/:palette/feature": {
+    "POST /template/mission/:mission/palette/:palette/feature": {
         "body": true,
         "query": false,
         "res": true
     },
-    "PATCH /palette/:palette/feature/:feature": {
+    "PATCH /template/mission/:mission/palette/:palette/feature/:feature": {
         "body": true,
         "query": false,
         "res": true
     },
-    "DELETE /palette/:palette/feature/:feature": {
+    "DELETE /template/mission/:mission/palette/:palette/feature/:feature": {
         "body": false,
         "query": false,
         "res": true
@@ -1300,7 +1295,7 @@
         "res": true
     },
     "POST /server/tileset": {
-        "body": false,
+        "body": true,
         "query": false,
         "res": true
     },
@@ -1350,6 +1345,11 @@
         "res": true
     },
     "DELETE /task/raw/:task/version/:version": {
+        "body": false,
+        "query": false,
+        "res": true
+    },
+    "GET /task/:task": {
         "body": false,
         "query": false,
         "res": true

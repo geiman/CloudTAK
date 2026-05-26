@@ -1,4 +1,4 @@
-import { Type, Static } from '@sinclair/typebox'
+import { Type, Static } from '@sinclair/typebox';
 import tokml from 'tokml';
 import Config from '../lib/config.js';
 import Schema from '@openaddresses/batch-schema';
@@ -7,8 +7,9 @@ import { coordEach } from '@turf/meta';
 import Err from '@openaddresses/batch-error';
 import Auth, { AuthResourceAccess } from '../lib/auth.js';
 import { ConnectionFeature } from '../lib/schema.js';
-import { StandardResponse, FeatureResponse, GeoJSONFeatureCollection, GeoJSONFeature } from '../lib/types.js'
-import { ExportFeatureFormat } from '../lib/enums.js'
+import { StandardResponse, FeatureResponse, GeoJSONFeatureCollection, GeoJSONFeature } from '../lib/types.js';
+import { ExportFeatureFormat } from '../lib/enums.js';
+import { enabledGeofence } from '../lib/control/feature.js';
 import { sql } from 'drizzle-orm';
 import * as Default from '../lib/limits.js';
 
@@ -20,43 +21,43 @@ export default async function router(schema: Schema, config: Config) {
             Return a list of Connecton Features
         `,
         params: Type.Object({
-            connectionid: Type.Integer()
+            connectionid: Type.Integer(),
         }),
         query: Type.Object({
             format: Type.Enum(ExportFeatureFormat, {
-                default: ExportFeatureFormat.GEOJSON
+                default: ExportFeatureFormat.GEOJSON,
             }),
             download: Type.Boolean({
                 default: false,
-                description: 'Set Content-Disposition to download the file'
+                description: 'Set Content-Disposition to download the file',
             }),
             limit: Type.Integer({ default: 1000 }),
             filter: Type.String({
                 default: '',
-                description: 'Filter features by callsign'
+                description: 'Filter features by callsign',
             }),
             layer: Type.Optional(Type.Integer({
-                description: 'Filter features by layer ID'
+                description: 'Filter features by layer ID',
             })),
             sort: Type.String({
                 default: 'id',
-                enum: Object.keys(ConnectionFeature)
+                enum: Object.keys(ConnectionFeature),
             }),
             page: Default.Page,
-            order: Default.Order
+            order: Default.Order,
         }),
         res: Type.Object({
             total: Type.Integer(),
-            items: Type.Array(FeatureResponse)
-        })
+            items: Type.Array(FeatureResponse),
+        }),
 
     }, async (req, res) => {
         try {
             const { connection } = await Auth.is_connection(config, req, {
                 resources: [
                     { access: AuthResourceAccess.CONNECTION, id: req.params.connectionid },
-                    { access: AuthResourceAccess.LAYER }
-                ]
+                    { access: AuthResourceAccess.LAYER },
+                ],
             }, req.params.connectionid);
 
             const list = await config.models.ConnectionFeature.list({
@@ -68,7 +69,7 @@ export default async function router(schema: Schema, config: Config) {
                     connection = ${req.params.connectionid}
                     ${req.query.layer !== undefined ? sql`AND layer = ${req.query.layer}` : sql``}
                     ${req.query.filter ? sql`AND properties->>'callsign' ILIKE ${'%' + req.query.filter + '%'}` : sql``}
-                `
+                `,
             });
 
             if (!req.query.download) {
@@ -80,11 +81,12 @@ export default async function router(schema: Schema, config: Config) {
                             path: feat.path,
                             type: 'Feature',
                             properties: feat.properties,
-                            geometry: feat.geometry
-                        } as Static<typeof FeatureResponse>
-                    })
-                })
-            } else {
+                            geometry: feat.geometry,
+                        } as Static<typeof FeatureResponse>;
+                    }),
+                });
+            }
+            else {
                 const filename = `connection-${connection.id}-export-${new Date().toISOString()}`;
 
                 res.setHeader('Content-Disposition', `attachment; filename="${filename}.${req.query.format}"`);
@@ -97,10 +99,10 @@ export default async function router(schema: Schema, config: Config) {
                             path: feat.path,
                             type: 'Feature',
                             properties: feat.properties,
-                            geometry: feat.geometry
-                        } as Static<typeof GeoJSONFeature>
-                    })
-                }
+                            geometry: feat.geometry,
+                        } as Static<typeof GeoJSONFeature>;
+                    }),
+                };
 
                 if (req.query.format === ExportFeatureFormat.GEOJSON) {
                     res.set('Content-Type', 'application/geo+json');
@@ -109,7 +111,8 @@ export default async function router(schema: Schema, config: Config) {
                     res.set('Content-Length', String(Buffer.byteLength(output)));
                     res.write(output);
                     res.end();
-                } else if (req.query.format === ExportFeatureFormat.KML) {
+                }
+                else if (req.query.format === ExportFeatureFormat.KML) {
                     res.set('Content-Type', 'application/vnd.google-earth.kml+xml');
 
                     const output = Buffer.from(tokml(feats, {
@@ -117,18 +120,20 @@ export default async function router(schema: Schema, config: Config) {
                         documentDescription: 'Exported from CloudTAK',
                         simplestyle: true,
                         name: 'callsign',
-                        description: 'remarks'
+                        description: 'remarks',
                     }));
 
                     res.set('Content-Length', String(Buffer.byteLength(output)));
                     res.write(output);
                     res.end();
-                } else {
+                }
+                else {
                     throw new Err(400, null, `Unknown Export Format: ${req.query.format}`);
                 }
             }
-        } catch (err) {
-             Err.respond(err, res);
+        }
+        catch (err) {
+            Err.respond(err, res);
         }
     });
 
@@ -137,19 +142,19 @@ export default async function router(schema: Schema, config: Config) {
         group: 'ConnectionFeature',
         description: 'Delete multiple features',
         params: Type.Object({
-            connectionid: Type.Integer()
+            connectionid: Type.Integer(),
         }),
         query: Type.Object({
             path: Type.Optional(Type.String()),
         }),
-        res: StandardResponse
+        res: StandardResponse,
     }, async (req, res) => {
         try {
             await Auth.is_connection(config, req, {
                 resources: [
                     { access: AuthResourceAccess.CONNECTION, id: req.params.connectionid },
-                    { access: AuthResourceAccess.LAYER }
-                ]
+                    { access: AuthResourceAccess.LAYER },
+                ],
             }, req.params.connectionid);
 
             if (req.query.path) {
@@ -157,7 +162,8 @@ export default async function router(schema: Schema, config: Config) {
                     starts_with(path, ${req.query.path})
                     AND connection = ${req.params.connectionid}
                 `);
-            } else {
+            }
+            else {
                 await config.models.ConnectionFeature.delete(sql`
                     connection = ${req.params.connectionid}
                 `);
@@ -165,10 +171,11 @@ export default async function router(schema: Schema, config: Config) {
 
             res.json({
                 status: 200,
-                message: 'Features Deleted'
+                message: 'Features Deleted',
             });
-        } catch (err) {
-             Err.respond(err, res);
+        }
+        catch (err) {
+            Err.respond(err, res);
         }
     });
 
@@ -180,19 +187,19 @@ export default async function router(schema: Schema, config: Config) {
             connectionid: Type.Integer(),
         }),
         body: FeatureResponse,
-        res: FeatureResponse
+        res: FeatureResponse,
     }, async (req, res) => {
         try {
             await Auth.is_connection(config, req, {
                 resources: [
                     { access: AuthResourceAccess.CONNECTION, id: req.params.connectionid },
-                    { access: AuthResourceAccess.LAYER }
-                ]
+                    { access: AuthResourceAccess.LAYER },
+                ],
             }, req.params.connectionid);
 
             coordEach(req.body.geometry, (coords) => {
                 if (coords.length === 2) coords.push(0);
-                return coords
+                return coords;
             });
 
             if (!req.body.id) throw new Err(400, null, 'Feature ID is required');
@@ -202,18 +209,20 @@ export default async function router(schema: Schema, config: Config) {
                 connection: req.params.connectionid,
                 path: req.body.path,
                 geometry: req.body.geometry,
-                properties: req.body.properties
+                enabled_geofence: enabledGeofence(req.body.properties),
+                properties: req.body.properties,
             }, {
                 upsert: GenerateUpsert.UPDATE,
-                upsertTarget: [ ConnectionFeature.connection, ConnectionFeature.id ]
+                upsertTarget: [ConnectionFeature.connection, ConnectionFeature.id],
             });
 
             res.json({
                 type: 'Feature',
-                ...feature
-            } as Static<typeof FeatureResponse>)
-        } catch (err) {
-             Err.respond(err, res);
+                ...feature,
+            } as Static<typeof FeatureResponse>);
+        }
+        catch (err) {
+            Err.respond(err, res);
         }
     });
 
@@ -225,16 +234,16 @@ export default async function router(schema: Schema, config: Config) {
         `,
         params: Type.Object({
             connectionid: Type.Integer(),
-            id: Type.String()
+            id: Type.String(),
         }),
-        res: StandardResponse
+        res: StandardResponse,
     }, async (req, res) => {
         try {
             await Auth.is_connection(config, req, {
                 resources: [
                     { access: AuthResourceAccess.CONNECTION, id: req.params.connectionid },
-                    { access: AuthResourceAccess.LAYER }
-                ]
+                    { access: AuthResourceAccess.LAYER },
+                ],
             }, req.params.connectionid);
 
             await config.models.ConnectionFeature.delete(sql`
@@ -244,10 +253,11 @@ export default async function router(schema: Schema, config: Config) {
 
             res.json({
                 status: 200,
-                message: 'Feature Deleted'
+                message: 'Feature Deleted',
             });
-        } catch (err) {
-             Err.respond(err, res);
+        }
+        catch (err) {
+            Err.respond(err, res);
         }
     });
 
@@ -259,16 +269,16 @@ export default async function router(schema: Schema, config: Config) {
         `,
         params: Type.Object({
             connectionid: Type.Integer(),
-            id: Type.String()
+            id: Type.String(),
         }),
-        res: FeatureResponse
+        res: FeatureResponse,
     }, async (req, res) => {
         try {
             await Auth.is_connection(config, req, {
                 resources: [
                     { access: AuthResourceAccess.CONNECTION, id: req.params.connectionid },
-                    { access: AuthResourceAccess.LAYER }
-                ]
+                    { access: AuthResourceAccess.LAYER },
+                ],
             }, req.params.connectionid);
 
             const feat = await config.models.ConnectionFeature.from(sql`
@@ -278,10 +288,11 @@ export default async function router(schema: Schema, config: Config) {
 
             res.json({
                 type: 'Feature',
-                ...feat
-            } as Static<typeof FeatureResponse>)
-        } catch (err) {
-             Err.respond(err, res);
+                ...feat,
+            } as Static<typeof FeatureResponse>);
+        }
+        catch (err) {
+            Err.respond(err, res);
         }
     });
 }

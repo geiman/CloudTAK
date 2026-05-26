@@ -27,7 +27,7 @@ test(`Worker Basemap Import: USGS.xml`, async (t) => {
 
     mockPool.intercept({
         path: '/api/basemap',
-        method: 'POST'
+        method: 'POST',
     }).reply((req) => {
         const body = JSON.parse(req.body as string);
         assert.deepEqual(body, {
@@ -35,14 +35,15 @@ test(`Worker Basemap Import: USGS.xml`, async (t) => {
             url: 'https://basemap.nationalmap.gov/ArcGIS/rest/services/USGSTopo/MapServer/tile/{$z}/{$y}/{$x}',
             minzoom: 0,
             maxzoom: 15,
-            format: 'png'
+            protocol: 'zxy',
+            format: 'png',
         });
-        
+
         return {
             statusCode: 200,
             data: JSON.stringify({
-                name: 'USGS.xml'
-            })
+                name: 'USGS.xml',
+            }),
         };
     });
 
@@ -60,11 +61,11 @@ test(`Worker Basemap Import: USGS.xml`, async (t) => {
         if (command instanceof GetObjectCommand) {
             assert.deepEqual(command.input, {
                 Bucket: 'test-bucket',
-                Key: `import/ba58a298-a3fe-46b4-a29a-9dd33fbb2139.xml`
+                Key: `import/ba58a298-a3fe-46b4-a29a-9dd33fbb2139.xml`,
             });
 
             return Promise.resolve({
-                Body: fs.createReadStream(new URL(`./fixtures/basemaps/USGS.xml`, import.meta.url))
+                Body: fs.createReadStream(new URL(`./fixtures/basemaps/USGS.xml`, import.meta.url)),
             });
         }
         return Promise.resolve({});
@@ -86,7 +87,7 @@ test(`Worker Basemap Import: USGS.xml`, async (t) => {
             source: 'Upload',
             config: {},
             source_id: null,
-        }
+        },
     });
 
     await new Promise((resolve, reject) => {
@@ -120,7 +121,7 @@ test(`Worker Basemap Import: Basemap.xml.zip`, async (t) => {
 
     mockPool.intercept({
         path: '/api/basemap',
-        method: 'POST'
+        method: 'POST',
     }).reply((req) => {
         const body = JSON.parse(req.body as string);
 
@@ -129,33 +130,34 @@ test(`Worker Basemap Import: Basemap.xml.zip`, async (t) => {
             url: 'https://example.com/exampledata/rest/services/Cached/TAK/MapServer/WMTS/tile/1.0.0/ExampleLayer/default/default028mm/{$z}/{$y}/{$x}.png',
             minzoom: 0,
             maxzoom: 24,
-            format: 'png'
+            protocol: 'zxy',
+            format: 'png',
         });
 
         return {
             statusCode: 200,
             data: JSON.stringify({
                 id: 42,
-                name: 'Cached_TAK on Cached_TAK'
-            })
+                name: 'Cached_TAK on Cached_TAK',
+            }),
         };
     });
 
     mockPool.intercept({
         path: '/api/import/ba58a298-a3fe-46b4-a29a-9dd33fbb2139/result',
-        method: 'POST'
+        method: 'POST',
     }).reply((req) => {
         const body = JSON.parse(req.body as string);
 
         assert.deepEqual(body, {
             name: 'Cached_TAK on Cached_TAK',
             type: 'Basemap',
-            type_id: '42'
+            type_id: '42',
         });
 
         return {
             statusCode: 200,
-            data: JSON.stringify({ ok: true })
+            data: JSON.stringify({ ok: true }),
         };
     });
 
@@ -163,11 +165,11 @@ test(`Worker Basemap Import: Basemap.xml.zip`, async (t) => {
         if (command instanceof GetObjectCommand) {
             assert.deepEqual(command.input, {
                 Bucket: 'test-bucket',
-                Key: `import/ba58a298-a3fe-46b4-a29a-9dd33fbb2139.zip`
+                Key: `import/ba58a298-a3fe-46b4-a29a-9dd33fbb2139.zip`,
             });
 
             return Promise.resolve({
-                Body: fs.createReadStream(new URL('./fixtures/package/Basemap.xml.zip', import.meta.url))
+                Body: fs.createReadStream(new URL('./fixtures/package/Basemap.xml.zip', import.meta.url)),
             });
         }
 
@@ -190,7 +192,7 @@ test(`Worker Basemap Import: Basemap.xml.zip`, async (t) => {
             source: 'Upload',
             config: {},
             source_id: null,
-        }
+        },
     });
 
     await new Promise((resolve, reject) => {

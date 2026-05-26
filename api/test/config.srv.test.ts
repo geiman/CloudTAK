@@ -14,12 +14,13 @@ test('GET api/config', async () => {
         const res = await flight.fetch('/api/config?keys=group::Yellow', {
             method: 'GET',
             auth: {
-                bearer: flight.token.admin
+                bearer: flight.token.admin,
             },
         }, true);
 
         assert.deepEqual(res.body, {});
-    } catch (err) {
+    }
+    catch (err) {
         assert.ifError(err);
     }
 });
@@ -29,17 +30,18 @@ test('PUT api/config', async () => {
         const res = await flight.fetch('/api/config', {
             method: 'PUT',
             auth: {
-                bearer: flight.token.admin
+                bearer: flight.token.admin,
             },
             body: {
-                'group::Yellow': 'Wildland Firefighter'
-            }
+                'group::Yellow': 'Wildland Firefighter',
+            },
         }, false);
 
         assert.deepEqual(res.body, {
-            'group::Yellow': 'Wildland Firefighter'
+            'group::Yellow': 'Wildland Firefighter',
         });
-    } catch (err) {
+    }
+    catch (err) {
         assert.ifError(err);
     }
 });
@@ -49,32 +51,15 @@ test('GET api/config', async () => {
         const res = await flight.fetch('/api/config?keys=group::Yellow', {
             method: 'GET',
             auth: {
-                bearer: flight.token.admin
+                bearer: flight.token.admin,
             },
         }, true);
 
         assert.deepEqual(res.body, {
-            'group::Yellow': 'Wildland Firefighter'
+            'group::Yellow': 'Wildland Firefighter',
         });
-    } catch (err) {
-        assert.ifError(err);
     }
-});
-
-test('GET api/config/group', async () => {
-    try {
-        const res = await flight.fetch('/api/config/group', {
-            method: 'GET',
-            auth: {
-                bearer: flight.token.admin
-            },
-        }, true);
-
-        assert.deepEqual(res.body, {
-            roles: [ 'Team Member', 'Team Lead', 'HQ', 'Sniper', 'Medic', 'Forward Observer', 'RTO', 'K9' ],
-            groups: { Yellow: 'Wildland Firefighter', Cyan: '', Green: '', Red: '', Purple: '', Orange: '', Blue: '', Magenta: '', White: '', Maroon: '', 'Dark Blue': '', Teal: '', 'Dark Green': '', Brown: '' }
-        });
-    } catch (err) {
+    catch (err) {
         assert.ifError(err);
     }
 });
@@ -84,7 +69,7 @@ test('GET api/config/login', async () => {
         const res = await flight.fetch('/api/config/login', {
             method: 'GET',
             auth: {
-                bearer: flight.token.admin
+                bearer: flight.token.admin,
             },
         }, true);
 
@@ -92,13 +77,14 @@ test('GET api/config/login', async () => {
             name: 'CloudTAK',
             username: 'Username or Email',
             brand: {
-                enabled: 'default'
+                enabled: 'default',
             },
             background: {
-                enabled: false
-            }
+                enabled: false,
+            },
         });
-    } catch (err) {
+    }
+    catch (err) {
         assert.ifError(err);
     }
 });
@@ -108,19 +94,20 @@ test('PUT api/config', async () => {
         const res = await flight.fetch('/api/config', {
             method: 'PUT',
             auth: {
-                bearer: flight.token.admin
+                bearer: flight.token.admin,
             },
             body: {
                 'login::signup': 'https://example.com/signup',
-                'login::forgot': 'https://example.com/forgot'
-            }
+                'login::forgot': 'https://example.com/forgot',
+            },
         }, false);
 
         assert.deepEqual(res.body, {
             'login::signup': 'https://example.com/signup',
-            'login::forgot': 'https://example.com/forgot'
+            'login::forgot': 'https://example.com/forgot',
         });
-    } catch (err) {
+    }
+    catch (err) {
         assert.ifError(err);
     }
 });
@@ -130,7 +117,7 @@ test('GET api/config/login', async () => {
         const res = await flight.fetch('/api/config/login', {
             method: 'GET',
             auth: {
-                bearer: flight.token.admin
+                bearer: flight.token.admin,
             },
         }, true);
 
@@ -140,34 +127,14 @@ test('GET api/config/login', async () => {
             forgot: 'https://example.com/forgot',
             username: 'Username or Email',
             brand: {
-                enabled: 'default'
+                enabled: 'default',
             },
             background: {
-                enabled: false
-            }
-        });
-    } catch (err) {
-        assert.ifError(err);
-    }
-});
-
-test('GET api/config/map', async () => {
-    try {
-        const res = await flight.fetch('/api/config/map', {
-            method: 'GET',
-            auth: {
-                bearer: flight.token.admin
+                enabled: false,
             },
-        }, true);
-
-        assert.deepEqual(res.body, {
-            center: '-100,40',
-            zoom: 4,
-            pitch: 0,
-            bearing: 0,
-            basemap: null,
         });
-    } catch (err) {
+    }
+    catch (err) {
         assert.ifError(err);
     }
 });
@@ -177,12 +144,13 @@ test('GET api/config (user - restricted)', async () => {
         const res = await flight.fetch('/api/config?keys=agol::token', {
             method: 'GET',
             auth: {
-                bearer: flight.token.user
+                bearer: flight.token.user,
             },
         }, false);
 
         assert.equal(res.status, 401);
-    } catch (err) {
+    }
+    catch (err) {
         assert.ifError(err);
     }
 });
@@ -192,15 +160,16 @@ test('GET api/config (user - map keys)', async () => {
         const res = await flight.fetch('/api/config?keys=map::center', {
             method: 'GET',
             auth: {
-                bearer: flight.token.user
+                bearer: flight.token.user,
             },
         }, false);
 
         assert.equal(res.status, 200);
         assert.deepEqual(res.body, {
-            'map::center': '-100,40'
+            'map::center': '-100,40',
         });
-    } catch (err) {
+    }
+    catch (err) {
         assert.ifError(err);
     }
 });
@@ -210,18 +179,70 @@ test('GET api/config (user - group keys)', async () => {
         const res = await flight.fetch('/api/config?keys=group::Yellow', {
             method: 'GET',
             auth: {
-                bearer: flight.token.user
+                bearer: flight.token.user,
             },
         }, false);
 
         assert.equal(res.status, 200);
         assert.deepEqual(res.body, {
-            'group::Yellow': 'Wildland Firefighter'
+            'group::Yellow': 'Wildland Firefighter',
         });
-    } catch (err) {
+    }
+    catch (err) {
         assert.ifError(err);
     }
 });
 
+test('PUT api/config (admin - firebase keys)', async () => {
+    try {
+        const body = {
+            'firebase::apikey': 'test-api-key',
+            'firebase::authdomain': 'cloudtak.firebaseapp.com',
+            'firebase::projectid': 'cloudtak-project',
+            'firebase::storagebucket': 'cloudtak-project.firebasestorage.app',
+            'firebase::messagingsenderid': '1234567890',
+            'firebase::appid': '1:1234567890:web:abcdef123456',
+            'firebase::measurementid': 'G-ABCDEF1234',
+        };
+
+        const res = await flight.fetch('/api/config', {
+            method: 'PUT',
+            auth: {
+                bearer: flight.token.admin,
+            },
+            body,
+        }, false);
+
+        assert.deepEqual(res.body, body);
+    }
+    catch (err) {
+        assert.ifError(err);
+    }
+});
+
+test('GET api/config (admin - firebase keys)', async () => {
+    try {
+        const res = await flight.fetch('/api/config?keys=firebase::apikey,firebase::authdomain,firebase::projectid,firebase::storagebucket,firebase::messagingsenderid,firebase::appid,firebase::measurementid', {
+            method: 'GET',
+            auth: {
+                bearer: flight.token.admin,
+            },
+        }, false);
+
+        assert.equal(res.status, 200);
+        assert.deepEqual(res.body, {
+            'firebase::apikey': 'test-api-key',
+            'firebase::authdomain': 'cloudtak.firebaseapp.com',
+            'firebase::projectid': 'cloudtak-project',
+            'firebase::storagebucket': 'cloudtak-project.firebasestorage.app',
+            'firebase::messagingsenderid': '1234567890',
+            'firebase::appid': '1:1234567890:web:abcdef123456',
+            'firebase::measurementid': 'G-ABCDEF1234',
+        });
+    }
+    catch (err) {
+        assert.ifError(err);
+    }
+});
 
 flight.landing();

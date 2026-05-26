@@ -32,7 +32,7 @@
                     v-if='paging.collection'
                     class='d-flex align-items-center gap-2'
                 >
-                    <BasemapCollection v-model:collection='paging.collection' />
+                    <PathBreadcrumb v-model:collection='paging.collection' />
                 </div>
             </div>
 
@@ -165,8 +165,9 @@
 import { onMounted, ref, watch, computed } from 'vue';
 import StandardItemBasemap from '../util/StandardItemBasemap.vue';
 import StandardItemFolder from '../util/StandardItemFolder.vue';
-import BasemapCollection from '../util/BasemapCollection.vue';
+import PathBreadcrumb from '../util/PathBreadcrumb.vue';
 import type { BasemapList, Basemap } from '../../../types.ts';
+import { openExternalUrl } from '../../../base/capacitor.ts';
 import ProfileConfig from '../../../base/profile.ts';
 import { server, stdurl } from '../../../std.ts';
 import Overlay from '../../../base/overlay.ts';
@@ -257,6 +258,8 @@ async function setBasemap(basemap: Basemap) {
                     await overlay.replace({
                         name: basemap.name,
                         type: basemap.type,
+                        opacity: 1,
+                        visible: true,
                         url: `/api/basemap/${basemap.id}/tiles`,
                         mode: 'basemap',
                         mode_id: String(basemap.id),
@@ -268,6 +271,8 @@ async function setBasemap(basemap: Basemap) {
                     await overlay.replace({
                         name: basemap.name,
                         type: basemap.type,
+                        opacity: 1,
+                        visible: true,
                         url: `/api/basemap/${basemap.id}/tiles`,
                         mode: 'basemap',
                         mode_id: String(basemap.id),
@@ -284,6 +289,8 @@ async function setBasemap(basemap: Basemap) {
             name: basemap.name,
             pos: -1,
             type: basemap.type,
+            opacity: 1,
+            visible: true,
             frequency: basemap.frequency,
             url: `/api/basemap/${basemap.id}/tiles`,
             mode: 'basemap',
@@ -294,7 +301,7 @@ async function setBasemap(basemap: Basemap) {
 }
 
 function download(basemap: Basemap) {
-    window.open(stdurl(`/api/basemap/${basemap.id}?format=xml&download=true&token=${localStorage.token}`), '_blank');
+    void openExternalUrl(stdurl(`/api/basemap/${basemap.id}?format=xml&download=true&token=${localStorage.token}`));
 }
 
 function setCollection(name: string) {

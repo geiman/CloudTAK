@@ -8,7 +8,10 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import Flight from './flight.js';
 import { DataPackage } from '@tak-ps/node-cot';
-import type { IncomingMessage, ServerResponse } from 'node:http'
+import FileCommands from '@tak-ps/node-tak/lib/api/files';
+import Sinon from 'sinon';
+import stream2buffer from '../lib/stream.js';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 
 const flight = new Flight();
 
@@ -18,19 +21,21 @@ flight.user();
 
 test('GET: api/marti/package - empty', async () => {
     try {
-        flight.tak.mockMarti.push(async (request: IncomingMessage, response: ServerResponse) => {
+        flight.tak.mockMarti.unshift(async (request: IncomingMessage, response: ServerResponse) => {
             if (!request.method || !request.url) {
                 return false;
-            } else if (request.method === 'GET' && request.url === '/Marti/sync/search?tool=public') {
+            }
+            else if (request.method === 'GET' && request.url === '/Marti/sync/search?tool=public') {
                 response.setHeader('Content-Type', 'application/json');
                 response.write(JSON.stringify({
                     resultCount: 0,
-                    results: []
+                    results: [],
                 }));
                 response.end();
 
                 return true;
-            } else {
+            }
+            else {
                 return false;
             }
         });
@@ -38,15 +43,100 @@ test('GET: api/marti/package - empty', async () => {
         const res = await flight.fetch('/api/marti/package', {
             method: 'GET',
             auth: {
-                bearer: flight.token.admin
-            }
+                bearer: flight.token.admin,
+            },
         }, true);
 
         assert.deepEqual(res.body, {
             total: 0,
-            items: []
+            items: [],
         });
-    } catch (err) {
+    }
+    catch (err) {
+        assert.ifError(err);
+    }
+
+    flight.tak.reset();
+});
+
+test('GET api/marti/package/:uid - includes channels from the newest duplicate-hash metadata row', async () => {
+    try {
+        flight.tak.mockMarti.unshift(async (request: IncomingMessage, response: ServerResponse) => {
+            if (!request.method || !request.url) {
+                return false;
+            }
+            else if (request.method === 'GET' && request.url.includes('/Marti/sync/search?uid=visible-pkg-uid')) {
+                response.setHeader('Content-Type', 'application/json');
+                response.write(JSON.stringify({
+                    resultCount: 2,
+                    results: [{
+                        UID: 'visible-pkg-uid',
+                        SubmissionDateTime: '2024-01-01T00:00:00.000Z',
+                        Keywords: ['older'],
+                        Tool: 'public',
+                        Size: 123,
+                        MIMEType: 'application/zip',
+                        EXPIRATION: '-1',
+                        SubmissionUser: 'pkgowner@example.com',
+                        PrimaryKey: 'older-primary',
+                        Hash: 'older-hash',
+                        CreatorUid: 'pkgowner',
+                        Name: 'Visible Package',
+                    }, {
+                        UID: 'visible-pkg-uid',
+                        SubmissionDateTime: '2025-01-01T00:00:00.000Z',
+                        Keywords: ['latest'],
+                        Tool: 'public',
+                        Size: 456,
+                        MIMEType: 'application/zip',
+                        EXPIRATION: '-1',
+                        SubmissionUser: 'someone-else@example.com',
+                        PrimaryKey: 'latest-primary',
+                        Hash: 'latest-hash',
+                        CreatorUid: 'pkgowner',
+                        Name: 'Visible Package',
+                    }],
+                }));
+                response.end();
+
+                return true;
+            }
+            else if (request.method === 'GET' && request.url.includes('/Marti/api/files/metadata')) {
+                response.setHeader('Content-Type', 'application/json');
+                response.write(JSON.stringify({
+                    data: [{
+                        Name: 'Visible Package',
+                        Hash: 'latest-hash',
+                        Time: '2024-01-01T00:00:00.000Z',
+                        Groups: 'Blue',
+                    }, {
+                        Name: 'Visible Package',
+                        Hash: 'latest-hash',
+                        Time: '2025-01-01T00:00:00.000Z',
+                        Groups: 'Blue, Red',
+                    }],
+                }));
+                response.end();
+
+                return true;
+            }
+            else {
+                return false;
+            }
+        });
+
+        const res = await flight.fetch('/api/marti/package/visible-pkg-uid', {
+            method: 'GET',
+            auth: {
+                bearer: flight.token.admin,
+            },
+        }, true);
+
+        assert.equal(res.status, 200);
+        assert.equal(res.body.hash, 'latest-hash');
+        assert.deepEqual(res.body.channels, ['Blue', 'Red']);
+    }
+    catch (err) {
         assert.ifError(err);
     }
 
@@ -57,10 +147,11 @@ test('POST api/marti/package - Upload Data Package', async () => {
     const outputPath = path.resolve(os.tmpdir(), randomUUID() + '.zip');
 
     try {
-        flight.tak.mockMarti.push(async (request: IncomingMessage, response: ServerResponse) => {
+        flight.tak.mockMarti.unshift(async (request: IncomingMessage, response: ServerResponse) => {
             if (!request.method || !request.url) {
                 return false;
-            } else if (request.method === 'POST' && request.url.includes('/Marti/sync/missionupload')) {
+            }
+            else if (request.method === 'POST' && request.url.includes('/Marti/sync/missionupload')) {
                 await new Promise((resolve, reject) => {
                     const contentType = request.headers['content-type'];
                     if (!contentType) {
@@ -68,14 +159,14 @@ test('POST api/marti/package - Upload Data Package', async () => {
                         return;
                     }
 
-                     const bb = new Busboy({
-                         headers: {
-                             'content-type': contentType
-                         },
-                         limits: {
-                             files: 1
-                         }
-                     });
+                    const bb = new Busboy({
+                        headers: {
+                            'content-type': contentType,
+                        },
+                        limits: {
+                            files: 1,
+                        },
+                    });
 
                     bb.on('file', (fieldname, file) => {
                         const writeStream = fs.createWriteStream(outputPath);
@@ -89,7 +180,7 @@ test('POST api/marti/package - Upload Data Package', async () => {
                         writeStream.on('error', (err) => {
                             reject(err);
                         });
-                    })
+                    });
 
                     bb.on('error', (err) => {
                         reject(err);
@@ -121,7 +212,8 @@ test('POST api/marti/package - Upload Data Package', async () => {
                 response.end();
 
                 return true;
-            } else if (request.method === 'GET' && request.url.includes('/Marti/sync/search')) {
+            }
+            else if (request.method === 'GET' && request.url.includes('/Marti/sync/search')) {
                 response.setHeader('Content-Type', 'application/json');
                 response.write(JSON.stringify({
                     resultCount: 1,
@@ -138,12 +230,13 @@ test('POST api/marti/package - Upload Data Package', async () => {
                         Hash: 'abc123',
                         CreatorUid: 'creator123',
                         Name: 'Test Package',
-                    }]
+                    }],
                 }));
                 response.end();
 
                 return true;
-            } else {
+            }
+            else {
                 return false;
             }
         });
@@ -152,17 +245,18 @@ test('POST api/marti/package - Upload Data Package', async () => {
         const file = await fsp.readFile(new URL('./data/SingleFeaturePackage.zip', import.meta.url));
 
         body.append('file', new Blob([new Uint8Array(file)], {
-            type: 'application/zip'
+            type: 'application/zip',
         }), 'SingleFeaturePackage.zip');
 
         await flight.fetch('/api/marti/package', {
             method: 'POST',
             auth: {
-                bearer: flight.token.admin
+                bearer: flight.token.admin,
             },
-            body
+            body,
         }, true);
-    } catch (err) {
+    }
+    catch (err) {
         assert.ifError(err);
     }
 
@@ -176,7 +270,8 @@ test('POST api/marti/package - Upload KML', async () => {
         flight.tak.mockMarti.push(async (request: IncomingMessage, response: ServerResponse) => {
             if (!request.method || !request.url) {
                 return false;
-            } else if (request.method === 'POST' && request.url.includes('/Marti/sync/missionupload')) {
+            }
+            else if (request.method === 'POST' && request.url.includes('/Marti/sync/missionupload')) {
                 await new Promise((resolve, reject) => {
                     const contentType = request.headers['content-type'];
                     if (!contentType) {
@@ -184,14 +279,14 @@ test('POST api/marti/package - Upload KML', async () => {
                         return;
                     }
 
-                     const bb = new Busboy({
-                         headers: {
-                             'content-type': contentType
-                         },
-                         limits: {
-                             files: 1
-                         }
-                     });
+                    const bb = new Busboy({
+                        headers: {
+                            'content-type': contentType,
+                        },
+                        limits: {
+                            files: 1,
+                        },
+                    });
 
                     bb.on('file', (fieldname, file) => {
                         const writeStream = fs.createWriteStream(outputPath);
@@ -205,7 +300,7 @@ test('POST api/marti/package - Upload KML', async () => {
                         writeStream.on('error', (err) => {
                             reject(err);
                         });
-                    })
+                    });
 
                     bb.on('error', (err) => {
                         reject(err);
@@ -240,7 +335,8 @@ test('POST api/marti/package - Upload KML', async () => {
                 response.end();
 
                 return true;
-            } else if (request.method === 'GET' && request.url.includes('/Marti/sync/search')) {
+            }
+            else if (request.method === 'GET' && request.url.includes('/Marti/sync/search')) {
                 response.setHeader('Content-Type', 'application/json');
                 response.write(JSON.stringify({
                     resultCount: 1,
@@ -257,12 +353,13 @@ test('POST api/marti/package - Upload KML', async () => {
                         Hash: 'abc123',
                         CreatorUid: 'creator123',
                         Name: 'Test Package',
-                    }]
+                    }],
                 }));
                 response.end();
 
                 return true;
-            } else {
+            }
+            else {
                 return false;
             }
         });
@@ -271,17 +368,98 @@ test('POST api/marti/package - Upload KML', async () => {
         const file = await fsp.readFile(new URL('./data/point.kml', import.meta.url));
 
         body.append('file', new Blob([new Uint8Array(file)], {
-            type: 'application/vnd.google-earth.kml+xml'
+            type: 'application/vnd.google-earth.kml+xml',
         }), 'point.kml');
 
         await flight.fetch('/api/marti/package', {
             method: 'POST',
             auth: {
-                bearer: flight.token.admin
+                bearer: flight.token.admin,
             },
-            body
+            body,
         }, true);
-    } catch (err) {
+    }
+    catch (err) {
+        assert.ifError(err);
+    }
+
+    flight.tak.reset();
+});
+
+test('PUT api/marti/package - private package upload uses application/zip for finalized data package content', async () => {
+    const outputPath = path.resolve(os.tmpdir(), randomUUID() + '.zip');
+    let uploadHit = false;
+
+    try {
+        flight.tak.mockMarti.unshift(async (request: IncomingMessage, response: ServerResponse) => {
+            if (!request.method || !request.url) {
+                return false;
+            }
+
+            const url = new URL(request.url, 'http://takserver');
+
+            if (request.method === 'POST' && url.pathname === '/Marti/sync/upload') {
+                uploadHit = true;
+
+                assert.equal(request.headers['content-type'], 'application/zip');
+
+                await fsp.writeFile(outputPath, await stream2buffer(request));
+
+                const dp = await DataPackage.parse(outputPath);
+
+                assert.equal(dp.contents.length, 1);
+                assert.ok(dp.contents[0]._attributes.zipEntry.endsWith('.cot'));
+
+                await dp.destroy();
+
+                response.setHeader('Content-Type', 'text/plain');
+                response.write(JSON.stringify({
+                    UID: 'private-upload',
+                    SubmissionDateTime: new Date().toISOString(),
+                    Keywords: [],
+                    MIMEType: 'application/zip',
+                    SubmissionUser: 'admin@example.com',
+                    PrimaryKey: 'private-primary',
+                    Hash: 'private-hash',
+                    CreatorUid: 'admin',
+                    Name: 'private-hash',
+                }));
+                response.end();
+
+                return true;
+            }
+
+            return false;
+        });
+
+        const res = await flight.fetch('/api/marti/package', {
+            method: 'PUT',
+            auth: {
+                bearer: flight.token.admin,
+            },
+            body: {
+                public: false,
+                keywords: [],
+                destinations: [],
+                assets: [],
+                basemaps: [],
+                features: [{
+                    id: 'feature-1',
+                    type: 'Feature',
+                    properties: {},
+                    geometry: {
+                        type: 'Point',
+                        coordinates: [-77.0365, 38.8977],
+                    },
+                }],
+            },
+        }, true);
+
+        assert.equal(res.status, 200);
+        assert.equal(uploadHit, true);
+        assert.equal(res.body.Hash, 'private-hash');
+    }
+    catch (err) {
         assert.ifError(err);
     }
 
@@ -289,13 +467,448 @@ test('POST api/marti/package - Upload KML', async () => {
 });
 
 flight.user({ username: 'pkgowner', admin: false });
+flight.user({ username: 'pkgviewer', admin: false });
+
+test('PATCH api/marti/package/:uid - User with overlapping active channel can update latest package metadata', async () => {
+    let searchCount = 0;
+    let groupsHandlerHit = false;
+    let uploadHit = false;
+
+    try {
+        flight.config?.conns.set('pkgowner@example.com', {
+            channels: new Set([1]),
+            destroy: () => {},
+        } as any);
+
+        flight.tak.mockMarti.unshift(async (request: IncomingMessage, response: ServerResponse) => {
+            if (!request.method || !request.url) {
+                return false;
+            }
+            else if (request.method === 'GET' && request.url.includes('/Marti/sync/search?uid=patch-pkg-uid')) {
+                searchCount++;
+
+                response.setHeader('Content-Type', 'application/json');
+                response.write(JSON.stringify({
+                    resultCount: 2,
+                    results: [{
+                        UID: 'patch-pkg-uid',
+                        SubmissionDateTime: '2024-01-01T00:00:00.000Z',
+                        Keywords: ['older'],
+                        Tool: 'public',
+                        Size: 123,
+                        MIMEType: 'application/zip',
+                        EXPIRATION: '-1',
+                        SubmissionUser: 'pkgowner@example.com',
+                        PrimaryKey: 'older-primary',
+                        Hash: 'older-hash',
+                        CreatorUid: 'pkgowner',
+                        Name: 'Patch Package',
+                    }, {
+                        UID: 'patch-pkg-uid',
+                        SubmissionDateTime: '2025-01-01T00:00:00.000Z',
+                        Keywords: searchCount > 1 ? ['updated'] : ['latest'],
+                        Tool: 'public',
+                        Size: 456,
+                        MIMEType: 'application/zip',
+                        EXPIRATION: searchCount > 1 ? '1234567890' : '-1',
+                        SubmissionUser: 'someone-else@example.com',
+                        PrimaryKey: 'latest-primary',
+                        Hash: 'latest-hash',
+                        CreatorUid: 'pkgowner',
+                        Name: 'Patch Package',
+                    }],
+                }));
+                response.end();
+
+                return true;
+            }
+            else if (request.method === 'GET' && request.url === '/Marti/sync/content?hash=latest-hash') {
+                response.writeHead(200, {
+                    'Content-Type': 'application/zip',
+                });
+                response.end(Buffer.from('zip-payload'));
+
+                return true;
+            }
+            else if (request.method === 'GET' && request.url === '/Marti/api/groups/all?useCache=true') {
+                groupsHandlerHit = true;
+                response.setHeader('Content-Type', 'application/json');
+                response.write(JSON.stringify({
+                    version: '3',
+                    type: 'com.bbn.marti.remote.groups.Group',
+                    data: [{
+                        name: 'Blue',
+                        direction: 'IN',
+                        created: new Date().toISOString(),
+                        type: 'SYSTEM',
+                        bitpos: 1,
+                        active: false,
+                    }, {
+                        name: 'Red',
+                        direction: 'IN',
+                        created: new Date().toISOString(),
+                        type: 'SYSTEM',
+                        bitpos: 2,
+                        active: false,
+                    }],
+                }));
+                response.end();
+
+                return true;
+            }
+            else if (request.method === 'GET' && request.url.includes('/Marti/api/files/metadata')) {
+                response.setHeader('Content-Type', 'application/json');
+                response.write(JSON.stringify({
+                    data: [{
+                        Name: 'Patch Package',
+                        Hash: 'latest-hash',
+                        Time: '2024-01-01T00:00:00.000Z',
+                        Groups: 'Blue',
+                    }, {
+                        Name: 'Patch Package',
+                        Hash: 'latest-hash',
+                        Time: searchCount > 1 ? '2025-01-01T00:00:00.000Z' : '2024-01-01T00:00:00.000Z',
+                        Groups: searchCount > 1 ? 'Blue, Red' : 'Blue',
+                    }],
+                }));
+                response.end();
+
+                return true;
+            }
+            else if (request.method === 'POST' && request.url === '/Marti/sync/missionupload?filename=Patch+Package&creatorUid=pkgowner&hash=latest-hash&mimetype=application%2Fzip&keyword=missionpackage&keyword=updated&Groups=Blue&Groups=Red') {
+                uploadHit = true;
+                response.writeHead(200);
+                response.end('http://takserver/Marti/sync/content?hash=latest-hash');
+
+                return true;
+            }
+            else if (request.method === 'PUT' && request.url === '/Marti/api/sync/metadata/latest-hash/keywords') {
+                const body = await stream2buffer(request);
+
+                assert.deepEqual(JSON.parse(body.toString()), ['updated']);
+
+                response.writeHead(200);
+                response.end();
+
+                return true;
+            }
+            else if (request.method === 'PUT' && request.url === '/Marti/api/sync/metadata/latest-hash/expiration?expiration=1234567890') {
+                response.writeHead(200);
+                response.end();
+
+                return true;
+            }
+            else {
+                return false;
+            }
+        });
+
+        const res = await flight.fetch('/api/marti/package/patch-pkg-uid', {
+            method: 'PATCH',
+            auth: {
+                bearer: flight.token.pkgowner,
+            },
+            body: {
+                channels: ['Blue', 'Red'],
+                keywords: ['updated'],
+                expiration: 1234567890,
+            },
+        }, true);
+
+        assert.equal(res.status, 200);
+        assert.equal(res.body.hash, 'latest-hash');
+        assert.deepEqual(res.body.keywords, ['updated']);
+        assert.equal(res.body.expiration, 1234567890);
+        assert.deepEqual(res.body.channels, ['Blue', 'Red']);
+        assert.equal(res.body.items[1].Hash, 'latest-hash');
+        assert.equal(groupsHandlerHit, true);
+        assert.equal(uploadHit, true);
+    }
+    catch (err) {
+        assert.ifError(err);
+    }
+    finally {
+        flight.config?.conns.delete('pkgowner@example.com');
+    }
+
+    flight.tak.reset();
+});
+
+test('PATCH api/marti/package/:uid - closes downloaded content when channel upload fails', async () => {
+    const content = {
+        destroyed: false,
+        readableEnded: false,
+        resume() {},
+        destroy() {
+            this.destroyed = true;
+            return this;
+        },
+    };
+
+    const resumeSpy = Sinon.spy(content, 'resume');
+    const destroySpy = Sinon.spy(content, 'destroy');
+    const uploadError = new Error('mission upload exploded');
+
+    try {
+        Sinon.stub(FileCommands.prototype, 'download').resolves(content as any);
+        Sinon.stub(FileCommands.prototype, 'uploadPackage').rejects(uploadError);
+
+        flight.tak.mockMarti.unshift(async (request: IncomingMessage, response: ServerResponse) => {
+            if (!request.method || !request.url) {
+                return false;
+            }
+            else if (request.method === 'GET' && request.url.includes('/Marti/sync/search?uid=failed-upload-pkg-uid')) {
+                response.setHeader('Content-Type', 'application/json');
+                response.write(JSON.stringify({
+                    resultCount: 1,
+                    results: [{
+                        UID: 'failed-upload-pkg-uid',
+                        SubmissionDateTime: '2025-01-01T00:00:00.000Z',
+                        Keywords: ['latest'],
+                        Tool: 'public',
+                        Size: 456,
+                        MIMEType: 'application/zip',
+                        EXPIRATION: '-1',
+                        SubmissionUser: 'pkgowner@example.com',
+                        PrimaryKey: 'failed-primary',
+                        Hash: 'failed-hash',
+                        CreatorUid: 'pkgowner',
+                        Name: 'Failed Upload Package',
+                    }],
+                }));
+                response.end();
+
+                return true;
+            }
+            else {
+                return false;
+            }
+        });
+
+        const res = await flight.fetch('/api/marti/package/failed-upload-pkg-uid', {
+            method: 'PATCH',
+            auth: {
+                bearer: flight.token.admin,
+            },
+            body: {
+                channels: ['Blue'],
+            },
+        }, false);
+
+        assert.equal(res.status, 500);
+        assert.equal(destroySpy.called || resumeSpy.called, true);
+    }
+    catch (err) {
+        assert.ifError(err);
+    }
+    finally {
+        Sinon.restore();
+    }
+
+    flight.tak.reset();
+});
+
+test('PATCH api/marti/package/:uid - User without overlapping active channel cannot update', async () => {
+    let attemptedUpdate = false;
+
+    try {
+        flight.config?.conns.set('pkgviewer@example.com', {
+            channels: new Set([1]),
+            destroy: () => {},
+        } as any);
+
+        flight.tak.mockMarti.unshift(async (request: IncomingMessage, response: ServerResponse) => {
+            if (!request.method || !request.url) {
+                return false;
+            }
+            else if (request.method === 'GET' && request.url.includes('/Marti/sync/search?uid=forbidden-pkg-uid')) {
+                response.setHeader('Content-Type', 'application/json');
+                response.write(JSON.stringify({
+                    resultCount: 1,
+                    results: [{
+                        UID: 'forbidden-pkg-uid',
+                        SubmissionDateTime: '2025-01-01T00:00:00.000Z',
+                        Keywords: ['latest'],
+                        Tool: 'public',
+                        Size: 456,
+                        MIMEType: 'application/zip',
+                        EXPIRATION: '-1',
+                        SubmissionUser: 'pkgviewer@example.com',
+                        PrimaryKey: 'forbidden-primary',
+                        Hash: 'forbidden-hash',
+                        CreatorUid: 'pkgowner',
+                        Name: 'Forbidden Package',
+                    }],
+                }));
+                response.end();
+
+                return true;
+            }
+            else if (request.method === 'GET' && request.url === '/Marti/api/groups/all?useCache=true') {
+                response.setHeader('Content-Type', 'application/json');
+                response.write(JSON.stringify({
+                    version: '3',
+                    type: 'com.bbn.marti.remote.groups.Group',
+                    data: [{
+                        name: 'Blue',
+                        direction: 'IN',
+                        created: new Date().toISOString(),
+                        type: 'SYSTEM',
+                        bitpos: 1,
+                        active: false,
+                    }, {
+                        name: 'Red',
+                        direction: 'IN',
+                        created: new Date().toISOString(),
+                        type: 'SYSTEM',
+                        bitpos: 2,
+                        active: false,
+                    }],
+                }));
+                response.end();
+
+                return true;
+            }
+            else if (request.method === 'GET' && request.url.includes('/Marti/api/files/metadata')) {
+                response.setHeader('Content-Type', 'application/json');
+                response.write(JSON.stringify({
+                    data: [{
+                        Name: 'Forbidden Package',
+                        Hash: 'forbidden-hash',
+                        Groups: 'Red',
+                    }],
+                }));
+                response.end();
+
+                return true;
+            }
+            else if (request.method === 'PUT' && request.url.includes('/Marti/api/sync/metadata/forbidden-hash/')) {
+                attemptedUpdate = true;
+
+                response.writeHead(200);
+                response.end();
+
+                return true;
+            }
+            else {
+                return false;
+            }
+        });
+
+        const res = await flight.fetch('/api/marti/package/forbidden-pkg-uid', {
+            method: 'PATCH',
+            auth: {
+                bearer: flight.token.pkgviewer,
+            },
+            body: {
+                keywords: ['updated'],
+            },
+        }, false);
+
+        assert.equal(res.status, 403);
+        assert.equal(res.body.message, 'Insufficient Access to update Package');
+        assert.equal(attemptedUpdate, false);
+    }
+    catch (err) {
+        assert.ifError(err);
+    }
+    finally {
+        flight.config?.conns.delete('pkgviewer@example.com');
+    }
+
+    flight.tak.reset();
+});
+
+test('PATCH api/marti/package/:uid - Admin can update any package', async () => {
+    let searchCount = 0;
+
+    try {
+        flight.tak.mockMarti.push(async (request: IncomingMessage, response: ServerResponse) => {
+            if (!request.method || !request.url) {
+                return false;
+            }
+            else if (request.method === 'GET' && request.url.includes('/Marti/sync/search?uid=admin-pkg-uid')) {
+                searchCount++;
+
+                response.setHeader('Content-Type', 'application/json');
+                response.write(JSON.stringify({
+                    resultCount: 1,
+                    results: [{
+                        UID: 'admin-pkg-uid',
+                        SubmissionDateTime: '2025-01-01T00:00:00.000Z',
+                        Keywords: searchCount > 1 ? ['admin-updated'] : ['latest'],
+                        Tool: 'public',
+                        Size: 456,
+                        MIMEType: 'application/zip',
+                        EXPIRATION: '-1',
+                        SubmissionUser: 'someone-else@example.com',
+                        PrimaryKey: 'admin-primary',
+                        Hash: 'admin-hash',
+                        CreatorUid: 'someone-else',
+                        Name: 'Admin Package',
+                    }],
+                }));
+                response.end();
+
+                return true;
+            }
+            else if (request.method === 'PUT' && request.url === '/Marti/api/sync/metadata/admin-hash/keywords') {
+                const body = await stream2buffer(request);
+
+                assert.deepEqual(JSON.parse(body.toString()), ['admin-updated']);
+
+                response.writeHead(200);
+                response.end();
+
+                return true;
+            }
+            else if (request.method === 'GET' && request.url.includes('/Marti/api/files/metadata')) {
+                response.setHeader('Content-Type', 'application/json');
+                response.write(JSON.stringify({
+                    data: [{
+                        Name: 'Admin Package',
+                        Hash: 'admin-hash',
+                        Groups: 'Blue',
+                    }],
+                }));
+                response.end();
+
+                return true;
+            }
+            else {
+                return false;
+            }
+        });
+
+        const res = await flight.fetch('/api/marti/package/admin-pkg-uid', {
+            method: 'PATCH',
+            auth: {
+                bearer: flight.token.admin,
+            },
+            body: {
+                keywords: ['admin-updated'],
+            },
+        }, true);
+
+        assert.equal(res.status, 200);
+        assert.equal(res.body.hash, 'admin-hash');
+        assert.deepEqual(res.body.keywords, ['admin-updated']);
+        assert.deepEqual(res.body.channels, ['Blue']);
+    }
+    catch (err) {
+        assert.ifError(err);
+    }
+
+    flight.tak.reset();
+});
 
 test('DELETE api/marti/package/:uid - Owner can delete own package', async () => {
     try {
         flight.tak.mockMarti.push(async (request: IncomingMessage, response: ServerResponse) => {
             if (!request.method || !request.url) {
                 return false;
-            } else if (request.method === 'GET' && request.url.includes('/Marti/sync/search')) {
+            }
+            else if (request.method === 'GET' && request.url.includes('/Marti/sync/search')) {
                 response.setHeader('Content-Type', 'application/json');
                 response.write(JSON.stringify({
                     resultCount: 1,
@@ -312,17 +925,19 @@ test('DELETE api/marti/package/:uid - Owner can delete own package', async () =>
                         Hash: 'owner-hash-123',
                         CreatorUid: 'pkgowner',
                         Name: 'Owner Package',
-                    }]
+                    }],
                 }));
                 response.end();
 
                 return true;
-            } else if (request.method === 'DELETE' && request.url.includes('/Marti/api/files/owner-hash-123')) {
+            }
+            else if (request.method === 'DELETE' && request.url.includes('/Marti/api/files/owner-hash-123')) {
                 response.writeHead(200);
                 response.end();
 
                 return true;
-            } else {
+            }
+            else {
                 return false;
             }
         });
@@ -330,16 +945,17 @@ test('DELETE api/marti/package/:uid - Owner can delete own package', async () =>
         const res = await flight.fetch('/api/marti/package/owner-pkg-uid?hash=owner-hash-123', {
             method: 'DELETE',
             auth: {
-                bearer: flight.token.pkgowner
-            }
+                bearer: flight.token.pkgowner,
+            },
         }, true);
 
         assert.equal(res.status, 200);
         assert.deepEqual(res.body, {
             status: 200,
-            message: 'Package Deleted'
+            message: 'Package Deleted',
         });
-    } catch (err) {
+    }
+    catch (err) {
         assert.ifError(err);
     }
 
@@ -351,7 +967,8 @@ test('DELETE api/marti/package/:uid - Non-owner non-admin cannot delete', async 
         flight.tak.mockMarti.push(async (request: IncomingMessage, response: ServerResponse) => {
             if (!request.method || !request.url) {
                 return false;
-            } else if (request.method === 'GET' && request.url.includes('/Marti/sync/search')) {
+            }
+            else if (request.method === 'GET' && request.url.includes('/Marti/sync/search')) {
                 response.setHeader('Content-Type', 'application/json');
                 response.write(JSON.stringify({
                     resultCount: 1,
@@ -368,12 +985,13 @@ test('DELETE api/marti/package/:uid - Non-owner non-admin cannot delete', async 
                         Hash: 'other-hash-456',
                         CreatorUid: 'someone-else',
                         Name: 'Other Package',
-                    }]
+                    }],
                 }));
                 response.end();
 
                 return true;
-            } else {
+            }
+            else {
                 return false;
             }
         });
@@ -381,13 +999,14 @@ test('DELETE api/marti/package/:uid - Non-owner non-admin cannot delete', async 
         const res = await flight.fetch('/api/marti/package/other-pkg-uid?hash=other-hash-456', {
             method: 'DELETE',
             auth: {
-                bearer: flight.token.pkgowner
-            }
+                bearer: flight.token.pkgowner,
+            },
         }, false);
 
         assert.equal(res.status, 403);
         assert.equal(res.body.message, 'Insufficient Access to delete Package');
-    } catch (err) {
+    }
+    catch (err) {
         assert.ifError(err);
     }
 
@@ -399,7 +1018,8 @@ test('DELETE api/marti/package/:uid - Admin can delete any package', async () =>
         flight.tak.mockMarti.push(async (request: IncomingMessage, response: ServerResponse) => {
             if (!request.method || !request.url) {
                 return false;
-            } else if (request.method === 'GET' && request.url.includes('/Marti/sync/search')) {
+            }
+            else if (request.method === 'GET' && request.url.includes('/Marti/sync/search')) {
                 response.setHeader('Content-Type', 'application/json');
                 response.write(JSON.stringify({
                     resultCount: 1,
@@ -416,17 +1036,19 @@ test('DELETE api/marti/package/:uid - Admin can delete any package', async () =>
                         Hash: 'any-hash-789',
                         CreatorUid: 'someone-else',
                         Name: 'Any Package',
-                    }]
+                    }],
                 }));
                 response.end();
 
                 return true;
-            } else if (request.method === 'DELETE' && request.url.includes('/Marti/api/files/any-hash-789')) {
+            }
+            else if (request.method === 'DELETE' && request.url.includes('/Marti/api/files/any-hash-789')) {
                 response.writeHead(200);
                 response.end();
 
                 return true;
-            } else {
+            }
+            else {
                 return false;
             }
         });
@@ -434,16 +1056,17 @@ test('DELETE api/marti/package/:uid - Admin can delete any package', async () =>
         const res = await flight.fetch('/api/marti/package/any-pkg-uid?hash=any-hash-789', {
             method: 'DELETE',
             auth: {
-                bearer: flight.token.admin
-            }
+                bearer: flight.token.admin,
+            },
         }, true);
 
         assert.equal(res.status, 200);
         assert.deepEqual(res.body, {
             status: 200,
-            message: 'Package Deleted'
+            message: 'Package Deleted',
         });
-    } catch (err) {
+    }
+    catch (err) {
         assert.ifError(err);
     }
 
