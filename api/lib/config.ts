@@ -115,8 +115,7 @@ export default class Config {
             Bucket = process.env.ASSET_BUCKET;
             API_URL = process.env.API_URL || 'http://localhost:5001';
             PMTILES_URL = process.env.PMTILES_URL || 'http://localhost:5001';
-        }
-        else {
+        } else {
             if (!process.env.StackName) throw new Error('StackName env must be set');
             if (!process.env.API_URL) throw new Error('API_URL env must be set');
             if (!process.env.ASSET_BUCKET) throw new Error('ASSET_BUCKET env must be set');
@@ -126,8 +125,7 @@ export default class Config {
             const apiUrl = new URL(process.env.API_URL);
             if (apiUrl.hostname === 'localhost') {
                 PMTILES_URL = process.env.PMTILES_URL || 'http://localhost:5001';
-            }
-            else {
+            } else {
                 const url = new URL(process.env.API_URL);
                 PMTILES_URL = process.env.PMTILES_URL || `https://tiles.${url.host}`;
             }
@@ -146,8 +144,7 @@ export default class Config {
         let server: InferSelectModel<typeof Server>;
         try {
             server = await models.Server.from(1);
-        }
-        catch (err) {
+        } catch (err) {
             console.log(`ok - no server config found: ${err instanceof Error ? err.message : String(err)}`);
 
             server = await models.Server.generate({
@@ -203,8 +200,7 @@ export default class Config {
     async fetchArnPrefix(service = ''): Promise<string> {
         if (this.arnPrefix) {
             return this.arnPrefix;
-        }
-        else {
+        } else {
             const sts = new STS.STSClient({ region: process.env.AWS_REGION });
             const account = await sts.send(new STS.GetCallerIdentityCommand({}));
             const res = [];
