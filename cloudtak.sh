@@ -1,6 +1,7 @@
 #!/bin/bash
 
 SUBCOMMAND=${1:-}
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 
 set -euo pipefail
 
@@ -200,7 +201,11 @@ EOF
         log_info "Set API_URL and PMTILES_URL in .env manually before starting"
     fi
 
+    run_step "Preparing persistent PostgreSQL storage" "$SCRIPT_DIR/scripts/prepare-postgis-volume.sh"
     run_step "Building CloudTAK Docker images" docker compose build
+
+elif [[ "$SUBCOMMAND" == "database-volume" ]]; then
+    "$SCRIPT_DIR/scripts/prepare-postgis-volume.sh"
 
 elif [[ "$SUBCOMMAND" == "backup" ]]; then
     if [ ! -f .env ]; then
@@ -304,9 +309,10 @@ elif [[ "$SUBCOMMAND" == "connect" ]]; then
     log_info "Connecting to PostgreSQL database..."
     docker exec -it cloudtak-postgis-1 psql -d "$DB_URL"
 elif [[ "$SUBCOMMAND" == "start" ]]; then
-    if ! docker compose ps | grep "cloudtak-postgis" &> /dev/null; then
-        docker compose up -d postgis
-    fi
+    "$SCRIPT_DIR/scripts/prepare-postgis-volume.sh"
+
+    # Always reconcile PostGIS so the prepared persistent volume is attached.
+    docker compose up -d postgis
 
     if ! docker compose ps | grep "cloudtak-store" &> /dev/null; then
         docker compose up -d store
@@ -382,6 +388,6 @@ elif [[ "$SUBCOMMAND" == "update" ]]; then
         $0 clean
     fi
 else
-    log_info "Usage: $0 install|start|update|stop|backup|restore|clean|connect"
+    log_info "Usage: $0 install|database-volume|start|update|stop|backup|restore|clean|connect"
     exit 0
 fi

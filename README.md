@@ -25,4 +25,11 @@ Deployment, local development, and administration guidance now live in the Cloud
 > [!NOTE]
 > Local development and Docker Compose expose the core map experience, but a full AWS deployment is still required for the complete optional ETL infrastructure.
 
+> [!IMPORTANT]
+> Before starting Docker Compose for the first time after this persistence change,
+> run `./cloudtak.sh database-volume`. On an existing installation, this command
+> stops database writers, backs up the current PostGIS container, restores and
+> verifies the database in the persistent volume, and retains the backup. On a
+> new installation, it creates the empty persistent volume. Compose intentionally
+> refuses to create an unprepared database volume.
 

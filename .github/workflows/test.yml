@@ -138,7 +138,9 @@ jobs:
           ref: ${{github.event.pull_request.head.sha || github.sha}}
 
       - name: Docker Compose Build
-        run: docker compose up --build -d postgis
+        run: |
+          docker volume create cloudtak-postgis-data
+          docker compose up --build -d postgis
 
       - name: Docker API Build
         run: docker compose build api
