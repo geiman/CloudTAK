@@ -1,118 +1,9 @@
 import cron from 'node-cron';
 import jwt from 'jsonwebtoken';
+import { tasks, type RetentionTaskConfig } from './tasks.js';
 
-export interface RetentionTaskConfig {
-    'retention::enabled'?: boolean;
-    'retention::connection-feature::enabled'?: boolean;
-    'retention::chat::enabled'?: boolean;
-    'retention::import::enabled'?: boolean;
-}
-
-export interface RetentionTaskResult {
-    name: string;
-    status: 'success' | 'error';
-    deleted: number;
-    duration: number;
-    message?: string;
-}
-
-export interface RetentionTask {
-    name: string;
-    enabled?: (config: RetentionTaskConfig) => boolean;
-    run: () => Promise<RetentionTaskResult>;
-}
-
-const tasks: RetentionTask[] = [{
-    name: 'connection-feature',
-    enabled: (config: RetentionTaskConfig): boolean => {
-        return config['retention::connection-feature::enabled'] !== false;
-    },
-    run: async (): Promise<RetentionTaskResult> => {
-        const apiUrl = process.env.API_URL;
-        const signingSecret = process.env.SigningSecret;
-
-        if (!apiUrl || !signingSecret) {
-            throw new Error('API_URL or SigningSecret not set');
-        }
-
-        const res = await fetch(new URL('/api/retention', apiUrl), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${jwt.sign({ access: 'admin', email: 'system' }, signingSecret, { expiresIn: '5m' })}`,
-            },
-            body: JSON.stringify({
-                action: 'connection-feature',
-            }),
-        });
-
-        if (!res.ok) {
-            throw new Error(`Failed to execute connection-feature retention: HTTP ${res.status}`);
-        }
-
-        return await res.json() as RetentionTaskResult;
-    },
-}, {
-    name: 'chat',
-    enabled: (config: RetentionTaskConfig): boolean => {
-        return config['retention::chat::enabled'] === true;
-    },
-    run: async (): Promise<RetentionTaskResult> => {
-        const apiUrl = process.env.API_URL;
-        const signingSecret = process.env.SigningSecret;
-
-        if (!apiUrl || !signingSecret) {
-            throw new Error('API_URL or SigningSecret not set');
-        }
-
-        const res = await fetch(new URL('/api/retention', apiUrl), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${jwt.sign({ access: 'admin', email: 'system' }, signingSecret, { expiresIn: '5m' })}`,
-            },
-            body: JSON.stringify({
-                action: 'chat',
-            }),
-        });
-
-        if (!res.ok) {
-            throw new Error(`Failed to execute chat retention: HTTP ${res.status}`);
-        }
-
-        return await res.json() as RetentionTaskResult;
-    },
-}, {
-    name: 'import',
-    enabled: (config: RetentionTaskConfig): boolean => {
-        return config['retention::import::enabled'] === true;
-    },
-    run: async (): Promise<RetentionTaskResult> => {
-        const apiUrl = process.env.API_URL;
-        const signingSecret = process.env.SigningSecret;
-
-        if (!apiUrl || !signingSecret) {
-            throw new Error('API_URL or SigningSecret not set');
-        }
-
-        const res = await fetch(new URL('/api/retention', apiUrl), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${jwt.sign({ access: 'admin', email: 'system' }, signingSecret, { expiresIn: '5m' })}`,
-            },
-            body: JSON.stringify({
-                action: 'import',
-            }),
-        });
-
-        if (!res.ok) {
-            throw new Error(`Failed to execute import retention: HTTP ${res.status}`);
-        }
-
-        return await res.json() as RetentionTaskResult;
-    },
-}];
+export type { RetentionTaskConfig, RetentionTaskResult, RetentionTask } from './tasks.js';
+export { tasks } from './tasks.js';
 
 async function runOnce(): Promise<void> {
     const apiUrl = process.env.API_URL;
@@ -124,7 +15,7 @@ async function runOnce(): Promise<void> {
     }
 
     const url = new URL('/api/config', apiUrl);
-    url.searchParams.set('keys', 'retention::enabled,retention::connection-feature::enabled,retention::chat::enabled,retention::import::enabled');
+    url.searchParams.set('keys', 'retention::enabled,retention::connection-feature::enabled,retention::chat::enabled,retention::import::enabled,retention::feature::enabled');
 
     const res = await fetch(url, {
         headers: {

@@ -7,10 +7,9 @@
             />
         </template>
         <template #default>
-            <div class='col-12 py-2'>
-                <TablerInput
+            <div class='my-2'>
+                <SearchSortFilter
                     v-model='paging.filter'
-                    icon='search'
                     placeholder='Filter'
                 />
             </div>
@@ -135,11 +134,11 @@ import type { Contact as ContactType, ContactList } from '../../../types.ts';
 import { useMapStore } from '../../../stores/map.ts';
 const mapStore = useMapStore();
 import MenuTemplate from '../util/MenuTemplate.vue';
+import SearchSortFilter from '../util/SearchSortFilter.vue';
 import SlideDownHeader from '../util/SlideDownHeader.vue';
 import {
     TablerBadge,
     TablerNone,
-    TablerInput,
     TablerLoading,
     TablerRefreshButton
 } from '@tak-ps/vue-tabler';

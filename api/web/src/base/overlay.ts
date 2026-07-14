@@ -2,10 +2,11 @@ import { liveQuery, type Observable } from 'dexie';
 import { shallowReactive } from 'vue';
 import { db, type DBOverlay } from '../database.ts';
 import type { paths } from '@cloudtak/api-types';
-import type { ProfileOverlay, ProfileOverlayList } from '../types.ts';
+import type { ProfileOverlay } from '../types.ts';
 import { server } from '../std.ts';
 import BaseInterface from './interface.ts';
 import Overlay from './overlay-class.ts';
+import { syncOverlays, OVERLAY_LIST_CACHE_KEY } from './overlay-sync.ts';
 import type {
     BaseInterface_ListOptions,
     BaseInterface_FromOptions
@@ -38,12 +39,8 @@ export type Overlay_CreateLoadedOptions = NonNullable<Parameters<typeof Overlay.
 const loadedOverlays = shallowReactive<Overlay[]>([]) as Overlay[];
 
 export default class OverlayManager extends BaseInterface {
-    static readonly listCacheKey = 'overlay';
+    static readonly listCacheKey = OVERLAY_LIST_CACHE_KEY;
     static readonly loaded = loadedOverlays;
-
-    static listLoaded(): Overlay[] {
-        return this.loaded;
-    }
 
     static clearLoaded(): void {
         this.loaded.splice(0);
@@ -63,24 +60,15 @@ export default class OverlayManager extends BaseInterface {
         return this.loaded.find((overlay) => overlay.mode === mode && overlay.mode_id === modeId);
     }
 
-    static loadedBeforeId(): string | undefined {
+    private static loadedBeforeId(): string | undefined {
         if (this.loaded.length > 1 && this.loaded[1].styles.length > 0) {
-            return String(this.loaded[1].styles[0].id);
+            // Background layers are never added to the map so they cannot
+            // anchor an insert - use the first renderable layer
+            const anchor = this.loaded[1].styles.find((l) => l.type !== 'background');
+            if (anchor) return String(anchor.id);
         }
 
         return undefined;
-    }
-
-    static addLoaded(overlay: Overlay): void {
-        if (this.loaded.length > 0) {
-            this.loaded.splice(1, 0, overlay);
-        } else {
-            this.loaded.push(overlay);
-        }
-    }
-
-    static prependLoaded(overlay: Overlay): void {
-        this.loaded.unshift(overlay);
     }
 
     static appendLoaded(...overlays: Overlay[]): void {
@@ -98,9 +86,11 @@ export default class OverlayManager extends BaseInterface {
         });
 
         if (position === 'prepend') {
-            this.prependLoaded(overlay);
+            this.loaded.unshift(overlay);
+        } else if (this.loaded.length > 0) {
+            this.loaded.splice(1, 0, overlay);
         } else {
-            this.addLoaded(overlay);
+            this.loaded.push(overlay);
         }
 
         return overlay;
@@ -140,22 +130,6 @@ export default class OverlayManager extends BaseInterface {
         if (pos !== -1) this.loaded.splice(pos, 1);
 
         await overlay.delete();
-    }
-
-    static loadedBasemapIds(mode = 'overlay'): Set<string> {
-        return new Set(
-            this.loaded
-                .filter((overlay) => overlay.mode === mode && overlay.mode_id)
-                .map((overlay) => String(overlay.mode_id))
-        );
-    }
-
-    static loadedProfileUrls(): Set<string> {
-        return new Set(
-            this.loaded
-                .filter((overlay) => overlay.mode === 'profile' && overlay.url)
-                .map((overlay) => overlay.url as string)
-        );
     }
 
     static queryableOverlayNames(): string[] {
@@ -308,41 +282,14 @@ export default class OverlayManager extends BaseInterface {
     }
 
     static async sync(): Promise<void> {
-        const res = await server.GET('/api/profile/overlay', {
-            params: {
-                query: {
-                    limit: 100,
-                    page: 0,
-                    order: 'asc',
-                    sort: 'pos'
-                }
-            }
-        });
-
-        if (res.error) throw new Error(res.error.message);
-        if (!res.data) throw new Error('Failed to sync overlays');
-
-        const list = res.data as ProfileOverlayList;
-
-        await db.transaction('rw', db.overlay, db.cache, async () => {
-            await db.overlay.clear();
-
-            if (list.items.length) {
-                await db.overlay.bulkPut(list.items);
-            }
-
-            await db.cache.put({
-                key: this.listCacheKey,
-                updated: Date.now()
-            });
-        });
+        await syncOverlays();
     }
 
     static async delete(id: string, opts: Overlay_DeleteOptions = {}): Promise<void> {
         const overlayId = this.overlayId(id);
 
         if (!opts.localOnly) {
-            const { error } = await server.DELETE('/api/profile/overlay', {
+            const { error, response } = await server.DELETE('/api/profile/overlay', {
                 params: {
                     query: {
                         id: String(overlayId),
@@ -350,7 +297,7 @@ export default class OverlayManager extends BaseInterface {
                 }
             });
 
-            if (error) throw new Error(error.message);
+            if (error && response.status !== 404) throw new Error(error.message);
         }
 
         await db.overlay.delete(overlayId);

@@ -30,6 +30,7 @@ export default class AtlasProfile {
     profile_remarks? : ProfileConfig<'tak_remarks'>;
     profile_group? : ProfileConfig<'tak_group'>;
     profile_role? : ProfileConfig<'tak_role'>;
+    profile_phone? : ProfileConfig<'tak_phone'>;
     profile_loc?: ProfileConfig<'tak_loc'>;
     profile_loc_freq?: ProfileConfig<'tak_loc_freq'>;
     profile_created?: ProfileConfig<'created'>;
@@ -76,6 +77,9 @@ export default class AtlasProfile {
 
         this.profile_role = await ProfileConfig.get('tak_role');
         if (this.profile_role) this.profile_role.subscribe();
+
+        this.profile_phone = await ProfileConfig.get('tak_phone');
+        if (this.profile_phone) this.profile_phone.subscribe();
 
         this.profile_loc = await ProfileConfig.get('tak_loc');
         if (this.profile_loc) this.profile_loc.subscribe();
@@ -145,6 +149,9 @@ export default class AtlasProfile {
         this.profile_role?.destroy();
         this.profile_role = undefined;
 
+        this.profile_phone?.destroy();
+        this.profile_phone = undefined;
+
         this.profile_loc?.destroy();
         this.profile_loc = undefined;
 
@@ -195,7 +202,7 @@ export default class AtlasProfile {
 
     async loadServer(): Promise<Server> {
         if (!this.server) {
-            this.server = await ServerManager.get(this.atlas.token);
+            this.server = await ServerManager.get();
         }
 
         return this.server;
@@ -205,9 +212,7 @@ export default class AtlasProfile {
         if (!this.username) {
             await this.loadServer();
 
-            await ProfileConfig.sync({
-                token: this.atlas.token
-            });
+            await ProfileConfig.sync();
 
             const callsign = await ProfileConfig.get('tak_callsign');
             const display_zoom = await ProfileConfig.get('display_zoom');
@@ -248,6 +253,17 @@ export default class AtlasProfile {
             this.atlas.postMessage({
                 type: WorkerMessageType.Profile_Location_Source,
                 body: { source: LocationState.Preset }
+            });
+
+            // Emit the manual coordinates so the map (and the geolocation
+            // control puck) renders the user at the location they set.
+            this.atlas.postMessage({
+                type: WorkerMessageType.Profile_Location_Coordinates,
+                body: {
+                    accuracy: undefined,
+                    altitude: undefined,
+                    coordinates: this.location.coordinates
+                }
             });
         } else if ((!this.profile_loc || !this.profile_loc.value) && this.location.source === LocationState.Preset) {
             // Reset to disabled when manual location is cleared
@@ -294,7 +310,7 @@ export default class AtlasProfile {
     async updateChannels(channels: Array<GroupChannel>): Promise<Array<GroupChannel>> {
         await this.postChannelStatus();
 
-        await GroupManager.update(channels, this.atlas.token);
+        await GroupManager.update(channels);
 
         return channels;
     }
@@ -308,7 +324,7 @@ export default class AtlasProfile {
     }
 
     async loadChannels(): Promise<Array<GroupChannel>> {
-        const channels = await GroupManager.list({ token: this.atlas.token });
+        const channels = await GroupManager.list();
 
         await this.postChannelStatus();
 
@@ -317,6 +333,26 @@ export default class AtlasProfile {
 
     async update(body: Profile_Update): Promise<void> {
         if (!this.username) throw new Error('Profile must be loaded before update');
+
+        // Eagerly push location messages before the HTTP call so the puck moves
+        // immediately rather than waiting for the network round-trip + CoT post.
+        if (body.tak_loc) {
+            const coords = (body.tak_loc as { coordinates: number[] }).coordinates;
+            this.location.source = LocationState.Preset;
+            this.location.coordinates = coords;
+            this.location.accuracy = undefined;
+            this.location.altitude = undefined;
+            if (this.profile_loc) this.profile_loc.value = body.tak_loc;
+
+            this.atlas.postMessage({
+                type: WorkerMessageType.Profile_Location_Source,
+                body: { source: LocationState.Preset }
+            });
+            this.atlas.postMessage({
+                type: WorkerMessageType.Profile_Location_Coordinates,
+                body: { accuracy: undefined, altitude: undefined, coordinates: coords }
+            });
+        }
 
         let freqChanged = false;
         if (body.tak_loc_freq && this.profile_loc_freq && this.profile_loc_freq.value !== body.tak_loc_freq) {
@@ -403,11 +439,12 @@ export default class AtlasProfile {
 
         const uid = this.uid();
 
-        const type = this.profile_type ? this.profile_type.value : undefined;
+        const type = 'a-f-G-E-V-C';
         const callsign = this.profile_callsign ? this.profile_callsign.value : undefined;
         const remarks = this.profile_remarks ? this.profile_remarks.value : undefined;
         const group = this.profile_group ? this.profile_group.value : undefined;
         const role = this.profile_role ? this.profile_role.value : undefined;
+        const phone = this.profile_phone ? this.profile_phone.value : undefined;
 
         const feat: Feature = {
             id: uid,
@@ -424,7 +461,11 @@ export default class AtlasProfile {
                 start: new Date().toISOString(),
                 stale: new Date(new Date().getTime() + (1000 * 60)).toISOString(),
                 center: coordinates,
-                contact: { endpoint: '*:-1:stcp', callsign: callsign as string },
+                contact: {
+                    endpoint: '*:-1:stcp',
+                    callsign: callsign as string,
+                    ...(phone ? { phone: phone as string } : {})
+                },
                 group: {
                     name: group as string,
                     role: role as string

@@ -3,6 +3,7 @@
         :name='subscription ? subscription.meta.name : "Data Sync"'
         :error='error'
         :loading='(!subscription && !error) || loading'
+        :scroll='false'
     >
         <template #buttons>
             <TablerDelete
@@ -29,7 +30,7 @@
                     <div class='col-12'>
                         <div
                             class='cursor-pointer col-12 cloudtak-hover d-flex align-items-center px-2 py-2'
-                            @click='shareToPackageSetup'
+                            @click.stop='shareToPackageSetup'
                         >
                             <IconPackages
                                 :size='32'
@@ -39,7 +40,7 @@
                         </div>
                         <div
                             class='cursor-pointer col-12 cloudtak-hover d-flex align-items-center px-2 py-2'
-                            @click='exportToPackage("geojson")'
+                            @click.stop='exportToPackage("geojson")'
                         >
                             <IconFile
                                 :size='32'
@@ -49,7 +50,7 @@
                         </div>
                         <div
                             class='cursor-pointer col-12 cloudtak-hover d-flex align-items-center px-2 py-2'
-                            @click='exportToPackage("kml")'
+                            @click.stop='exportToPackage("kml")'
                         >
                             <IconFile
                                 :size='32'
@@ -59,7 +60,7 @@
                         </div>
                         <div
                             class='cursor-pointer col-12 cloudtak-hover d-flex align-items-center px-2 py-2'
-                            @click='exportToPackage("zip")'
+                            @click.stop='exportToPackage("zip")'
                         >
                             <IconFileZip
                                 :size='32'

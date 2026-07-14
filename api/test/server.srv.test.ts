@@ -72,9 +72,9 @@ test('PATCH: api/server - Configured - Non-admin User', async () => {
             },
             body: {
                 name: 'Updated Server',
-                url: 'ssl://localhost:8089',
-                api: 'https://localhost:8443',
-                webtak: 'http://localhost:8444',
+                url: `ssl://localhost:${flight.tak.ports.streaming}`,
+                api: `https://localhost:${flight.tak.ports.marti}`,
+                webtak: `http://localhost:${flight.tak.ports.webtak}`,
                 auth: {
                     cert: String(fs.readFileSync(flight.tak.keys.cert)),
                     key: String(fs.readFileSync(flight.tak.keys.key)),
@@ -97,9 +97,9 @@ test('PATCH: api/server - Configured - Admin', async () => {
             },
             body: {
                 name: 'Updated Server',
-                url: 'ssl://localhost:8089',
-                api: 'https://localhost:8443',
-                webtak: 'http://localhost:8444',
+                url: `ssl://localhost:${flight.tak.ports.streaming}`,
+                api: `https://localhost:${flight.tak.ports.marti}`,
+                webtak: `http://localhost:${flight.tak.ports.webtak}`,
                 auth: {
                     cert: String(fs.readFileSync(flight.tak.keys.cert)),
                     key: String(fs.readFileSync(flight.tak.keys.key)),
@@ -147,6 +147,8 @@ test('GET: api/server - Unconfigured - Admin', async () => {
             id: 1,
             status: 'unconfigured',
             name: 'Default Server',
+            connection_status: 'dead',
+            connection: true,
             url: '',
             api: '',
             webtak: '',
@@ -174,6 +176,8 @@ test('GET: api/server - Unconfigured - User', async () => {
             id: 1,
             status: 'unconfigured',
             name: 'Default Server',
+            connection_status: 'dead',
+            connection: true,
             url: '',
             api: '',
             webtak: '',
@@ -198,6 +202,8 @@ test('GET: api/server - Unconfigured - No Auth', async () => {
             id: 1,
             status: 'unconfigured',
             name: 'Default Server',
+            connection_status: 'dead',
+            connection: true,
             url: '',
             api: '',
             webtak: '',
@@ -212,11 +218,14 @@ test('PATCH: api/server - Unconfigured without username/password', async () => {
     try {
         const res = await flight.fetch('/api/server', {
             method: 'PATCH',
+            auth: {
+                bearer: flight.token.admin,
+            },
             body: {
                 name: 'Test Server',
-                url: 'ssl://localhost:8089',
-                api: 'https://localhost:8443',
-                webtak: 'http://localhost:8444',
+                url: `ssl://localhost:${flight.tak.ports.streaming}`,
+                api: `https://localhost:${flight.tak.ports.marti}`,
+                webtak: `http://localhost:${flight.tak.ports.webtak}`,
                 auth: {
                     cert: String(fs.readFileSync(flight.tak.keys.cert)),
                     key: String(fs.readFileSync(flight.tak.keys.key)),

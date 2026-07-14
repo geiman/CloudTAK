@@ -9,9 +9,9 @@ import AtlasProfile from './atlas-profile.ts';
 import type { ProfileLocationState } from './atlas-profile.ts';
 import AtlasDatabase from './atlas-database.ts';
 import AtlasConnection from './atlas-connection.ts';
+import AtlasSync from './atlas-sync.ts';
 import { CloudTAKTransferHandler } from '../base/handler.ts';
 import { db } from '../database.ts';
-import Icon from '../base/icon.ts';
 
 export default class Atlas {
     channel: BroadcastChannel;
@@ -23,6 +23,7 @@ export default class Atlas {
     db = Comlink.proxy(new AtlasDatabase(this));
     conn = Comlink.proxy(new AtlasConnection(this));
     profile = Comlink.proxy(new AtlasProfile(this));
+    sync = Comlink.proxy(new AtlasSync(this));
 
     constructor() {
         this.channel = new BroadcastChannel('cloudtak');
@@ -72,11 +73,6 @@ export default class Atlas {
 
             this.username = await this.profile.init();
 
-            void Icon.hydrate({ token: authToken })
-                .catch((err: unknown) => {
-                    console.error('Failed to hydrate iconsets after startup', err);
-                });
-
             await this.conn.connect(this.username)
 
             await this.db.init();
@@ -86,6 +82,7 @@ export default class Atlas {
             // Reset state so a future init call can retry after a transient failure
             this.conn.destroy();
             this.profile.destroy();
+            this.sync.destroy();
             this.token = '';
             this.username = '';
             this.initialized = false;
@@ -96,6 +93,7 @@ export default class Atlas {
     destroy() {
         this.conn.destroy();
         this.profile.destroy();
+        this.sync.destroy();
         this.initialized = false;
         this.token = '';
         this.username = '';

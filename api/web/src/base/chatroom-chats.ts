@@ -1,10 +1,11 @@
 import { db } from '../database.ts';
-import { std, stdurl } from '../std.ts';
+import { server } from '../std.ts';
 import type {
     ProfileChatList,
     APIProfileChat
 } from '../types.ts'
 import type { DBChatroomChat } from '../database.ts';
+import { ChatStatus } from '../database.ts';
 import type Atlas from '../workers/atlas.ts';
 import type { Remote } from 'comlink';
 import ContactManager from './contact.ts';
@@ -19,10 +20,16 @@ export default class ChatroomChats {
     }
 
     async refresh(): Promise<void> {
-        const url = stdurl(`/api/profile/chatroom/${encodeURIComponent(this.chatroom)}/chat`);
-        url.searchParams.append('limit', '50');
+        const res = await server.GET('/api/profile/chatroom/{:chatroom}/chat', {
+            params: {
+                path: { ':chatroom': this.chatroom },
+                query: { limit: 50, page: 0, order: 'desc', sort: 'created' }
+            }
+        });
 
-        const list = await std(url) as ProfileChatList;
+        if (res.error) throw new Error(res.error.message);
+
+        const list = res.data as ProfileChatList;
 
         await db.transaction('rw', db.chatroom_chats, async () => {
             await db.chatroom_chats
@@ -38,7 +45,10 @@ export default class ChatroomChats {
                     sender: c.sender_callsign,
                     sender_uid: c.sender_uid,
                     message: c.message,
-                    created: c.created
+                    // Postgres timestamps are not ISO 8601 formatted - normalize
+                    // so they sort consistently against locally created messages
+                    created: new Date(c.created).toISOString(),
+                    status: (c.status as ChatStatus | null) ?? undefined
                 });
             }
         });
@@ -65,8 +75,10 @@ export default class ChatroomChats {
             .equals(this.chatroom)
             .toArray();
 
+        // Oldest to most recent - compare as dates as stored timestamps
+        // may be a mix of ISO 8601 and Postgres formatted strings
         chats.sort((a, b) => {
-            return a.created.localeCompare(b.created);
+            return new Date(a.created).getTime() - new Date(b.created).getTime();
         });
 
         return chats;
@@ -95,7 +107,8 @@ export default class ChatroomChats {
             sender: sender.callsign,
             sender_uid: sender.uid,
             message: message,
-            created: created
+            created: created,
+            status: ChatStatus.Sending
         });
 
         if (!recipient) {

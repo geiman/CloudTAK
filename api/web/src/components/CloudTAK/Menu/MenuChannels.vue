@@ -28,12 +28,26 @@
             />
         </template>
         <template #default>
-            <div class='col-12 pb-2 pt-2'>
-                <TablerInput
+            <div class='my-2'>
+                <SearchSortFilter
                     v-model='paging.filter'
-                    icon='search'
+                    v-model:sort='sort'
+                    :sort-options='sortOptions'
                     placeholder='Filter'
-                />
+                >
+                    <template #sort-icon>
+                        <component
+                            :is='sortTypeIcon'
+                            :size='20'
+                            stroke='1'
+                        />
+                        <component
+                            :is='sortDirectionIcon'
+                            :size='20'
+                            stroke='1'
+                        />
+                    </template>
+                </SearchSortFilter>
             </div>
 
             <EmptyInfo
@@ -112,9 +126,9 @@ import {
     TablerNone,
     TablerIconButton,
     TablerRefreshButton,
-    TablerInput,
 } from '@tak-ps/vue-tabler';
 import MenuTemplate from '../util/MenuTemplate.vue';
+import SearchSortFilter from '../util/SearchSortFilter.vue';
 import StandardItem from '../util/StandardItem.vue';
 import EmptyInfo from '../util/EmptyInfo.vue';
 import {
@@ -124,6 +138,9 @@ import {
     IconEyeX,
     IconEyePlus,
     IconEyeOff,
+    IconLetterCase,
+    IconArrowUp,
+    IconArrowDown,
 } from '@tabler/icons-vue';
 import { useMapStore } from '../../../stores/map.ts';
 const mapStore = useMapStore();
@@ -132,6 +149,11 @@ const syncing = ref(false);
 const paging = ref({
     filter: ''
 });
+
+const sort = ref('A → Z');
+const sortOptions = ['A → Z', 'Z → A'];
+const sortTypeIcon = computed(() => IconLetterCase);
+const sortDirectionIcon = computed(() => sort.value === 'A → Z' ? IconArrowUp : IconArrowDown);
 
 const channels = useObservable(
     from(GroupManager.live()),
@@ -147,7 +169,8 @@ const processChannels = computed<Record<string, GroupChannel>>(() => {
 
     JSON.parse(JSON.stringify(channels.value))
         .sort((a: GroupChannel, b: GroupChannel) => {
-            return (a.name > b.name) ? 1 : ((b.name > a.name) ? -1 : 0);
+            const cmp = a.name.localeCompare(b.name);
+            return sort.value === 'Z → A' ? -cmp : cmp;
         }).forEach((channel: GroupChannel) => {
             filteredChannels[channel.name] = channel;
         })

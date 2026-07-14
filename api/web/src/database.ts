@@ -5,6 +5,7 @@ import type {
     Mission,
     MissionRole,
     MissionChange,
+    MissionLayer,
     MissionLog,
     Contact,
     Server,
@@ -47,6 +48,32 @@ export interface DBChatroom {
     last_read: string | null;
 }
 
+/**
+ * Delivery status of a chat message sent by the current user
+ * - sending: submitted locally but not yet confirmed by the CloudTAK Server
+ * - sent: received by the CloudTAK/TAK Server
+ * - pending/failed/delivered/read: reported by the recipient's client via
+ *   b-t-f-p/s/d/r Chat Receipt CoTs
+ */
+export enum ChatStatus {
+    Sending = 'sending',
+    Sent = 'sent',
+    Pending = 'pending',
+    Failed = 'failed',
+    Delivered = 'delivered',
+    Read = 'read',
+}
+
+// A chat status can only move forward - a late "delivered" receipt must not downgrade "read"
+export const ChatStatusRank: Record<ChatStatus, number> = {
+    [ChatStatus.Sending]: 0,
+    [ChatStatus.Sent]: 1,
+    [ChatStatus.Pending]: 2,
+    [ChatStatus.Failed]: 3,
+    [ChatStatus.Delivered]: 4,
+    [ChatStatus.Read]: 5
+};
+
 export interface DBChatroomChat {
     id: string;
     chatroom: string;
@@ -55,6 +82,7 @@ export interface DBChatroomChat {
     message: string;
     created: string;
     unread?: boolean;
+    status?: ChatStatus;
 }
 
 export interface DBIconset {
@@ -125,6 +153,12 @@ export interface DBSubscriptionFeature {
     geometry: Feature["geometry"];
 }
 
+export interface DBSubscriptionLayer {
+    uid: string;
+    mission: string;
+    layer: MissionLayer;
+}
+
 export interface DBSubscriptionContent {
     uid: string;
     mission: string;
@@ -154,6 +188,7 @@ export interface DBSubscriptionChat {
     message: string;
     created: string;
     unread: boolean;
+    status?: ChatStatus;
 }
 
 export interface DBSubscription {
@@ -242,6 +277,7 @@ export type DatabaseType = Dexie & {
     subscription_log: EntityTable<DBSubscriptionLog, 'id'>,
     subscription_feature: EntityTable<DBSubscriptionFeature, 'id'>,
     subscription_chat: EntityTable<DBSubscriptionChat, 'id'>,
+    subscription_layer: EntityTable<DBSubscriptionLayer, 'uid'>,
     mission_template: EntityTable<DBMissionTemplate, 'id'>,
     mission_template_log: EntityTable<DBMissionTemplateLog, 'id'>,
     kv: EntityTable<DBKV, 'key'>,
@@ -253,7 +289,7 @@ export type DatabaseType = Dexie & {
 
 export const db = new Dexie('CloudTAK') as DatabaseType;
 
-db.version(1).stores({
+db.version(2).stores({
     kv: 'key',
 
     server: '_id',
@@ -283,9 +319,116 @@ db.version(1).stores({
     subscription_log: 'id, [mission+id]',
     subscription_chat: 'id, mission, [mission+id]',
     subscription_feature: 'id, mission, [mission+id]',
+    subscription_layer: 'uid, mission, [mission+uid]',
     subscription_contents: 'uid, mission, [mission+uid]',
     subscription_changes: '++id, mission',
 
     mission_template: 'id, name',
     mission_template_log: 'id, template, [template+id]',
 });
+
+let reopenPromise: Promise<void> | null = null;
+
+// An IndexedDB open issued while a page is unloading leaves WKWebView's
+// database process holding an orphaned request that deadlocks the next
+// page's first IndexedDB operation until the app is fully restarted. Close
+// proactively on pagehide and suppress the auto-reopen; a pageshow (bfcache
+// restore) resumes.
+let shuttingDown = false;
+
+if (typeof window !== 'undefined') {
+    window.addEventListener('pagehide', () => {
+        shuttingDown = true;
+
+        try {
+            db.close();
+        } catch (err) {
+            console.warn('Failed to close database on navigation', err);
+        }
+    });
+
+    window.addEventListener('pageshow', () => {
+        if (shuttingDown) {
+            shuttingDown = false;
+            void ensureDatabase();
+        }
+    });
+}
+
+export async function ensureDatabase(): Promise<void> {
+    if (shuttingDown || db.isOpen()) return;
+
+    if (!reopenPromise) {
+        reopenPromise = (async () => {
+            let lastError: unknown;
+            for (let attempt = 0; attempt < 5; attempt++) {
+                if (shuttingDown || db.isOpen()) return;
+
+                try {
+                    await db.open();
+                    return;
+                } catch (err) {
+                    if (db.isOpen()) return;
+                    lastError = err;
+                    console.warn(`Dexie reopen attempt ${attempt + 1} failed:`, err);
+                    await new Promise((resolve) => setTimeout(resolve, 100 * (attempt + 1)));
+                }
+            }
+            throw lastError;
+        })().finally(() => {
+            reopenPromise = null;
+        });
+    }
+
+    return reopenPromise;
+}
+
+const TRANSIENT_DB_ERROR_NAMES = new Set([
+    'AbortError',
+    'DatabaseClosedError',
+    'PrematureCommitError',
+    'TransactionInactiveError',
+    'InvalidStateError',
+    'UnknownError'
+]);
+
+const TRANSIENT_DB_ERROR_MESSAGES = [
+    'transaction finished',
+    'transaction is not active',
+    'transaction was aborted',
+    'transaction aborted',
+    'objectstore',
+    'connection is closing',
+    'premature commit'
+];
+
+db.on('close', () => {
+    if (!shuttingDown) void ensureDatabase();
+});
+
+export function isTransientDbError(err: unknown): boolean {
+    const e = err as { name?: string; message?: string } | null;
+    if (TRANSIENT_DB_ERROR_NAMES.has(e?.name ?? '')) return true;
+
+    const message = (e?.message ?? '').toLowerCase();
+    return TRANSIENT_DB_ERROR_MESSAGES.some((fragment) => message.includes(fragment));
+}
+
+export async function withDbRetry<T>(fn: () => Promise<T>, attempts = 4): Promise<T> {
+    let lastError: unknown;
+
+    for (let attempt = 0; attempt < attempts; attempt++) {
+        try {
+            await ensureDatabase();
+            return await fn();
+        } catch (err) {
+            lastError = err;
+            if (!isTransientDbError(err)) throw err;
+
+            await ensureDatabase();
+            await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)));
+        }
+    }
+
+    throw lastError;
+}

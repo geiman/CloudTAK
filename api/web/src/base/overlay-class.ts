@@ -10,9 +10,11 @@ import { bbox } from '@turf/bbox'
 import type { LngLatBoundsLike, LayerSpecification, VectorTileSource, RasterTileSource, GeoJSONSource } from 'maplibre-gl'
 import cotStyles from './utils/styles.ts'
 import { std, stdurl } from '../std.js';
+import { db, type DBOverlay } from '../database.ts';
 import { useMapStore } from '../stores/map.js';
 import ProfileConfig from './profile.ts';
 import Subscription from './subscription.ts';
+import { FeatureVisibility } from '../stores/modules/feature-visibility.ts';
 
 /**
  * @class
@@ -72,8 +74,10 @@ export default class Overlay {
                 for (const layer of ov.styles) {
                     const l = layer as LayerSpecification;
                     l.id = `${ov.id}-${l.id}`;
-                    // @ts-expect-error Special case Background Layer type
-                    l.source = String(ov.id);
+
+                    if (l.type !== 'background') {
+                        l.source = String(ov.id);
+                    }
                 }
             }
 
@@ -87,6 +91,8 @@ export default class Overlay {
             });
 
             await overlay.init(opts);
+
+            await db.overlay.put(overlay.toDBOverlay());
 
             return overlay;
         } else {
@@ -238,6 +244,8 @@ export default class Overlay {
         }
 
         for (const l of this.styles) {
+            if (l.type === 'background') continue;
+
             if (before) {
                 mapStore.map.addLayer(l, before);
             } else {
@@ -249,14 +257,19 @@ export default class Overlay {
         // without round-tripping through update()/save() which would PATCH
         // the server with unchanged values.
         for (const l of this.styles) {
+            if (l.type === 'background') continue;
+
             if (this.type === 'raster') {
                 mapStore.map.setPaintProperty(l.id, 'raster-opacity', Number(this.opacity));
             }
             mapStore.map.setLayoutProperty(l.id, 'visibility', this.visible ? 'visible' : 'none');
         }
 
-        // Update attribution if this is a basemap
+        await FeatureVisibility.applyToOverlay(this);
+
+        // Update background + attribution if this is a basemap
         if (this.mode === 'basemap') {
+            mapStore.updateBackground();
             await mapStore.updateAttribution();
         }
 
@@ -411,12 +424,6 @@ export default class Overlay {
             this.styles = [];
         }
 
-        if (this.iconset) {
-            mapStore.icons.addIconset(this.iconset).catch((err: unknown) => {
-                console.error('Error adding iconset', this.iconset, err);
-            });
-        }
-
         if (this.type === 'vector' && this. mode !== 'basemap' && opts.clickable === undefined) {
             opts.clickable = this.styles.map((l) => {
                 return { id: l.id, type: 'feat' };
@@ -452,12 +459,6 @@ export default class Overlay {
             }
         }
 
-        if (this.iconset) {
-            mapStore.icons.removeIconset(this.iconset).catch((err: unknown) => {
-                console.error('Error removing iconset', this.iconset, err);
-            });
-        }
-
         if (mapStore.map.getStyle().sources[String(this.id)]) {
             // Don't crash the map if it already  removed
             mapStore.map.removeSource(String(this.id));
@@ -466,7 +467,7 @@ export default class Overlay {
 
     moveBefore(overlay?: Overlay): void {
         const mapStore = useMapStore();
-        const before = overlay?.styles[0]?.id;
+        const before = overlay?.styles.find((l) => l.type !== 'background')?.id;
         const hasBefore = before ? !!mapStore.map.getLayer(before) : false;
 
         for (const layer of this.styles) {
@@ -582,10 +583,15 @@ export default class Overlay {
             await std(`/api/profile/overlay?id=${this.id}`, {
                 method: 'DELETE'
             });
+
+            await db.overlay.delete(this.id);
         }
 
-        // Update attribution if this was a basemap
+        // Update background + attribution if this was a basemap - if the
+        // remaining basemaps provide no background color the CloudTAK
+        // default is restored
         if (wasBasemap) {
+            mapStore.updateBackground();
             await mapStore.updateAttribution();
         }
     }
@@ -613,13 +619,15 @@ export default class Overlay {
         if (body.visible !== undefined && body.visible !== this.visible) {
             this.visible = body.visible;
             for (const l of this.styles) {
+                if (l.type === 'background') continue;
                 mapStore.map.setLayoutProperty(l.id, 'visibility', this.visible ? 'visible' : 'none');
             }
             changed = true;
         }
 
-        // Update attribution if this is a basemap
+        // Update background + attribution if this is a basemap
         if (this.mode === 'basemap') {
+            mapStore.updateBackground();
             await mapStore.updateAttribution();
         }
 
@@ -661,5 +669,38 @@ export default class Overlay {
                 styles: dropStyles ? [] : this.styles
             }
         })
+
+        await db.overlay.put(this.toDBOverlay());
+    }
+
+    toDBOverlay(): DBOverlay {
+        const dropStyles = ['mission', 'internal'].includes(this.mode);
+
+        // IndexedDB uses the structured clone algorithm which cannot clone Vue
+        // reactive Proxy objects. JSON round-trip strips any Proxy wrappers so
+        // only plain objects reach the database.
+        const styles = dropStyles ? [] : JSON.parse(JSON.stringify(this.styles)) as Array<LayerSpecification>;
+
+        return {
+            id: this.id,
+            name: this.name,
+            active: this.active,
+            username: this.username,
+            frequency: this.frequency,
+            iconset: this.iconset,
+            created: this.created,
+            updated: this.updated,
+            pos: this.pos,
+            type: this.type,
+            opacity: this.opacity,
+            visible: this.visible,
+            mode: this.mode,
+            mode_id: this.mode_id,
+            encoding: this.encoding,
+            actions: this.actions,
+            url: this.url,
+            styles,
+            token: this.token
+        } as DBOverlay;
     }
 }

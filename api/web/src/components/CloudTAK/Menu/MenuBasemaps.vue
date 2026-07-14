@@ -21,12 +21,25 @@
                 v-if='!share'
                 class='col-12 py-2 d-flex flex-column gap-2'
             >
-                <TablerInput
+                <SearchSortFilter
                     v-model='paging.filter'
-                    class='w-100'
-                    icon='search'
+                    v-model:sort='sort'
+                    :sort-options='sortOptions'
                     placeholder='Filter'
-                />
+                >
+                    <template #sort-icon>
+                        <component
+                            :is='sortTypeIcon'
+                            :size='20'
+                            stroke='1'
+                        />
+                        <component
+                            :is='sortDirectionIcon'
+                            :size='20'
+                            stroke='1'
+                        />
+                    </template>
+                </SearchSortFilter>
 
                 <div
                     v-if='paging.collection'
@@ -162,7 +175,7 @@
 </template>
 
 <script setup lang='ts'>
-import { onMounted, ref, watch, computed } from 'vue';
+import { onMounted, onUnmounted, ref, watch, computed } from 'vue';
 import { Preferences } from '@capacitor/preferences';
 import StandardItemBasemap from '../util/StandardItemBasemap.vue';
 import StandardItemFolder from '../util/StandardItemFolder.vue';
@@ -172,12 +185,13 @@ import { openExternalUrl } from '../../../base/capacitor.ts';
 import ProfileConfig from '../../../base/profile.ts';
 import { server, stdurl } from '../../../std.ts';
 import OverlayManager from '../../../base/overlay.ts';
+import type { Subscription } from 'dexie';
 import BasemapEditModal from './Basemaps/EditModal.vue';
 import MenuTemplate from '../util/MenuTemplate.vue';
+import SearchSortFilter from '../util/SearchSortFilter.vue';
 import Share from '../util/Share.vue';
 import {
     TablerNone,
-    TablerInput,
     TablerPager,
     TablerAlert,
     TablerLoading,
@@ -192,12 +206,36 @@ import {
     IconSettings,
     IconBoxMultiple,
     IconDotsVertical,
+    IconLetterCase,
+    IconArrowUp,
+    IconArrowDown,
 } from '@tabler/icons-vue'
 import type { LayerSpecification } from 'maplibre-gl'
 import { useRouter } from 'vue-router';
 
-const overlayBasemapIds = computed<Set<string>>(() => {
-    return OverlayManager.loadedBasemapIds('overlay');
+const overlayBasemapIds = ref<Set<string>>(new Set());
+const currentBasemapModeIds = ref<Set<string>>(new Set());
+let overlaySubscription: Subscription | undefined;
+
+onMounted(() => {
+    overlaySubscription = OverlayManager.liveList().subscribe({
+        next: (items) => {
+            overlayBasemapIds.value = new Set(
+                items
+                    .filter((overlay) => overlay.mode === 'overlay' && overlay.mode_id)
+                    .map((overlay) => String(overlay.mode_id))
+            );
+            currentBasemapModeIds.value = new Set(
+                items
+                    .filter((overlay) => overlay.mode === 'basemap' && overlay.mode_id)
+                    .map((overlay) => String(overlay.mode_id))
+            );
+        }
+    });
+});
+
+onUnmounted(() => {
+    overlaySubscription?.unsubscribe();
 });
 
 function basemapOverlayExists(basemap: Basemap): boolean {
@@ -218,6 +256,11 @@ const paging = ref({
     page: 0
 });
 
+const sort = ref('A → Z');
+const sortOptions = ['A → Z', 'Z → A'];
+const sortTypeIcon = computed(() => IconLetterCase);
+const sortDirectionIcon = computed(() => sort.value === 'A → Z' ? IconArrowUp : IconArrowDown);
+
 const list = ref<BasemapList>({
     total: 0,
     collections: [],
@@ -235,6 +278,10 @@ watch(editModal, async () => {
 });
 
 watch(paging.value, async () => {
+    await fetchList();
+});
+
+watch(sort, async () => {
     await fetchList();
 });
 
@@ -306,10 +353,7 @@ function setCollection(name: string) {
 }
 
 function isCurrentBasemap(basemapId: number): boolean {
-    const currentBasemap = OverlayManager.loaded.find(overlay =>
-        overlay.mode === 'basemap' && overlay.mode_id === String(basemapId)
-    );
-    return !!currentBasemap;
+    return currentBasemapModeIds.value.has(String(basemapId));
 }
 
 async function addOverlay(basemap: Basemap) {
@@ -347,7 +391,7 @@ async function fetchList() {
                     filter: paging.value.filter,
                     collection: paging.value.collection ? paging.value.collection : undefined,
                     limit: paging.value.limit,
-                    order: 'asc',
+                    order: sort.value === 'A → Z' ? 'asc' : 'desc',
                     sort: 'name',
                     page: paging.value.page,
                     type: ['vector', 'raster']

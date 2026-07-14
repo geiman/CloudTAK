@@ -902,20 +902,29 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
+                            /** @constant */
+                            tilejson?: "3.0.0";
+                            version?: string;
+                            /** @constant */
+                            scheme?: "xyz";
                             name?: string;
-                            type?: "raster" | "raster-dem" | "vector";
-                            url?: string;
+                            description?: string;
                             attribution?: string;
-                            serverParts?: string;
-                            bounds?: unknown;
-                            center?: unknown;
+                            tileSize?: number;
                             minzoom?: number;
                             maxzoom?: number;
-                            tilesize?: number;
+                            tiles?: string[];
+                            bounds?: [
+                                number,
+                                number,
+                                number,
+                                number
+                            ];
+                            /** @enum {string} */
                             encoding?: "mapbox" | "terrarium";
-                            /** @constant */
-                            style?: "xyz";
-                            format?: "png" | "webp" | "jpeg" | "mvt";
+                            center?: number[];
+                            type?: string;
+                            format?: string;
                             vector_layers?: {
                                 id: string;
                                 fields: {
@@ -2141,6 +2150,39 @@ export interface paths {
                             "retention::import::enabled"?: boolean;
                             /** @description Number of days to retain imports */
                             "retention::import::days"?: number;
+                            /** @description Enable retention processing for recently deleted features */
+                            "retention::feature::enabled"?: boolean;
+                            /** @description Number of days to retain recently deleted features */
+                            "retention::feature::days"?: number;
+                            /** @description Enable notification delivery */
+                            "notification::enabled"?: boolean;
+                            /** @description Enable email notifications */
+                            "notification::email::enabled"?: boolean;
+                            /**
+                             * @description Email notification delivery service
+                             * @enum {string}
+                             */
+                            "notification::email::service"?: "aws";
+                            /** @description Enable SMS notifications */
+                            "notification::sms::enabled"?: boolean;
+                            /**
+                             * @description SMS notification delivery service
+                             * @enum {string}
+                             */
+                            "notification::sms::service"?: "aws";
+                            /** @description Enable push notifications */
+                            "notification::push::enabled"?: boolean;
+                            /**
+                             * @description Push notification delivery service
+                             * @enum {string}
+                             */
+                            "notification::push::service"?: "firebase";
+                            /** @description Firebase service account project ID */
+                            "notification::push::firebase::project_id"?: string;
+                            /** @description Firebase service account client email */
+                            "notification::push::firebase::client_email"?: string;
+                            /** @description Firebase service account private key */
+                            "notification::push::firebase::private_key"?: string;
                             /** @description Enable ArcGIS Online Integration */
                             "agol::enabled"?: boolean;
                             /**
@@ -2156,6 +2198,11 @@ export interface paths {
                             "agol::client_secret"?: string;
                             /** @description Base URL for Media Service */
                             "media::url"?: string;
+                            "media::proxy::allow"?: string[];
+                            /** @description COTURN Server URL */
+                            "coturn::url"?: string;
+                            /** @description COTURN Server Secret */
+                            "coturn::secret"?: string;
                             /** @description Map Center Coordinates (lng,lat) */
                             "map::center"?: string;
                             /** @description Default Map Pitch Angle */
@@ -2178,6 +2225,7 @@ export interface paths {
                             "display::coordinate"?: "dd" | "dm" | "dms" | "mgrs" | "utm";
                             "display::text"?: "Small" | "Medium" | "Large";
                             "display::icon_rotation"?: boolean;
+                            "display::radiation_dose"?: "sieverts" | "rems";
                             "group::Yellow"?: string;
                             "group::Cyan"?: string;
                             "group::Green"?: string;
@@ -2239,20 +2287,6 @@ export interface paths {
                             "login::background::color"?: string;
                             /** @description Base64 encoded PNG for Logo */
                             "login::logo"?: string;
-                            /** @description Firebase API Key */
-                            "firebase::apikey"?: string;
-                            /** @description Firebase Auth Domain */
-                            "firebase::authdomain"?: string;
-                            /** @description Firebase Project ID */
-                            "firebase::projectid"?: string;
-                            /** @description Firebase Storage Bucket */
-                            "firebase::storagebucket"?: string;
-                            /** @description Firebase Messaging Sender ID */
-                            "firebase::messagingsenderid"?: string;
-                            /** @description Firebase App ID */
-                            "firebase::appid"?: string;
-                            /** @description Firebase Measurement ID */
-                            "firebase::measurementid"?: string;
                             /** @description External application links */
                             "external::applications"?: {
                                 /** @description Application Name */
@@ -2356,6 +2390,39 @@ export interface paths {
                         "retention::import::enabled"?: boolean;
                         /** @description Number of days to retain imports */
                         "retention::import::days"?: number;
+                        /** @description Enable retention processing for recently deleted features */
+                        "retention::feature::enabled"?: boolean;
+                        /** @description Number of days to retain recently deleted features */
+                        "retention::feature::days"?: number;
+                        /** @description Enable notification delivery */
+                        "notification::enabled"?: boolean;
+                        /** @description Enable email notifications */
+                        "notification::email::enabled"?: boolean;
+                        /**
+                         * @description Email notification delivery service
+                         * @enum {string}
+                         */
+                        "notification::email::service"?: "aws";
+                        /** @description Enable SMS notifications */
+                        "notification::sms::enabled"?: boolean;
+                        /**
+                         * @description SMS notification delivery service
+                         * @enum {string}
+                         */
+                        "notification::sms::service"?: "aws";
+                        /** @description Enable push notifications */
+                        "notification::push::enabled"?: boolean;
+                        /**
+                         * @description Push notification delivery service
+                         * @enum {string}
+                         */
+                        "notification::push::service"?: "firebase";
+                        /** @description Firebase service account project ID */
+                        "notification::push::firebase::project_id"?: string;
+                        /** @description Firebase service account client email */
+                        "notification::push::firebase::client_email"?: string;
+                        /** @description Firebase service account private key */
+                        "notification::push::firebase::private_key"?: string;
                         /** @description Enable ArcGIS Online Integration */
                         "agol::enabled"?: boolean;
                         /**
@@ -2371,6 +2438,11 @@ export interface paths {
                         "agol::client_secret"?: string;
                         /** @description Base URL for Media Service */
                         "media::url"?: string;
+                        "media::proxy::allow"?: string[];
+                        /** @description COTURN Server URL */
+                        "coturn::url"?: string;
+                        /** @description COTURN Server Secret */
+                        "coturn::secret"?: string;
                         /** @description Map Center Coordinates (lng,lat) */
                         "map::center"?: string;
                         /** @description Default Map Pitch Angle */
@@ -2393,6 +2465,7 @@ export interface paths {
                         "display::coordinate"?: "dd" | "dm" | "dms" | "mgrs" | "utm";
                         "display::text"?: "Small" | "Medium" | "Large";
                         "display::icon_rotation"?: boolean;
+                        "display::radiation_dose"?: "sieverts" | "rems";
                         "group::Yellow"?: string;
                         "group::Cyan"?: string;
                         "group::Green"?: string;
@@ -2454,20 +2527,6 @@ export interface paths {
                         "login::background::color"?: string;
                         /** @description Base64 encoded PNG for Logo */
                         "login::logo"?: string;
-                        /** @description Firebase API Key */
-                        "firebase::apikey"?: string;
-                        /** @description Firebase Auth Domain */
-                        "firebase::authdomain"?: string;
-                        /** @description Firebase Project ID */
-                        "firebase::projectid"?: string;
-                        /** @description Firebase Storage Bucket */
-                        "firebase::storagebucket"?: string;
-                        /** @description Firebase Messaging Sender ID */
-                        "firebase::messagingsenderid"?: string;
-                        /** @description Firebase App ID */
-                        "firebase::appid"?: string;
-                        /** @description Firebase Measurement ID */
-                        "firebase::measurementid"?: string;
                         /** @description External application links */
                         "external::applications"?: {
                             /** @description Application Name */
@@ -2506,6 +2565,39 @@ export interface paths {
                             "retention::import::enabled"?: boolean;
                             /** @description Number of days to retain imports */
                             "retention::import::days"?: number;
+                            /** @description Enable retention processing for recently deleted features */
+                            "retention::feature::enabled"?: boolean;
+                            /** @description Number of days to retain recently deleted features */
+                            "retention::feature::days"?: number;
+                            /** @description Enable notification delivery */
+                            "notification::enabled"?: boolean;
+                            /** @description Enable email notifications */
+                            "notification::email::enabled"?: boolean;
+                            /**
+                             * @description Email notification delivery service
+                             * @enum {string}
+                             */
+                            "notification::email::service"?: "aws";
+                            /** @description Enable SMS notifications */
+                            "notification::sms::enabled"?: boolean;
+                            /**
+                             * @description SMS notification delivery service
+                             * @enum {string}
+                             */
+                            "notification::sms::service"?: "aws";
+                            /** @description Enable push notifications */
+                            "notification::push::enabled"?: boolean;
+                            /**
+                             * @description Push notification delivery service
+                             * @enum {string}
+                             */
+                            "notification::push::service"?: "firebase";
+                            /** @description Firebase service account project ID */
+                            "notification::push::firebase::project_id"?: string;
+                            /** @description Firebase service account client email */
+                            "notification::push::firebase::client_email"?: string;
+                            /** @description Firebase service account private key */
+                            "notification::push::firebase::private_key"?: string;
                             /** @description Enable ArcGIS Online Integration */
                             "agol::enabled"?: boolean;
                             /**
@@ -2521,6 +2613,11 @@ export interface paths {
                             "agol::client_secret"?: string;
                             /** @description Base URL for Media Service */
                             "media::url"?: string;
+                            "media::proxy::allow"?: string[];
+                            /** @description COTURN Server URL */
+                            "coturn::url"?: string;
+                            /** @description COTURN Server Secret */
+                            "coturn::secret"?: string;
                             /** @description Map Center Coordinates (lng,lat) */
                             "map::center"?: string;
                             /** @description Default Map Pitch Angle */
@@ -2543,6 +2640,7 @@ export interface paths {
                             "display::coordinate"?: "dd" | "dm" | "dms" | "mgrs" | "utm";
                             "display::text"?: "Small" | "Medium" | "Large";
                             "display::icon_rotation"?: boolean;
+                            "display::radiation_dose"?: "sieverts" | "rems";
                             "group::Yellow"?: string;
                             "group::Cyan"?: string;
                             "group::Green"?: string;
@@ -2604,20 +2702,6 @@ export interface paths {
                             "login::background::color"?: string;
                             /** @description Base64 encoded PNG for Logo */
                             "login::logo"?: string;
-                            /** @description Firebase API Key */
-                            "firebase::apikey"?: string;
-                            /** @description Firebase Auth Domain */
-                            "firebase::authdomain"?: string;
-                            /** @description Firebase Project ID */
-                            "firebase::projectid"?: string;
-                            /** @description Firebase Storage Bucket */
-                            "firebase::storagebucket"?: string;
-                            /** @description Firebase Messaging Sender ID */
-                            "firebase::messagingsenderid"?: string;
-                            /** @description Firebase App ID */
-                            "firebase::appid"?: string;
-                            /** @description Firebase Measurement ID */
-                            "firebase::measurementid"?: string;
                             /** @description External application links */
                             "external::applications"?: {
                                 /** @description Application Name */
@@ -2772,6 +2856,11 @@ export interface paths {
                                 /** @default true */
                                 value: boolean;
                                 options: boolean[];
+                            };
+                            radiation_dose: {
+                                /** @default sieverts */
+                                value: "sieverts" | "rems";
+                                options: string[];
                             };
                         };
                     };
@@ -3970,107 +4059,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/connection/{:connectionid}/data/{:dataid}/asset/{:asset}.pmtiles/tile": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get TileJSON */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description No Description */
-                    ":connectionid": number;
-                    /** @description No Description */
-                    ":dataid": number;
-                    /** @description No Description */
-                    ":asset": string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Successful Response */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description Error Response */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/connection/{:connectionid}/data": {
         parameters: {
             query?: never;
@@ -4875,7 +4863,7 @@ export interface paths {
                                         groupOwner?: string;
                                         messageId?: string;
                                         chatroom: string;
-                                        id: string;
+                                        id?: string;
                                         senderCallsign: string;
                                         chatgrp: unknown;
                                     };
@@ -4928,6 +4916,268 @@ export interface paths {
                                     };
                                     flow?: {
                                         [key: string]: string;
+                                    };
+                                    radsensordetail?: {
+                                        sensor_data: {
+                                            /** @description epoch time in Long format */
+                                            time: string;
+                                            /** @description The model of sensor (Micro Detective, IdentiFINDER 2, etc.) in string format */
+                                            model: string;
+                                            /** @description The neutron detector status (Full, Reduced or Unknown). Not available for most sensors, default to Unknown */
+                                            neutronstatus: string;
+                                            /** @description The gamma detector status (Full, Reduced or Unknown). Not available for most sensors, default to Unknown */
+                                            gammastatus: string;
+                                            /** @description The Manufacturer of the sensor (Ortec, Nucsafe, etc.) in string format */
+                                            manufacturer: string;
+                                            /** @description The name of the given sensor in string format */
+                                            callsign?: string;
+                                            /** @description The Serial Number of the Sensor in string format */
+                                            serialnumber: string;
+                                            /** @description The battery level as a percentage, float value */
+                                            batterylevel?: number;
+                                            /** @description The ID algorithm used to ID isotopes (ex. GADRAS) */
+                                            id_algorithm?: string;
+                                            /** @description The search algorithm used (ex. RDAK, SAMBA) */
+                                            search_algorithm?: string;
+                                            /** @description The alarm algorithm used (ex. RDAK, SAMBA) */
+                                            alarm_algorithm?: string;
+                                            /** @description Used internally by the CBRN plugin */
+                                            ordinal?: number;
+                                            /** @description Identifier of this subchannel, if this event is a report from a subchannel of a master sensor */
+                                            subchannel?: string;
+                                            /** @description Used to align subchannels */
+                                            measurement_ref?: number;
+                                            /** @description Name of the master sensor, if this event is a report from a subchannel */
+                                            master_sensor_manufacturer?: string;
+                                            /** @description Serial number of the master sensor, if this event is a report from a subchannel */
+                                            master_sensor_serial?: string;
+                                            /** @description A bearing in positive degrees if the sensor reports back a direction for the detected source, -1 otherwise */
+                                            source_bearing?: number;
+                                            /** @description A scale from 0 - 0.5 giving the magnitude of the source strength in the direction of source_bearing */
+                                            source_strength?: number;
+                                            /** @description Used for sensors that can relay data from other sensors, or that can be relayed in that way */
+                                            relay_type?: string;
+                                            /** @description The location of the sensor where it's being worn on the vest */
+                                            module_location?: string;
+                                            /** @description The number from the sensor needed in order to retrieve any specific algorithm calculated data */
+                                            detector_number?: number;
+                                            /** @description The total mR configured for the sensor's current mission */
+                                            mission_total_mR?: number;
+                                            /** @description The total seconds remaining of mission time based on current configuration of sensor and acquired dose */
+                                            mission_stay_time_sec?: number;
+                                            /** @description The total uR acquired by the sensor for the current mission */
+                                            mission_acquired_uR?: number;
+                                            /** @description The temperature of the sensor in degrees celsius */
+                                            sensor_temp_deg_c?: number;
+                                            /** @description The current directional heading of the sensor */
+                                            heading?: number;
+                                            source_distance?: "MOVE_MUCH_CLOSER" | "MOVE_CLOSER" | "OPTIMAL" | "MOVE_AWAY" | "MOVE_FAR_AWAY";
+                                            /** @description The UID of the TAK marker that this sensor is attached to */
+                                            attachedUid?: string;
+                                            /** @description Is the data in this element representative of a simulated sensor */
+                                            simulated?: boolean;
+                                        };
+                                        radmeasurement?: {
+                                            /** @description Defines the alarm level, could be standard deviations above background. Will default to 0 (no alarm) */
+                                            nalarmstddev: number;
+                                            /** @description Alarm flag for the measurement. 1 = alarmed, 0 = not alarmed */
+                                            alarm: number;
+                                            /** @description The measurement value as a float. A/B/G/N will be interpreted as CPS. Dose Rate will be interpreted as mR/Hr */
+                                            measurement: number;
+                                            name: "alpha" | "beta" | "gamma" | "neutron" | "doserate";
+                                        }[];
+                                        physical_module?: {
+                                            location: "FRONT_LEFT" | "FRONT_RIGHT" | "REAR_LEFT" | "REAR_RIGHT" | "CAB";
+                                            /** @description Gamma counts per second */
+                                            gamma_cps: number;
+                                            /** @description Alarm level for the measurement. 0 = not alarmed, > 0 = alarm level */
+                                            gamma_alarm: number;
+                                            /** @description The gamma dose rate. Will be interpreted as uR/Hr */
+                                            gamma_dose_rate: number;
+                                        }[];
+                                        search_algorithm?: {
+                                            /** @description The Neutron localization value */
+                                            neutron_loc: number;
+                                            /** @description The Gamma localization value */
+                                            gamma_loc: number;
+                                            /** @description The Neutron localization alarm level */
+                                            neutron_loc_alarm_value: number;
+                                            /** @description The Gamma localization alarm level */
+                                            gamma_loc_alarm_value: number;
+                                            /** @description Alarm flag for the neutron localization value. 1 = alarmed, 0 = not alarmed */
+                                            neutron_loc_alarm: number;
+                                            /** @description Alarm flag for the gamma localization value. 1 = alarmed, 0 = not alarmed */
+                                            gamma_loc_alarm: number;
+                                        };
+                                        spectrum?: {
+                                            /** @description Flag for zero compression. 1 = zero compressed, 0 = not compressed */
+                                            zerocompression: number;
+                                            /** @description FOREGROUND or BACKGROUND */
+                                            type: string;
+                                            /** @description Spectrum live time in epoch time (ms) */
+                                            livetime_ms: string;
+                                            /** @description Spectrum real time in epoch time (ms) */
+                                            realtime_ms: string;
+                                            /** @description The spectral channel data */
+                                            channeldata: string;
+                                            /** @description The ID of the crystal reporting the channel data */
+                                            crystal_id?: string;
+                                        }[];
+                                        isotope?: {
+                                            /** @description The confidence value as a float representation of a percentage (88.5 NOT 0.885) */
+                                            confidence: number;
+                                            /** @description The name of the isotope */
+                                            name: string;
+                                            /** @description The type of the isotope */
+                                            type: string;
+                                        }[];
+                                        data_permissions?: {
+                                            /** @description All is true if all users should have access/permission */
+                                            all: boolean;
+                                            /** @description The list of ATAK UIDs that should have access/permission */
+                                            contact_list: string;
+                                        };
+                                        command_permissions?: {
+                                            /** @description All is true if all users should have access/permission */
+                                            all: boolean;
+                                            /** @description The list of ATAK UIDs that should have access/permission */
+                                            contact_list: string;
+                                        };
+                                    };
+                                    chemsensordetail?: {
+                                        sensor_data: {
+                                            /** @description The Manufacturer of the sensor in string format */
+                                            manufacturer: string;
+                                            /** @description The model of sensor in string format */
+                                            model: string;
+                                            /** @description The Serial Number of the Sensor in string format */
+                                            serialnumber: string;
+                                            /** @description The battery level as a percentage, float value */
+                                            batterylevel?: number;
+                                            /** @description The name of the given sensor in string format. Default name is Manufacturer+SerialNum */
+                                            callsign?: string;
+                                            /** @description The revision of the ChemCoT format, at writing this is "7" */
+                                            revision?: number;
+                                            /** @description General sensor health status */
+                                            status?: string;
+                                            /** @description Used internally by the CBRN plugin */
+                                            ordinal?: number;
+                                            /** @description The UID of the TAK marker that this sensor is attached to */
+                                            attachedUid?: string;
+                                            /** @description Is the data in this element representative of a simulated sensor */
+                                            simulated?: boolean;
+                                        };
+                                        detection?: {
+                                            /** @description Timestamp for the detection, epoch time (ms) */
+                                            time: string;
+                                            /** @description Chemical Name in string format */
+                                            agent: string;
+                                            /** @description Amount of chemical detected as a float. Could be mass, density, bars etc. */
+                                            quantity: number;
+                                            /** @description The units used to describe the quantity */
+                                            quantityunits: string;
+                                            /** @description Concentration of chemical in Kg/m^3 */
+                                            concentration?: number;
+                                            /** @description Alarm state of the sensor. 1 = alarm, 0 = no alarm */
+                                            alarm: number;
+                                            /** @description The confidence of the detection from the sensor as a percentage */
+                                            confidence?: number;
+                                            /** @description The mass fraction of the detection from the sensor in ppm */
+                                            massfraction?: number;
+                                            /** @description The percentage of the detection from the sensor in percent from 0-100 */
+                                            percent?: number;
+                                            /** @description The class of chemical detected. Nerve, Blood, TIC, etc. */
+                                            class?: string;
+                                            /** @description The ID number of the detection */
+                                            id?: number;
+                                        }[];
+                                    };
+                                    biosensordetail?: {
+                                        sensor_data: {
+                                            /** @description The Manufacturer of the sensor in string format */
+                                            manufacturer: string;
+                                            /** @description The model of sensor in string format */
+                                            model: string;
+                                            /** @description The Serial Number of the Sensor in string format */
+                                            serialnumber: string;
+                                            /** @description The battery level as a percentage, float value */
+                                            batterylevel?: number;
+                                            /** @description The name of the given sensor in string format. Default name is Manufacturer+SerialNum */
+                                            callsign?: string;
+                                            /** @description The revision of the BioCoT format */
+                                            revision?: number;
+                                            /** @description General sensor health status */
+                                            status?: string;
+                                            /** @description Used internally by the CBRN plugin */
+                                            ordinal?: number;
+                                            /** @description The UID of the TAK marker that this sensor is attached to */
+                                            attachedUid?: string;
+                                            /** @description Is the data in this element representative of a simulated sensor */
+                                            simulated?: boolean;
+                                        };
+                                        measurement?: {
+                                            /** @description Timestamp for the measurement, epoch time (ms) */
+                                            time: string;
+                                            /** @description Biological class */
+                                            bioClass?: string;
+                                            /** @description Biological type */
+                                            type?: string;
+                                            /** @description Channel identifier */
+                                            channel?: number;
+                                            /** @description Is this bio measurement harmful */
+                                            harmful?: boolean;
+                                            /** @description Dose Time */
+                                            doseTime?: number;
+                                            /** @description Amount of dose */
+                                            dose: number;
+                                            /** @description The confidence of the measurement from the sensor as a percentage */
+                                            confidence?: number;
+                                            /** @description Confirmation level */
+                                            confirmationLevel?: string;
+                                            /** @description Concentration */
+                                            concentration?: number;
+                                            /** @description Sample ID of this measurement */
+                                            sampleId?: string;
+                                            /** @description Persistency */
+                                            persistency?: string;
+                                            level?: {
+                                                /** @description The name of this measurement level */
+                                                levelName: string;
+                                                /** @description The value of this measurement level */
+                                                levelValue: string;
+                                            }[];
+                                        }[];
+                                    };
+                                    spatial?: {
+                                        version?: number;
+                                        attitude: {
+                                            /** @description Roll of entity in degrees. Positive indicates listing to the right. */
+                                            roll: number;
+                                            /** @description Pitch of entity in degrees. Positive indicates nose point up. */
+                                            pitch: number;
+                                            /** @description Yaw of entity in degrees. Positive indicates turned to the right. */
+                                            yaw?: number;
+                                            /** @description 1-sigma error of roll with respect to a zero mean normal Gaussian distribution. */
+                                            eRoll?: number;
+                                            /** @description 1-sigma error of pitch with respect to a zero mean normal Gaussian distribution. */
+                                            ePitch?: number;
+                                            /** @description 1-sigma error of yaw with respect to a zero mean normal Gaussian distribution. */
+                                            eYaw?: number;
+                                        };
+                                        spin: {
+                                            /** @description Degrees per second with positive indicating to the pilots right */
+                                            roll: number;
+                                            /** @description Degrees per second with positive indicating nose up. */
+                                            pitch: number;
+                                            /** @description Degrees per second with positive indicating right. */
+                                            yaw?: number;
+                                            /** @description 1-sigma error of roll with respect to a zero mean normal Gaussian distribution. */
+                                            eRoll?: number;
+                                            /** @description 1-sigma error of pitch with respect to a zero mean normal Gaussian distribution. */
+                                            ePitch?: number;
+                                            /** @description 1-sigma error of yaw with respect to a zero mean normal Gaussian distribution. */
+                                            eYaw?: number;
+                                        };
                                     };
                                 };
                                 path: string;
@@ -5217,7 +5467,7 @@ export interface paths {
                                 groupOwner?: string;
                                 messageId?: string;
                                 chatroom: string;
-                                id: string;
+                                id?: string;
                                 senderCallsign: string;
                                 chatgrp: unknown;
                             };
@@ -5270,6 +5520,268 @@ export interface paths {
                             };
                             flow?: {
                                 [key: string]: string;
+                            };
+                            radsensordetail?: {
+                                sensor_data: {
+                                    /** @description epoch time in Long format */
+                                    time: string;
+                                    /** @description The model of sensor (Micro Detective, IdentiFINDER 2, etc.) in string format */
+                                    model: string;
+                                    /** @description The neutron detector status (Full, Reduced or Unknown). Not available for most sensors, default to Unknown */
+                                    neutronstatus: string;
+                                    /** @description The gamma detector status (Full, Reduced or Unknown). Not available for most sensors, default to Unknown */
+                                    gammastatus: string;
+                                    /** @description The Manufacturer of the sensor (Ortec, Nucsafe, etc.) in string format */
+                                    manufacturer: string;
+                                    /** @description The name of the given sensor in string format */
+                                    callsign?: string;
+                                    /** @description The Serial Number of the Sensor in string format */
+                                    serialnumber: string;
+                                    /** @description The battery level as a percentage, float value */
+                                    batterylevel?: number;
+                                    /** @description The ID algorithm used to ID isotopes (ex. GADRAS) */
+                                    id_algorithm?: string;
+                                    /** @description The search algorithm used (ex. RDAK, SAMBA) */
+                                    search_algorithm?: string;
+                                    /** @description The alarm algorithm used (ex. RDAK, SAMBA) */
+                                    alarm_algorithm?: string;
+                                    /** @description Used internally by the CBRN plugin */
+                                    ordinal?: number;
+                                    /** @description Identifier of this subchannel, if this event is a report from a subchannel of a master sensor */
+                                    subchannel?: string;
+                                    /** @description Used to align subchannels */
+                                    measurement_ref?: number;
+                                    /** @description Name of the master sensor, if this event is a report from a subchannel */
+                                    master_sensor_manufacturer?: string;
+                                    /** @description Serial number of the master sensor, if this event is a report from a subchannel */
+                                    master_sensor_serial?: string;
+                                    /** @description A bearing in positive degrees if the sensor reports back a direction for the detected source, -1 otherwise */
+                                    source_bearing?: number;
+                                    /** @description A scale from 0 - 0.5 giving the magnitude of the source strength in the direction of source_bearing */
+                                    source_strength?: number;
+                                    /** @description Used for sensors that can relay data from other sensors, or that can be relayed in that way */
+                                    relay_type?: string;
+                                    /** @description The location of the sensor where it's being worn on the vest */
+                                    module_location?: string;
+                                    /** @description The number from the sensor needed in order to retrieve any specific algorithm calculated data */
+                                    detector_number?: number;
+                                    /** @description The total mR configured for the sensor's current mission */
+                                    mission_total_mR?: number;
+                                    /** @description The total seconds remaining of mission time based on current configuration of sensor and acquired dose */
+                                    mission_stay_time_sec?: number;
+                                    /** @description The total uR acquired by the sensor for the current mission */
+                                    mission_acquired_uR?: number;
+                                    /** @description The temperature of the sensor in degrees celsius */
+                                    sensor_temp_deg_c?: number;
+                                    /** @description The current directional heading of the sensor */
+                                    heading?: number;
+                                    source_distance?: "MOVE_MUCH_CLOSER" | "MOVE_CLOSER" | "OPTIMAL" | "MOVE_AWAY" | "MOVE_FAR_AWAY";
+                                    /** @description The UID of the TAK marker that this sensor is attached to */
+                                    attachedUid?: string;
+                                    /** @description Is the data in this element representative of a simulated sensor */
+                                    simulated?: boolean;
+                                };
+                                radmeasurement?: {
+                                    /** @description Defines the alarm level, could be standard deviations above background. Will default to 0 (no alarm) */
+                                    nalarmstddev: number;
+                                    /** @description Alarm flag for the measurement. 1 = alarmed, 0 = not alarmed */
+                                    alarm: number;
+                                    /** @description The measurement value as a float. A/B/G/N will be interpreted as CPS. Dose Rate will be interpreted as mR/Hr */
+                                    measurement: number;
+                                    name: "alpha" | "beta" | "gamma" | "neutron" | "doserate";
+                                }[];
+                                physical_module?: {
+                                    location: "FRONT_LEFT" | "FRONT_RIGHT" | "REAR_LEFT" | "REAR_RIGHT" | "CAB";
+                                    /** @description Gamma counts per second */
+                                    gamma_cps: number;
+                                    /** @description Alarm level for the measurement. 0 = not alarmed, > 0 = alarm level */
+                                    gamma_alarm: number;
+                                    /** @description The gamma dose rate. Will be interpreted as uR/Hr */
+                                    gamma_dose_rate: number;
+                                }[];
+                                search_algorithm?: {
+                                    /** @description The Neutron localization value */
+                                    neutron_loc: number;
+                                    /** @description The Gamma localization value */
+                                    gamma_loc: number;
+                                    /** @description The Neutron localization alarm level */
+                                    neutron_loc_alarm_value: number;
+                                    /** @description The Gamma localization alarm level */
+                                    gamma_loc_alarm_value: number;
+                                    /** @description Alarm flag for the neutron localization value. 1 = alarmed, 0 = not alarmed */
+                                    neutron_loc_alarm: number;
+                                    /** @description Alarm flag for the gamma localization value. 1 = alarmed, 0 = not alarmed */
+                                    gamma_loc_alarm: number;
+                                };
+                                spectrum?: {
+                                    /** @description Flag for zero compression. 1 = zero compressed, 0 = not compressed */
+                                    zerocompression: number;
+                                    /** @description FOREGROUND or BACKGROUND */
+                                    type: string;
+                                    /** @description Spectrum live time in epoch time (ms) */
+                                    livetime_ms: string;
+                                    /** @description Spectrum real time in epoch time (ms) */
+                                    realtime_ms: string;
+                                    /** @description The spectral channel data */
+                                    channeldata: string;
+                                    /** @description The ID of the crystal reporting the channel data */
+                                    crystal_id?: string;
+                                }[];
+                                isotope?: {
+                                    /** @description The confidence value as a float representation of a percentage (88.5 NOT 0.885) */
+                                    confidence: number;
+                                    /** @description The name of the isotope */
+                                    name: string;
+                                    /** @description The type of the isotope */
+                                    type: string;
+                                }[];
+                                data_permissions?: {
+                                    /** @description All is true if all users should have access/permission */
+                                    all: boolean;
+                                    /** @description The list of ATAK UIDs that should have access/permission */
+                                    contact_list: string;
+                                };
+                                command_permissions?: {
+                                    /** @description All is true if all users should have access/permission */
+                                    all: boolean;
+                                    /** @description The list of ATAK UIDs that should have access/permission */
+                                    contact_list: string;
+                                };
+                            };
+                            chemsensordetail?: {
+                                sensor_data: {
+                                    /** @description The Manufacturer of the sensor in string format */
+                                    manufacturer: string;
+                                    /** @description The model of sensor in string format */
+                                    model: string;
+                                    /** @description The Serial Number of the Sensor in string format */
+                                    serialnumber: string;
+                                    /** @description The battery level as a percentage, float value */
+                                    batterylevel?: number;
+                                    /** @description The name of the given sensor in string format. Default name is Manufacturer+SerialNum */
+                                    callsign?: string;
+                                    /** @description The revision of the ChemCoT format, at writing this is "7" */
+                                    revision?: number;
+                                    /** @description General sensor health status */
+                                    status?: string;
+                                    /** @description Used internally by the CBRN plugin */
+                                    ordinal?: number;
+                                    /** @description The UID of the TAK marker that this sensor is attached to */
+                                    attachedUid?: string;
+                                    /** @description Is the data in this element representative of a simulated sensor */
+                                    simulated?: boolean;
+                                };
+                                detection?: {
+                                    /** @description Timestamp for the detection, epoch time (ms) */
+                                    time: string;
+                                    /** @description Chemical Name in string format */
+                                    agent: string;
+                                    /** @description Amount of chemical detected as a float. Could be mass, density, bars etc. */
+                                    quantity: number;
+                                    /** @description The units used to describe the quantity */
+                                    quantityunits: string;
+                                    /** @description Concentration of chemical in Kg/m^3 */
+                                    concentration?: number;
+                                    /** @description Alarm state of the sensor. 1 = alarm, 0 = no alarm */
+                                    alarm: number;
+                                    /** @description The confidence of the detection from the sensor as a percentage */
+                                    confidence?: number;
+                                    /** @description The mass fraction of the detection from the sensor in ppm */
+                                    massfraction?: number;
+                                    /** @description The percentage of the detection from the sensor in percent from 0-100 */
+                                    percent?: number;
+                                    /** @description The class of chemical detected. Nerve, Blood, TIC, etc. */
+                                    class?: string;
+                                    /** @description The ID number of the detection */
+                                    id?: number;
+                                }[];
+                            };
+                            biosensordetail?: {
+                                sensor_data: {
+                                    /** @description The Manufacturer of the sensor in string format */
+                                    manufacturer: string;
+                                    /** @description The model of sensor in string format */
+                                    model: string;
+                                    /** @description The Serial Number of the Sensor in string format */
+                                    serialnumber: string;
+                                    /** @description The battery level as a percentage, float value */
+                                    batterylevel?: number;
+                                    /** @description The name of the given sensor in string format. Default name is Manufacturer+SerialNum */
+                                    callsign?: string;
+                                    /** @description The revision of the BioCoT format */
+                                    revision?: number;
+                                    /** @description General sensor health status */
+                                    status?: string;
+                                    /** @description Used internally by the CBRN plugin */
+                                    ordinal?: number;
+                                    /** @description The UID of the TAK marker that this sensor is attached to */
+                                    attachedUid?: string;
+                                    /** @description Is the data in this element representative of a simulated sensor */
+                                    simulated?: boolean;
+                                };
+                                measurement?: {
+                                    /** @description Timestamp for the measurement, epoch time (ms) */
+                                    time: string;
+                                    /** @description Biological class */
+                                    bioClass?: string;
+                                    /** @description Biological type */
+                                    type?: string;
+                                    /** @description Channel identifier */
+                                    channel?: number;
+                                    /** @description Is this bio measurement harmful */
+                                    harmful?: boolean;
+                                    /** @description Dose Time */
+                                    doseTime?: number;
+                                    /** @description Amount of dose */
+                                    dose: number;
+                                    /** @description The confidence of the measurement from the sensor as a percentage */
+                                    confidence?: number;
+                                    /** @description Confirmation level */
+                                    confirmationLevel?: string;
+                                    /** @description Concentration */
+                                    concentration?: number;
+                                    /** @description Sample ID of this measurement */
+                                    sampleId?: string;
+                                    /** @description Persistency */
+                                    persistency?: string;
+                                    level?: {
+                                        /** @description The name of this measurement level */
+                                        levelName: string;
+                                        /** @description The value of this measurement level */
+                                        levelValue: string;
+                                    }[];
+                                }[];
+                            };
+                            spatial?: {
+                                version?: number;
+                                attitude: {
+                                    /** @description Roll of entity in degrees. Positive indicates listing to the right. */
+                                    roll: number;
+                                    /** @description Pitch of entity in degrees. Positive indicates nose point up. */
+                                    pitch: number;
+                                    /** @description Yaw of entity in degrees. Positive indicates turned to the right. */
+                                    yaw?: number;
+                                    /** @description 1-sigma error of roll with respect to a zero mean normal Gaussian distribution. */
+                                    eRoll?: number;
+                                    /** @description 1-sigma error of pitch with respect to a zero mean normal Gaussian distribution. */
+                                    ePitch?: number;
+                                    /** @description 1-sigma error of yaw with respect to a zero mean normal Gaussian distribution. */
+                                    eYaw?: number;
+                                };
+                                spin: {
+                                    /** @description Degrees per second with positive indicating to the pilots right */
+                                    roll: number;
+                                    /** @description Degrees per second with positive indicating nose up. */
+                                    pitch: number;
+                                    /** @description Degrees per second with positive indicating right. */
+                                    yaw?: number;
+                                    /** @description 1-sigma error of roll with respect to a zero mean normal Gaussian distribution. */
+                                    eRoll?: number;
+                                    /** @description 1-sigma error of pitch with respect to a zero mean normal Gaussian distribution. */
+                                    ePitch?: number;
+                                    /** @description 1-sigma error of yaw with respect to a zero mean normal Gaussian distribution. */
+                                    eYaw?: number;
+                                };
                             };
                         };
                         path: string;
@@ -5490,7 +6002,7 @@ export interface paths {
                                     groupOwner?: string;
                                     messageId?: string;
                                     chatroom: string;
-                                    id: string;
+                                    id?: string;
                                     senderCallsign: string;
                                     chatgrp: unknown;
                                 };
@@ -5543,6 +6055,268 @@ export interface paths {
                                 };
                                 flow?: {
                                     [key: string]: string;
+                                };
+                                radsensordetail?: {
+                                    sensor_data: {
+                                        /** @description epoch time in Long format */
+                                        time: string;
+                                        /** @description The model of sensor (Micro Detective, IdentiFINDER 2, etc.) in string format */
+                                        model: string;
+                                        /** @description The neutron detector status (Full, Reduced or Unknown). Not available for most sensors, default to Unknown */
+                                        neutronstatus: string;
+                                        /** @description The gamma detector status (Full, Reduced or Unknown). Not available for most sensors, default to Unknown */
+                                        gammastatus: string;
+                                        /** @description The Manufacturer of the sensor (Ortec, Nucsafe, etc.) in string format */
+                                        manufacturer: string;
+                                        /** @description The name of the given sensor in string format */
+                                        callsign?: string;
+                                        /** @description The Serial Number of the Sensor in string format */
+                                        serialnumber: string;
+                                        /** @description The battery level as a percentage, float value */
+                                        batterylevel?: number;
+                                        /** @description The ID algorithm used to ID isotopes (ex. GADRAS) */
+                                        id_algorithm?: string;
+                                        /** @description The search algorithm used (ex. RDAK, SAMBA) */
+                                        search_algorithm?: string;
+                                        /** @description The alarm algorithm used (ex. RDAK, SAMBA) */
+                                        alarm_algorithm?: string;
+                                        /** @description Used internally by the CBRN plugin */
+                                        ordinal?: number;
+                                        /** @description Identifier of this subchannel, if this event is a report from a subchannel of a master sensor */
+                                        subchannel?: string;
+                                        /** @description Used to align subchannels */
+                                        measurement_ref?: number;
+                                        /** @description Name of the master sensor, if this event is a report from a subchannel */
+                                        master_sensor_manufacturer?: string;
+                                        /** @description Serial number of the master sensor, if this event is a report from a subchannel */
+                                        master_sensor_serial?: string;
+                                        /** @description A bearing in positive degrees if the sensor reports back a direction for the detected source, -1 otherwise */
+                                        source_bearing?: number;
+                                        /** @description A scale from 0 - 0.5 giving the magnitude of the source strength in the direction of source_bearing */
+                                        source_strength?: number;
+                                        /** @description Used for sensors that can relay data from other sensors, or that can be relayed in that way */
+                                        relay_type?: string;
+                                        /** @description The location of the sensor where it's being worn on the vest */
+                                        module_location?: string;
+                                        /** @description The number from the sensor needed in order to retrieve any specific algorithm calculated data */
+                                        detector_number?: number;
+                                        /** @description The total mR configured for the sensor's current mission */
+                                        mission_total_mR?: number;
+                                        /** @description The total seconds remaining of mission time based on current configuration of sensor and acquired dose */
+                                        mission_stay_time_sec?: number;
+                                        /** @description The total uR acquired by the sensor for the current mission */
+                                        mission_acquired_uR?: number;
+                                        /** @description The temperature of the sensor in degrees celsius */
+                                        sensor_temp_deg_c?: number;
+                                        /** @description The current directional heading of the sensor */
+                                        heading?: number;
+                                        source_distance?: "MOVE_MUCH_CLOSER" | "MOVE_CLOSER" | "OPTIMAL" | "MOVE_AWAY" | "MOVE_FAR_AWAY";
+                                        /** @description The UID of the TAK marker that this sensor is attached to */
+                                        attachedUid?: string;
+                                        /** @description Is the data in this element representative of a simulated sensor */
+                                        simulated?: boolean;
+                                    };
+                                    radmeasurement?: {
+                                        /** @description Defines the alarm level, could be standard deviations above background. Will default to 0 (no alarm) */
+                                        nalarmstddev: number;
+                                        /** @description Alarm flag for the measurement. 1 = alarmed, 0 = not alarmed */
+                                        alarm: number;
+                                        /** @description The measurement value as a float. A/B/G/N will be interpreted as CPS. Dose Rate will be interpreted as mR/Hr */
+                                        measurement: number;
+                                        name: "alpha" | "beta" | "gamma" | "neutron" | "doserate";
+                                    }[];
+                                    physical_module?: {
+                                        location: "FRONT_LEFT" | "FRONT_RIGHT" | "REAR_LEFT" | "REAR_RIGHT" | "CAB";
+                                        /** @description Gamma counts per second */
+                                        gamma_cps: number;
+                                        /** @description Alarm level for the measurement. 0 = not alarmed, > 0 = alarm level */
+                                        gamma_alarm: number;
+                                        /** @description The gamma dose rate. Will be interpreted as uR/Hr */
+                                        gamma_dose_rate: number;
+                                    }[];
+                                    search_algorithm?: {
+                                        /** @description The Neutron localization value */
+                                        neutron_loc: number;
+                                        /** @description The Gamma localization value */
+                                        gamma_loc: number;
+                                        /** @description The Neutron localization alarm level */
+                                        neutron_loc_alarm_value: number;
+                                        /** @description The Gamma localization alarm level */
+                                        gamma_loc_alarm_value: number;
+                                        /** @description Alarm flag for the neutron localization value. 1 = alarmed, 0 = not alarmed */
+                                        neutron_loc_alarm: number;
+                                        /** @description Alarm flag for the gamma localization value. 1 = alarmed, 0 = not alarmed */
+                                        gamma_loc_alarm: number;
+                                    };
+                                    spectrum?: {
+                                        /** @description Flag for zero compression. 1 = zero compressed, 0 = not compressed */
+                                        zerocompression: number;
+                                        /** @description FOREGROUND or BACKGROUND */
+                                        type: string;
+                                        /** @description Spectrum live time in epoch time (ms) */
+                                        livetime_ms: string;
+                                        /** @description Spectrum real time in epoch time (ms) */
+                                        realtime_ms: string;
+                                        /** @description The spectral channel data */
+                                        channeldata: string;
+                                        /** @description The ID of the crystal reporting the channel data */
+                                        crystal_id?: string;
+                                    }[];
+                                    isotope?: {
+                                        /** @description The confidence value as a float representation of a percentage (88.5 NOT 0.885) */
+                                        confidence: number;
+                                        /** @description The name of the isotope */
+                                        name: string;
+                                        /** @description The type of the isotope */
+                                        type: string;
+                                    }[];
+                                    data_permissions?: {
+                                        /** @description All is true if all users should have access/permission */
+                                        all: boolean;
+                                        /** @description The list of ATAK UIDs that should have access/permission */
+                                        contact_list: string;
+                                    };
+                                    command_permissions?: {
+                                        /** @description All is true if all users should have access/permission */
+                                        all: boolean;
+                                        /** @description The list of ATAK UIDs that should have access/permission */
+                                        contact_list: string;
+                                    };
+                                };
+                                chemsensordetail?: {
+                                    sensor_data: {
+                                        /** @description The Manufacturer of the sensor in string format */
+                                        manufacturer: string;
+                                        /** @description The model of sensor in string format */
+                                        model: string;
+                                        /** @description The Serial Number of the Sensor in string format */
+                                        serialnumber: string;
+                                        /** @description The battery level as a percentage, float value */
+                                        batterylevel?: number;
+                                        /** @description The name of the given sensor in string format. Default name is Manufacturer+SerialNum */
+                                        callsign?: string;
+                                        /** @description The revision of the ChemCoT format, at writing this is "7" */
+                                        revision?: number;
+                                        /** @description General sensor health status */
+                                        status?: string;
+                                        /** @description Used internally by the CBRN plugin */
+                                        ordinal?: number;
+                                        /** @description The UID of the TAK marker that this sensor is attached to */
+                                        attachedUid?: string;
+                                        /** @description Is the data in this element representative of a simulated sensor */
+                                        simulated?: boolean;
+                                    };
+                                    detection?: {
+                                        /** @description Timestamp for the detection, epoch time (ms) */
+                                        time: string;
+                                        /** @description Chemical Name in string format */
+                                        agent: string;
+                                        /** @description Amount of chemical detected as a float. Could be mass, density, bars etc. */
+                                        quantity: number;
+                                        /** @description The units used to describe the quantity */
+                                        quantityunits: string;
+                                        /** @description Concentration of chemical in Kg/m^3 */
+                                        concentration?: number;
+                                        /** @description Alarm state of the sensor. 1 = alarm, 0 = no alarm */
+                                        alarm: number;
+                                        /** @description The confidence of the detection from the sensor as a percentage */
+                                        confidence?: number;
+                                        /** @description The mass fraction of the detection from the sensor in ppm */
+                                        massfraction?: number;
+                                        /** @description The percentage of the detection from the sensor in percent from 0-100 */
+                                        percent?: number;
+                                        /** @description The class of chemical detected. Nerve, Blood, TIC, etc. */
+                                        class?: string;
+                                        /** @description The ID number of the detection */
+                                        id?: number;
+                                    }[];
+                                };
+                                biosensordetail?: {
+                                    sensor_data: {
+                                        /** @description The Manufacturer of the sensor in string format */
+                                        manufacturer: string;
+                                        /** @description The model of sensor in string format */
+                                        model: string;
+                                        /** @description The Serial Number of the Sensor in string format */
+                                        serialnumber: string;
+                                        /** @description The battery level as a percentage, float value */
+                                        batterylevel?: number;
+                                        /** @description The name of the given sensor in string format. Default name is Manufacturer+SerialNum */
+                                        callsign?: string;
+                                        /** @description The revision of the BioCoT format */
+                                        revision?: number;
+                                        /** @description General sensor health status */
+                                        status?: string;
+                                        /** @description Used internally by the CBRN plugin */
+                                        ordinal?: number;
+                                        /** @description The UID of the TAK marker that this sensor is attached to */
+                                        attachedUid?: string;
+                                        /** @description Is the data in this element representative of a simulated sensor */
+                                        simulated?: boolean;
+                                    };
+                                    measurement?: {
+                                        /** @description Timestamp for the measurement, epoch time (ms) */
+                                        time: string;
+                                        /** @description Biological class */
+                                        bioClass?: string;
+                                        /** @description Biological type */
+                                        type?: string;
+                                        /** @description Channel identifier */
+                                        channel?: number;
+                                        /** @description Is this bio measurement harmful */
+                                        harmful?: boolean;
+                                        /** @description Dose Time */
+                                        doseTime?: number;
+                                        /** @description Amount of dose */
+                                        dose: number;
+                                        /** @description The confidence of the measurement from the sensor as a percentage */
+                                        confidence?: number;
+                                        /** @description Confirmation level */
+                                        confirmationLevel?: string;
+                                        /** @description Concentration */
+                                        concentration?: number;
+                                        /** @description Sample ID of this measurement */
+                                        sampleId?: string;
+                                        /** @description Persistency */
+                                        persistency?: string;
+                                        level?: {
+                                            /** @description The name of this measurement level */
+                                            levelName: string;
+                                            /** @description The value of this measurement level */
+                                            levelValue: string;
+                                        }[];
+                                    }[];
+                                };
+                                spatial?: {
+                                    version?: number;
+                                    attitude: {
+                                        /** @description Roll of entity in degrees. Positive indicates listing to the right. */
+                                        roll: number;
+                                        /** @description Pitch of entity in degrees. Positive indicates nose point up. */
+                                        pitch: number;
+                                        /** @description Yaw of entity in degrees. Positive indicates turned to the right. */
+                                        yaw?: number;
+                                        /** @description 1-sigma error of roll with respect to a zero mean normal Gaussian distribution. */
+                                        eRoll?: number;
+                                        /** @description 1-sigma error of pitch with respect to a zero mean normal Gaussian distribution. */
+                                        ePitch?: number;
+                                        /** @description 1-sigma error of yaw with respect to a zero mean normal Gaussian distribution. */
+                                        eYaw?: number;
+                                    };
+                                    spin: {
+                                        /** @description Degrees per second with positive indicating to the pilots right */
+                                        roll: number;
+                                        /** @description Degrees per second with positive indicating nose up. */
+                                        pitch: number;
+                                        /** @description Degrees per second with positive indicating right. */
+                                        yaw?: number;
+                                        /** @description 1-sigma error of roll with respect to a zero mean normal Gaussian distribution. */
+                                        eRoll?: number;
+                                        /** @description 1-sigma error of pitch with respect to a zero mean normal Gaussian distribution. */
+                                        ePitch?: number;
+                                        /** @description 1-sigma error of yaw with respect to a zero mean normal Gaussian distribution. */
+                                        eYaw?: number;
+                                    };
                                 };
                             };
                             path: string;
@@ -5942,7 +6716,7 @@ export interface paths {
                                     groupOwner?: string;
                                     messageId?: string;
                                     chatroom: string;
-                                    id: string;
+                                    id?: string;
                                     senderCallsign: string;
                                     chatgrp: unknown;
                                 };
@@ -5995,6 +6769,268 @@ export interface paths {
                                 };
                                 flow?: {
                                     [key: string]: string;
+                                };
+                                radsensordetail?: {
+                                    sensor_data: {
+                                        /** @description epoch time in Long format */
+                                        time: string;
+                                        /** @description The model of sensor (Micro Detective, IdentiFINDER 2, etc.) in string format */
+                                        model: string;
+                                        /** @description The neutron detector status (Full, Reduced or Unknown). Not available for most sensors, default to Unknown */
+                                        neutronstatus: string;
+                                        /** @description The gamma detector status (Full, Reduced or Unknown). Not available for most sensors, default to Unknown */
+                                        gammastatus: string;
+                                        /** @description The Manufacturer of the sensor (Ortec, Nucsafe, etc.) in string format */
+                                        manufacturer: string;
+                                        /** @description The name of the given sensor in string format */
+                                        callsign?: string;
+                                        /** @description The Serial Number of the Sensor in string format */
+                                        serialnumber: string;
+                                        /** @description The battery level as a percentage, float value */
+                                        batterylevel?: number;
+                                        /** @description The ID algorithm used to ID isotopes (ex. GADRAS) */
+                                        id_algorithm?: string;
+                                        /** @description The search algorithm used (ex. RDAK, SAMBA) */
+                                        search_algorithm?: string;
+                                        /** @description The alarm algorithm used (ex. RDAK, SAMBA) */
+                                        alarm_algorithm?: string;
+                                        /** @description Used internally by the CBRN plugin */
+                                        ordinal?: number;
+                                        /** @description Identifier of this subchannel, if this event is a report from a subchannel of a master sensor */
+                                        subchannel?: string;
+                                        /** @description Used to align subchannels */
+                                        measurement_ref?: number;
+                                        /** @description Name of the master sensor, if this event is a report from a subchannel */
+                                        master_sensor_manufacturer?: string;
+                                        /** @description Serial number of the master sensor, if this event is a report from a subchannel */
+                                        master_sensor_serial?: string;
+                                        /** @description A bearing in positive degrees if the sensor reports back a direction for the detected source, -1 otherwise */
+                                        source_bearing?: number;
+                                        /** @description A scale from 0 - 0.5 giving the magnitude of the source strength in the direction of source_bearing */
+                                        source_strength?: number;
+                                        /** @description Used for sensors that can relay data from other sensors, or that can be relayed in that way */
+                                        relay_type?: string;
+                                        /** @description The location of the sensor where it's being worn on the vest */
+                                        module_location?: string;
+                                        /** @description The number from the sensor needed in order to retrieve any specific algorithm calculated data */
+                                        detector_number?: number;
+                                        /** @description The total mR configured for the sensor's current mission */
+                                        mission_total_mR?: number;
+                                        /** @description The total seconds remaining of mission time based on current configuration of sensor and acquired dose */
+                                        mission_stay_time_sec?: number;
+                                        /** @description The total uR acquired by the sensor for the current mission */
+                                        mission_acquired_uR?: number;
+                                        /** @description The temperature of the sensor in degrees celsius */
+                                        sensor_temp_deg_c?: number;
+                                        /** @description The current directional heading of the sensor */
+                                        heading?: number;
+                                        source_distance?: "MOVE_MUCH_CLOSER" | "MOVE_CLOSER" | "OPTIMAL" | "MOVE_AWAY" | "MOVE_FAR_AWAY";
+                                        /** @description The UID of the TAK marker that this sensor is attached to */
+                                        attachedUid?: string;
+                                        /** @description Is the data in this element representative of a simulated sensor */
+                                        simulated?: boolean;
+                                    };
+                                    radmeasurement?: {
+                                        /** @description Defines the alarm level, could be standard deviations above background. Will default to 0 (no alarm) */
+                                        nalarmstddev: number;
+                                        /** @description Alarm flag for the measurement. 1 = alarmed, 0 = not alarmed */
+                                        alarm: number;
+                                        /** @description The measurement value as a float. A/B/G/N will be interpreted as CPS. Dose Rate will be interpreted as mR/Hr */
+                                        measurement: number;
+                                        name: "alpha" | "beta" | "gamma" | "neutron" | "doserate";
+                                    }[];
+                                    physical_module?: {
+                                        location: "FRONT_LEFT" | "FRONT_RIGHT" | "REAR_LEFT" | "REAR_RIGHT" | "CAB";
+                                        /** @description Gamma counts per second */
+                                        gamma_cps: number;
+                                        /** @description Alarm level for the measurement. 0 = not alarmed, > 0 = alarm level */
+                                        gamma_alarm: number;
+                                        /** @description The gamma dose rate. Will be interpreted as uR/Hr */
+                                        gamma_dose_rate: number;
+                                    }[];
+                                    search_algorithm?: {
+                                        /** @description The Neutron localization value */
+                                        neutron_loc: number;
+                                        /** @description The Gamma localization value */
+                                        gamma_loc: number;
+                                        /** @description The Neutron localization alarm level */
+                                        neutron_loc_alarm_value: number;
+                                        /** @description The Gamma localization alarm level */
+                                        gamma_loc_alarm_value: number;
+                                        /** @description Alarm flag for the neutron localization value. 1 = alarmed, 0 = not alarmed */
+                                        neutron_loc_alarm: number;
+                                        /** @description Alarm flag for the gamma localization value. 1 = alarmed, 0 = not alarmed */
+                                        gamma_loc_alarm: number;
+                                    };
+                                    spectrum?: {
+                                        /** @description Flag for zero compression. 1 = zero compressed, 0 = not compressed */
+                                        zerocompression: number;
+                                        /** @description FOREGROUND or BACKGROUND */
+                                        type: string;
+                                        /** @description Spectrum live time in epoch time (ms) */
+                                        livetime_ms: string;
+                                        /** @description Spectrum real time in epoch time (ms) */
+                                        realtime_ms: string;
+                                        /** @description The spectral channel data */
+                                        channeldata: string;
+                                        /** @description The ID of the crystal reporting the channel data */
+                                        crystal_id?: string;
+                                    }[];
+                                    isotope?: {
+                                        /** @description The confidence value as a float representation of a percentage (88.5 NOT 0.885) */
+                                        confidence: number;
+                                        /** @description The name of the isotope */
+                                        name: string;
+                                        /** @description The type of the isotope */
+                                        type: string;
+                                    }[];
+                                    data_permissions?: {
+                                        /** @description All is true if all users should have access/permission */
+                                        all: boolean;
+                                        /** @description The list of ATAK UIDs that should have access/permission */
+                                        contact_list: string;
+                                    };
+                                    command_permissions?: {
+                                        /** @description All is true if all users should have access/permission */
+                                        all: boolean;
+                                        /** @description The list of ATAK UIDs that should have access/permission */
+                                        contact_list: string;
+                                    };
+                                };
+                                chemsensordetail?: {
+                                    sensor_data: {
+                                        /** @description The Manufacturer of the sensor in string format */
+                                        manufacturer: string;
+                                        /** @description The model of sensor in string format */
+                                        model: string;
+                                        /** @description The Serial Number of the Sensor in string format */
+                                        serialnumber: string;
+                                        /** @description The battery level as a percentage, float value */
+                                        batterylevel?: number;
+                                        /** @description The name of the given sensor in string format. Default name is Manufacturer+SerialNum */
+                                        callsign?: string;
+                                        /** @description The revision of the ChemCoT format, at writing this is "7" */
+                                        revision?: number;
+                                        /** @description General sensor health status */
+                                        status?: string;
+                                        /** @description Used internally by the CBRN plugin */
+                                        ordinal?: number;
+                                        /** @description The UID of the TAK marker that this sensor is attached to */
+                                        attachedUid?: string;
+                                        /** @description Is the data in this element representative of a simulated sensor */
+                                        simulated?: boolean;
+                                    };
+                                    detection?: {
+                                        /** @description Timestamp for the detection, epoch time (ms) */
+                                        time: string;
+                                        /** @description Chemical Name in string format */
+                                        agent: string;
+                                        /** @description Amount of chemical detected as a float. Could be mass, density, bars etc. */
+                                        quantity: number;
+                                        /** @description The units used to describe the quantity */
+                                        quantityunits: string;
+                                        /** @description Concentration of chemical in Kg/m^3 */
+                                        concentration?: number;
+                                        /** @description Alarm state of the sensor. 1 = alarm, 0 = no alarm */
+                                        alarm: number;
+                                        /** @description The confidence of the detection from the sensor as a percentage */
+                                        confidence?: number;
+                                        /** @description The mass fraction of the detection from the sensor in ppm */
+                                        massfraction?: number;
+                                        /** @description The percentage of the detection from the sensor in percent from 0-100 */
+                                        percent?: number;
+                                        /** @description The class of chemical detected. Nerve, Blood, TIC, etc. */
+                                        class?: string;
+                                        /** @description The ID number of the detection */
+                                        id?: number;
+                                    }[];
+                                };
+                                biosensordetail?: {
+                                    sensor_data: {
+                                        /** @description The Manufacturer of the sensor in string format */
+                                        manufacturer: string;
+                                        /** @description The model of sensor in string format */
+                                        model: string;
+                                        /** @description The Serial Number of the Sensor in string format */
+                                        serialnumber: string;
+                                        /** @description The battery level as a percentage, float value */
+                                        batterylevel?: number;
+                                        /** @description The name of the given sensor in string format. Default name is Manufacturer+SerialNum */
+                                        callsign?: string;
+                                        /** @description The revision of the BioCoT format */
+                                        revision?: number;
+                                        /** @description General sensor health status */
+                                        status?: string;
+                                        /** @description Used internally by the CBRN plugin */
+                                        ordinal?: number;
+                                        /** @description The UID of the TAK marker that this sensor is attached to */
+                                        attachedUid?: string;
+                                        /** @description Is the data in this element representative of a simulated sensor */
+                                        simulated?: boolean;
+                                    };
+                                    measurement?: {
+                                        /** @description Timestamp for the measurement, epoch time (ms) */
+                                        time: string;
+                                        /** @description Biological class */
+                                        bioClass?: string;
+                                        /** @description Biological type */
+                                        type?: string;
+                                        /** @description Channel identifier */
+                                        channel?: number;
+                                        /** @description Is this bio measurement harmful */
+                                        harmful?: boolean;
+                                        /** @description Dose Time */
+                                        doseTime?: number;
+                                        /** @description Amount of dose */
+                                        dose: number;
+                                        /** @description The confidence of the measurement from the sensor as a percentage */
+                                        confidence?: number;
+                                        /** @description Confirmation level */
+                                        confirmationLevel?: string;
+                                        /** @description Concentration */
+                                        concentration?: number;
+                                        /** @description Sample ID of this measurement */
+                                        sampleId?: string;
+                                        /** @description Persistency */
+                                        persistency?: string;
+                                        level?: {
+                                            /** @description The name of this measurement level */
+                                            levelName: string;
+                                            /** @description The value of this measurement level */
+                                            levelValue: string;
+                                        }[];
+                                    }[];
+                                };
+                                spatial?: {
+                                    version?: number;
+                                    attitude: {
+                                        /** @description Roll of entity in degrees. Positive indicates listing to the right. */
+                                        roll: number;
+                                        /** @description Pitch of entity in degrees. Positive indicates nose point up. */
+                                        pitch: number;
+                                        /** @description Yaw of entity in degrees. Positive indicates turned to the right. */
+                                        yaw?: number;
+                                        /** @description 1-sigma error of roll with respect to a zero mean normal Gaussian distribution. */
+                                        eRoll?: number;
+                                        /** @description 1-sigma error of pitch with respect to a zero mean normal Gaussian distribution. */
+                                        ePitch?: number;
+                                        /** @description 1-sigma error of yaw with respect to a zero mean normal Gaussian distribution. */
+                                        eYaw?: number;
+                                    };
+                                    spin: {
+                                        /** @description Degrees per second with positive indicating to the pilots right */
+                                        roll: number;
+                                        /** @description Degrees per second with positive indicating nose up. */
+                                        pitch: number;
+                                        /** @description Degrees per second with positive indicating right. */
+                                        yaw?: number;
+                                        /** @description 1-sigma error of roll with respect to a zero mean normal Gaussian distribution. */
+                                        eRoll?: number;
+                                        /** @description 1-sigma error of pitch with respect to a zero mean normal Gaussian distribution. */
+                                        ePitch?: number;
+                                        /** @description 1-sigma error of yaw with respect to a zero mean normal Gaussian distribution. */
+                                        eYaw?: number;
+                                    };
                                 };
                             };
                             path: string;
@@ -6397,7 +7433,7 @@ export interface paths {
                                     groupOwner?: string;
                                     messageId?: string;
                                     chatroom: string;
-                                    id: string;
+                                    id?: string;
                                     senderCallsign: string;
                                     chatgrp: unknown;
                                 };
@@ -6450,6 +7486,268 @@ export interface paths {
                                 };
                                 flow?: {
                                     [key: string]: string;
+                                };
+                                radsensordetail?: {
+                                    sensor_data: {
+                                        /** @description epoch time in Long format */
+                                        time: string;
+                                        /** @description The model of sensor (Micro Detective, IdentiFINDER 2, etc.) in string format */
+                                        model: string;
+                                        /** @description The neutron detector status (Full, Reduced or Unknown). Not available for most sensors, default to Unknown */
+                                        neutronstatus: string;
+                                        /** @description The gamma detector status (Full, Reduced or Unknown). Not available for most sensors, default to Unknown */
+                                        gammastatus: string;
+                                        /** @description The Manufacturer of the sensor (Ortec, Nucsafe, etc.) in string format */
+                                        manufacturer: string;
+                                        /** @description The name of the given sensor in string format */
+                                        callsign?: string;
+                                        /** @description The Serial Number of the Sensor in string format */
+                                        serialnumber: string;
+                                        /** @description The battery level as a percentage, float value */
+                                        batterylevel?: number;
+                                        /** @description The ID algorithm used to ID isotopes (ex. GADRAS) */
+                                        id_algorithm?: string;
+                                        /** @description The search algorithm used (ex. RDAK, SAMBA) */
+                                        search_algorithm?: string;
+                                        /** @description The alarm algorithm used (ex. RDAK, SAMBA) */
+                                        alarm_algorithm?: string;
+                                        /** @description Used internally by the CBRN plugin */
+                                        ordinal?: number;
+                                        /** @description Identifier of this subchannel, if this event is a report from a subchannel of a master sensor */
+                                        subchannel?: string;
+                                        /** @description Used to align subchannels */
+                                        measurement_ref?: number;
+                                        /** @description Name of the master sensor, if this event is a report from a subchannel */
+                                        master_sensor_manufacturer?: string;
+                                        /** @description Serial number of the master sensor, if this event is a report from a subchannel */
+                                        master_sensor_serial?: string;
+                                        /** @description A bearing in positive degrees if the sensor reports back a direction for the detected source, -1 otherwise */
+                                        source_bearing?: number;
+                                        /** @description A scale from 0 - 0.5 giving the magnitude of the source strength in the direction of source_bearing */
+                                        source_strength?: number;
+                                        /** @description Used for sensors that can relay data from other sensors, or that can be relayed in that way */
+                                        relay_type?: string;
+                                        /** @description The location of the sensor where it's being worn on the vest */
+                                        module_location?: string;
+                                        /** @description The number from the sensor needed in order to retrieve any specific algorithm calculated data */
+                                        detector_number?: number;
+                                        /** @description The total mR configured for the sensor's current mission */
+                                        mission_total_mR?: number;
+                                        /** @description The total seconds remaining of mission time based on current configuration of sensor and acquired dose */
+                                        mission_stay_time_sec?: number;
+                                        /** @description The total uR acquired by the sensor for the current mission */
+                                        mission_acquired_uR?: number;
+                                        /** @description The temperature of the sensor in degrees celsius */
+                                        sensor_temp_deg_c?: number;
+                                        /** @description The current directional heading of the sensor */
+                                        heading?: number;
+                                        source_distance?: "MOVE_MUCH_CLOSER" | "MOVE_CLOSER" | "OPTIMAL" | "MOVE_AWAY" | "MOVE_FAR_AWAY";
+                                        /** @description The UID of the TAK marker that this sensor is attached to */
+                                        attachedUid?: string;
+                                        /** @description Is the data in this element representative of a simulated sensor */
+                                        simulated?: boolean;
+                                    };
+                                    radmeasurement?: {
+                                        /** @description Defines the alarm level, could be standard deviations above background. Will default to 0 (no alarm) */
+                                        nalarmstddev: number;
+                                        /** @description Alarm flag for the measurement. 1 = alarmed, 0 = not alarmed */
+                                        alarm: number;
+                                        /** @description The measurement value as a float. A/B/G/N will be interpreted as CPS. Dose Rate will be interpreted as mR/Hr */
+                                        measurement: number;
+                                        name: "alpha" | "beta" | "gamma" | "neutron" | "doserate";
+                                    }[];
+                                    physical_module?: {
+                                        location: "FRONT_LEFT" | "FRONT_RIGHT" | "REAR_LEFT" | "REAR_RIGHT" | "CAB";
+                                        /** @description Gamma counts per second */
+                                        gamma_cps: number;
+                                        /** @description Alarm level for the measurement. 0 = not alarmed, > 0 = alarm level */
+                                        gamma_alarm: number;
+                                        /** @description The gamma dose rate. Will be interpreted as uR/Hr */
+                                        gamma_dose_rate: number;
+                                    }[];
+                                    search_algorithm?: {
+                                        /** @description The Neutron localization value */
+                                        neutron_loc: number;
+                                        /** @description The Gamma localization value */
+                                        gamma_loc: number;
+                                        /** @description The Neutron localization alarm level */
+                                        neutron_loc_alarm_value: number;
+                                        /** @description The Gamma localization alarm level */
+                                        gamma_loc_alarm_value: number;
+                                        /** @description Alarm flag for the neutron localization value. 1 = alarmed, 0 = not alarmed */
+                                        neutron_loc_alarm: number;
+                                        /** @description Alarm flag for the gamma localization value. 1 = alarmed, 0 = not alarmed */
+                                        gamma_loc_alarm: number;
+                                    };
+                                    spectrum?: {
+                                        /** @description Flag for zero compression. 1 = zero compressed, 0 = not compressed */
+                                        zerocompression: number;
+                                        /** @description FOREGROUND or BACKGROUND */
+                                        type: string;
+                                        /** @description Spectrum live time in epoch time (ms) */
+                                        livetime_ms: string;
+                                        /** @description Spectrum real time in epoch time (ms) */
+                                        realtime_ms: string;
+                                        /** @description The spectral channel data */
+                                        channeldata: string;
+                                        /** @description The ID of the crystal reporting the channel data */
+                                        crystal_id?: string;
+                                    }[];
+                                    isotope?: {
+                                        /** @description The confidence value as a float representation of a percentage (88.5 NOT 0.885) */
+                                        confidence: number;
+                                        /** @description The name of the isotope */
+                                        name: string;
+                                        /** @description The type of the isotope */
+                                        type: string;
+                                    }[];
+                                    data_permissions?: {
+                                        /** @description All is true if all users should have access/permission */
+                                        all: boolean;
+                                        /** @description The list of ATAK UIDs that should have access/permission */
+                                        contact_list: string;
+                                    };
+                                    command_permissions?: {
+                                        /** @description All is true if all users should have access/permission */
+                                        all: boolean;
+                                        /** @description The list of ATAK UIDs that should have access/permission */
+                                        contact_list: string;
+                                    };
+                                };
+                                chemsensordetail?: {
+                                    sensor_data: {
+                                        /** @description The Manufacturer of the sensor in string format */
+                                        manufacturer: string;
+                                        /** @description The model of sensor in string format */
+                                        model: string;
+                                        /** @description The Serial Number of the Sensor in string format */
+                                        serialnumber: string;
+                                        /** @description The battery level as a percentage, float value */
+                                        batterylevel?: number;
+                                        /** @description The name of the given sensor in string format. Default name is Manufacturer+SerialNum */
+                                        callsign?: string;
+                                        /** @description The revision of the ChemCoT format, at writing this is "7" */
+                                        revision?: number;
+                                        /** @description General sensor health status */
+                                        status?: string;
+                                        /** @description Used internally by the CBRN plugin */
+                                        ordinal?: number;
+                                        /** @description The UID of the TAK marker that this sensor is attached to */
+                                        attachedUid?: string;
+                                        /** @description Is the data in this element representative of a simulated sensor */
+                                        simulated?: boolean;
+                                    };
+                                    detection?: {
+                                        /** @description Timestamp for the detection, epoch time (ms) */
+                                        time: string;
+                                        /** @description Chemical Name in string format */
+                                        agent: string;
+                                        /** @description Amount of chemical detected as a float. Could be mass, density, bars etc. */
+                                        quantity: number;
+                                        /** @description The units used to describe the quantity */
+                                        quantityunits: string;
+                                        /** @description Concentration of chemical in Kg/m^3 */
+                                        concentration?: number;
+                                        /** @description Alarm state of the sensor. 1 = alarm, 0 = no alarm */
+                                        alarm: number;
+                                        /** @description The confidence of the detection from the sensor as a percentage */
+                                        confidence?: number;
+                                        /** @description The mass fraction of the detection from the sensor in ppm */
+                                        massfraction?: number;
+                                        /** @description The percentage of the detection from the sensor in percent from 0-100 */
+                                        percent?: number;
+                                        /** @description The class of chemical detected. Nerve, Blood, TIC, etc. */
+                                        class?: string;
+                                        /** @description The ID number of the detection */
+                                        id?: number;
+                                    }[];
+                                };
+                                biosensordetail?: {
+                                    sensor_data: {
+                                        /** @description The Manufacturer of the sensor in string format */
+                                        manufacturer: string;
+                                        /** @description The model of sensor in string format */
+                                        model: string;
+                                        /** @description The Serial Number of the Sensor in string format */
+                                        serialnumber: string;
+                                        /** @description The battery level as a percentage, float value */
+                                        batterylevel?: number;
+                                        /** @description The name of the given sensor in string format. Default name is Manufacturer+SerialNum */
+                                        callsign?: string;
+                                        /** @description The revision of the BioCoT format */
+                                        revision?: number;
+                                        /** @description General sensor health status */
+                                        status?: string;
+                                        /** @description Used internally by the CBRN plugin */
+                                        ordinal?: number;
+                                        /** @description The UID of the TAK marker that this sensor is attached to */
+                                        attachedUid?: string;
+                                        /** @description Is the data in this element representative of a simulated sensor */
+                                        simulated?: boolean;
+                                    };
+                                    measurement?: {
+                                        /** @description Timestamp for the measurement, epoch time (ms) */
+                                        time: string;
+                                        /** @description Biological class */
+                                        bioClass?: string;
+                                        /** @description Biological type */
+                                        type?: string;
+                                        /** @description Channel identifier */
+                                        channel?: number;
+                                        /** @description Is this bio measurement harmful */
+                                        harmful?: boolean;
+                                        /** @description Dose Time */
+                                        doseTime?: number;
+                                        /** @description Amount of dose */
+                                        dose: number;
+                                        /** @description The confidence of the measurement from the sensor as a percentage */
+                                        confidence?: number;
+                                        /** @description Confirmation level */
+                                        confirmationLevel?: string;
+                                        /** @description Concentration */
+                                        concentration?: number;
+                                        /** @description Sample ID of this measurement */
+                                        sampleId?: string;
+                                        /** @description Persistency */
+                                        persistency?: string;
+                                        level?: {
+                                            /** @description The name of this measurement level */
+                                            levelName: string;
+                                            /** @description The value of this measurement level */
+                                            levelValue: string;
+                                        }[];
+                                    }[];
+                                };
+                                spatial?: {
+                                    version?: number;
+                                    attitude: {
+                                        /** @description Roll of entity in degrees. Positive indicates listing to the right. */
+                                        roll: number;
+                                        /** @description Pitch of entity in degrees. Positive indicates nose point up. */
+                                        pitch: number;
+                                        /** @description Yaw of entity in degrees. Positive indicates turned to the right. */
+                                        yaw?: number;
+                                        /** @description 1-sigma error of roll with respect to a zero mean normal Gaussian distribution. */
+                                        eRoll?: number;
+                                        /** @description 1-sigma error of pitch with respect to a zero mean normal Gaussian distribution. */
+                                        ePitch?: number;
+                                        /** @description 1-sigma error of yaw with respect to a zero mean normal Gaussian distribution. */
+                                        eYaw?: number;
+                                    };
+                                    spin: {
+                                        /** @description Degrees per second with positive indicating to the pilots right */
+                                        roll: number;
+                                        /** @description Degrees per second with positive indicating nose up. */
+                                        pitch: number;
+                                        /** @description Degrees per second with positive indicating right. */
+                                        yaw?: number;
+                                        /** @description 1-sigma error of roll with respect to a zero mean normal Gaussian distribution. */
+                                        eRoll?: number;
+                                        /** @description 1-sigma error of pitch with respect to a zero mean normal Gaussian distribution. */
+                                        ePitch?: number;
+                                        /** @description 1-sigma error of yaw with respect to a zero mean normal Gaussian distribution. */
+                                        eYaw?: number;
+                                    };
                                 };
                                 stale?: number | string;
                             };
@@ -6676,7 +7974,7 @@ export interface paths {
                                             groupOwner?: string;
                                             messageId?: string;
                                             chatroom: string;
-                                            id: string;
+                                            id?: string;
                                             senderCallsign: string;
                                             chatgrp: unknown;
                                         };
@@ -6729,6 +8027,268 @@ export interface paths {
                                         };
                                         flow?: {
                                             [key: string]: string;
+                                        };
+                                        radsensordetail?: {
+                                            sensor_data: {
+                                                /** @description epoch time in Long format */
+                                                time: string;
+                                                /** @description The model of sensor (Micro Detective, IdentiFINDER 2, etc.) in string format */
+                                                model: string;
+                                                /** @description The neutron detector status (Full, Reduced or Unknown). Not available for most sensors, default to Unknown */
+                                                neutronstatus: string;
+                                                /** @description The gamma detector status (Full, Reduced or Unknown). Not available for most sensors, default to Unknown */
+                                                gammastatus: string;
+                                                /** @description The Manufacturer of the sensor (Ortec, Nucsafe, etc.) in string format */
+                                                manufacturer: string;
+                                                /** @description The name of the given sensor in string format */
+                                                callsign?: string;
+                                                /** @description The Serial Number of the Sensor in string format */
+                                                serialnumber: string;
+                                                /** @description The battery level as a percentage, float value */
+                                                batterylevel?: number;
+                                                /** @description The ID algorithm used to ID isotopes (ex. GADRAS) */
+                                                id_algorithm?: string;
+                                                /** @description The search algorithm used (ex. RDAK, SAMBA) */
+                                                search_algorithm?: string;
+                                                /** @description The alarm algorithm used (ex. RDAK, SAMBA) */
+                                                alarm_algorithm?: string;
+                                                /** @description Used internally by the CBRN plugin */
+                                                ordinal?: number;
+                                                /** @description Identifier of this subchannel, if this event is a report from a subchannel of a master sensor */
+                                                subchannel?: string;
+                                                /** @description Used to align subchannels */
+                                                measurement_ref?: number;
+                                                /** @description Name of the master sensor, if this event is a report from a subchannel */
+                                                master_sensor_manufacturer?: string;
+                                                /** @description Serial number of the master sensor, if this event is a report from a subchannel */
+                                                master_sensor_serial?: string;
+                                                /** @description A bearing in positive degrees if the sensor reports back a direction for the detected source, -1 otherwise */
+                                                source_bearing?: number;
+                                                /** @description A scale from 0 - 0.5 giving the magnitude of the source strength in the direction of source_bearing */
+                                                source_strength?: number;
+                                                /** @description Used for sensors that can relay data from other sensors, or that can be relayed in that way */
+                                                relay_type?: string;
+                                                /** @description The location of the sensor where it's being worn on the vest */
+                                                module_location?: string;
+                                                /** @description The number from the sensor needed in order to retrieve any specific algorithm calculated data */
+                                                detector_number?: number;
+                                                /** @description The total mR configured for the sensor's current mission */
+                                                mission_total_mR?: number;
+                                                /** @description The total seconds remaining of mission time based on current configuration of sensor and acquired dose */
+                                                mission_stay_time_sec?: number;
+                                                /** @description The total uR acquired by the sensor for the current mission */
+                                                mission_acquired_uR?: number;
+                                                /** @description The temperature of the sensor in degrees celsius */
+                                                sensor_temp_deg_c?: number;
+                                                /** @description The current directional heading of the sensor */
+                                                heading?: number;
+                                                source_distance?: "MOVE_MUCH_CLOSER" | "MOVE_CLOSER" | "OPTIMAL" | "MOVE_AWAY" | "MOVE_FAR_AWAY";
+                                                /** @description The UID of the TAK marker that this sensor is attached to */
+                                                attachedUid?: string;
+                                                /** @description Is the data in this element representative of a simulated sensor */
+                                                simulated?: boolean;
+                                            };
+                                            radmeasurement?: {
+                                                /** @description Defines the alarm level, could be standard deviations above background. Will default to 0 (no alarm) */
+                                                nalarmstddev: number;
+                                                /** @description Alarm flag for the measurement. 1 = alarmed, 0 = not alarmed */
+                                                alarm: number;
+                                                /** @description The measurement value as a float. A/B/G/N will be interpreted as CPS. Dose Rate will be interpreted as mR/Hr */
+                                                measurement: number;
+                                                name: "alpha" | "beta" | "gamma" | "neutron" | "doserate";
+                                            }[];
+                                            physical_module?: {
+                                                location: "FRONT_LEFT" | "FRONT_RIGHT" | "REAR_LEFT" | "REAR_RIGHT" | "CAB";
+                                                /** @description Gamma counts per second */
+                                                gamma_cps: number;
+                                                /** @description Alarm level for the measurement. 0 = not alarmed, > 0 = alarm level */
+                                                gamma_alarm: number;
+                                                /** @description The gamma dose rate. Will be interpreted as uR/Hr */
+                                                gamma_dose_rate: number;
+                                            }[];
+                                            search_algorithm?: {
+                                                /** @description The Neutron localization value */
+                                                neutron_loc: number;
+                                                /** @description The Gamma localization value */
+                                                gamma_loc: number;
+                                                /** @description The Neutron localization alarm level */
+                                                neutron_loc_alarm_value: number;
+                                                /** @description The Gamma localization alarm level */
+                                                gamma_loc_alarm_value: number;
+                                                /** @description Alarm flag for the neutron localization value. 1 = alarmed, 0 = not alarmed */
+                                                neutron_loc_alarm: number;
+                                                /** @description Alarm flag for the gamma localization value. 1 = alarmed, 0 = not alarmed */
+                                                gamma_loc_alarm: number;
+                                            };
+                                            spectrum?: {
+                                                /** @description Flag for zero compression. 1 = zero compressed, 0 = not compressed */
+                                                zerocompression: number;
+                                                /** @description FOREGROUND or BACKGROUND */
+                                                type: string;
+                                                /** @description Spectrum live time in epoch time (ms) */
+                                                livetime_ms: string;
+                                                /** @description Spectrum real time in epoch time (ms) */
+                                                realtime_ms: string;
+                                                /** @description The spectral channel data */
+                                                channeldata: string;
+                                                /** @description The ID of the crystal reporting the channel data */
+                                                crystal_id?: string;
+                                            }[];
+                                            isotope?: {
+                                                /** @description The confidence value as a float representation of a percentage (88.5 NOT 0.885) */
+                                                confidence: number;
+                                                /** @description The name of the isotope */
+                                                name: string;
+                                                /** @description The type of the isotope */
+                                                type: string;
+                                            }[];
+                                            data_permissions?: {
+                                                /** @description All is true if all users should have access/permission */
+                                                all: boolean;
+                                                /** @description The list of ATAK UIDs that should have access/permission */
+                                                contact_list: string;
+                                            };
+                                            command_permissions?: {
+                                                /** @description All is true if all users should have access/permission */
+                                                all: boolean;
+                                                /** @description The list of ATAK UIDs that should have access/permission */
+                                                contact_list: string;
+                                            };
+                                        };
+                                        chemsensordetail?: {
+                                            sensor_data: {
+                                                /** @description The Manufacturer of the sensor in string format */
+                                                manufacturer: string;
+                                                /** @description The model of sensor in string format */
+                                                model: string;
+                                                /** @description The Serial Number of the Sensor in string format */
+                                                serialnumber: string;
+                                                /** @description The battery level as a percentage, float value */
+                                                batterylevel?: number;
+                                                /** @description The name of the given sensor in string format. Default name is Manufacturer+SerialNum */
+                                                callsign?: string;
+                                                /** @description The revision of the ChemCoT format, at writing this is "7" */
+                                                revision?: number;
+                                                /** @description General sensor health status */
+                                                status?: string;
+                                                /** @description Used internally by the CBRN plugin */
+                                                ordinal?: number;
+                                                /** @description The UID of the TAK marker that this sensor is attached to */
+                                                attachedUid?: string;
+                                                /** @description Is the data in this element representative of a simulated sensor */
+                                                simulated?: boolean;
+                                            };
+                                            detection?: {
+                                                /** @description Timestamp for the detection, epoch time (ms) */
+                                                time: string;
+                                                /** @description Chemical Name in string format */
+                                                agent: string;
+                                                /** @description Amount of chemical detected as a float. Could be mass, density, bars etc. */
+                                                quantity: number;
+                                                /** @description The units used to describe the quantity */
+                                                quantityunits: string;
+                                                /** @description Concentration of chemical in Kg/m^3 */
+                                                concentration?: number;
+                                                /** @description Alarm state of the sensor. 1 = alarm, 0 = no alarm */
+                                                alarm: number;
+                                                /** @description The confidence of the detection from the sensor as a percentage */
+                                                confidence?: number;
+                                                /** @description The mass fraction of the detection from the sensor in ppm */
+                                                massfraction?: number;
+                                                /** @description The percentage of the detection from the sensor in percent from 0-100 */
+                                                percent?: number;
+                                                /** @description The class of chemical detected. Nerve, Blood, TIC, etc. */
+                                                class?: string;
+                                                /** @description The ID number of the detection */
+                                                id?: number;
+                                            }[];
+                                        };
+                                        biosensordetail?: {
+                                            sensor_data: {
+                                                /** @description The Manufacturer of the sensor in string format */
+                                                manufacturer: string;
+                                                /** @description The model of sensor in string format */
+                                                model: string;
+                                                /** @description The Serial Number of the Sensor in string format */
+                                                serialnumber: string;
+                                                /** @description The battery level as a percentage, float value */
+                                                batterylevel?: number;
+                                                /** @description The name of the given sensor in string format. Default name is Manufacturer+SerialNum */
+                                                callsign?: string;
+                                                /** @description The revision of the BioCoT format */
+                                                revision?: number;
+                                                /** @description General sensor health status */
+                                                status?: string;
+                                                /** @description Used internally by the CBRN plugin */
+                                                ordinal?: number;
+                                                /** @description The UID of the TAK marker that this sensor is attached to */
+                                                attachedUid?: string;
+                                                /** @description Is the data in this element representative of a simulated sensor */
+                                                simulated?: boolean;
+                                            };
+                                            measurement?: {
+                                                /** @description Timestamp for the measurement, epoch time (ms) */
+                                                time: string;
+                                                /** @description Biological class */
+                                                bioClass?: string;
+                                                /** @description Biological type */
+                                                type?: string;
+                                                /** @description Channel identifier */
+                                                channel?: number;
+                                                /** @description Is this bio measurement harmful */
+                                                harmful?: boolean;
+                                                /** @description Dose Time */
+                                                doseTime?: number;
+                                                /** @description Amount of dose */
+                                                dose: number;
+                                                /** @description The confidence of the measurement from the sensor as a percentage */
+                                                confidence?: number;
+                                                /** @description Confirmation level */
+                                                confirmationLevel?: string;
+                                                /** @description Concentration */
+                                                concentration?: number;
+                                                /** @description Sample ID of this measurement */
+                                                sampleId?: string;
+                                                /** @description Persistency */
+                                                persistency?: string;
+                                                level?: {
+                                                    /** @description The name of this measurement level */
+                                                    levelName: string;
+                                                    /** @description The value of this measurement level */
+                                                    levelValue: string;
+                                                }[];
+                                            }[];
+                                        };
+                                        spatial?: {
+                                            version?: number;
+                                            attitude: {
+                                                /** @description Roll of entity in degrees. Positive indicates listing to the right. */
+                                                roll: number;
+                                                /** @description Pitch of entity in degrees. Positive indicates nose point up. */
+                                                pitch: number;
+                                                /** @description Yaw of entity in degrees. Positive indicates turned to the right. */
+                                                yaw?: number;
+                                                /** @description 1-sigma error of roll with respect to a zero mean normal Gaussian distribution. */
+                                                eRoll?: number;
+                                                /** @description 1-sigma error of pitch with respect to a zero mean normal Gaussian distribution. */
+                                                ePitch?: number;
+                                                /** @description 1-sigma error of yaw with respect to a zero mean normal Gaussian distribution. */
+                                                eYaw?: number;
+                                            };
+                                            spin: {
+                                                /** @description Degrees per second with positive indicating to the pilots right */
+                                                roll: number;
+                                                /** @description Degrees per second with positive indicating nose up. */
+                                                pitch: number;
+                                                /** @description Degrees per second with positive indicating right. */
+                                                yaw?: number;
+                                                /** @description 1-sigma error of roll with respect to a zero mean normal Gaussian distribution. */
+                                                eRoll?: number;
+                                                /** @description 1-sigma error of pitch with respect to a zero mean normal Gaussian distribution. */
+                                                ePitch?: number;
+                                                /** @description 1-sigma error of yaw with respect to a zero mean normal Gaussian distribution. */
+                                                eYaw?: number;
+                                            };
                                         };
                                         stale?: number | string;
                                     };
@@ -7042,7 +8602,7 @@ export interface paths {
                                     groupOwner?: string;
                                     messageId?: string;
                                     chatroom: string;
-                                    id: string;
+                                    id?: string;
                                     senderCallsign: string;
                                     chatgrp: unknown;
                                 };
@@ -7095,6 +8655,268 @@ export interface paths {
                                 };
                                 flow?: {
                                     [key: string]: string;
+                                };
+                                radsensordetail?: {
+                                    sensor_data: {
+                                        /** @description epoch time in Long format */
+                                        time: string;
+                                        /** @description The model of sensor (Micro Detective, IdentiFINDER 2, etc.) in string format */
+                                        model: string;
+                                        /** @description The neutron detector status (Full, Reduced or Unknown). Not available for most sensors, default to Unknown */
+                                        neutronstatus: string;
+                                        /** @description The gamma detector status (Full, Reduced or Unknown). Not available for most sensors, default to Unknown */
+                                        gammastatus: string;
+                                        /** @description The Manufacturer of the sensor (Ortec, Nucsafe, etc.) in string format */
+                                        manufacturer: string;
+                                        /** @description The name of the given sensor in string format */
+                                        callsign?: string;
+                                        /** @description The Serial Number of the Sensor in string format */
+                                        serialnumber: string;
+                                        /** @description The battery level as a percentage, float value */
+                                        batterylevel?: number;
+                                        /** @description The ID algorithm used to ID isotopes (ex. GADRAS) */
+                                        id_algorithm?: string;
+                                        /** @description The search algorithm used (ex. RDAK, SAMBA) */
+                                        search_algorithm?: string;
+                                        /** @description The alarm algorithm used (ex. RDAK, SAMBA) */
+                                        alarm_algorithm?: string;
+                                        /** @description Used internally by the CBRN plugin */
+                                        ordinal?: number;
+                                        /** @description Identifier of this subchannel, if this event is a report from a subchannel of a master sensor */
+                                        subchannel?: string;
+                                        /** @description Used to align subchannels */
+                                        measurement_ref?: number;
+                                        /** @description Name of the master sensor, if this event is a report from a subchannel */
+                                        master_sensor_manufacturer?: string;
+                                        /** @description Serial number of the master sensor, if this event is a report from a subchannel */
+                                        master_sensor_serial?: string;
+                                        /** @description A bearing in positive degrees if the sensor reports back a direction for the detected source, -1 otherwise */
+                                        source_bearing?: number;
+                                        /** @description A scale from 0 - 0.5 giving the magnitude of the source strength in the direction of source_bearing */
+                                        source_strength?: number;
+                                        /** @description Used for sensors that can relay data from other sensors, or that can be relayed in that way */
+                                        relay_type?: string;
+                                        /** @description The location of the sensor where it's being worn on the vest */
+                                        module_location?: string;
+                                        /** @description The number from the sensor needed in order to retrieve any specific algorithm calculated data */
+                                        detector_number?: number;
+                                        /** @description The total mR configured for the sensor's current mission */
+                                        mission_total_mR?: number;
+                                        /** @description The total seconds remaining of mission time based on current configuration of sensor and acquired dose */
+                                        mission_stay_time_sec?: number;
+                                        /** @description The total uR acquired by the sensor for the current mission */
+                                        mission_acquired_uR?: number;
+                                        /** @description The temperature of the sensor in degrees celsius */
+                                        sensor_temp_deg_c?: number;
+                                        /** @description The current directional heading of the sensor */
+                                        heading?: number;
+                                        source_distance?: "MOVE_MUCH_CLOSER" | "MOVE_CLOSER" | "OPTIMAL" | "MOVE_AWAY" | "MOVE_FAR_AWAY";
+                                        /** @description The UID of the TAK marker that this sensor is attached to */
+                                        attachedUid?: string;
+                                        /** @description Is the data in this element representative of a simulated sensor */
+                                        simulated?: boolean;
+                                    };
+                                    radmeasurement?: {
+                                        /** @description Defines the alarm level, could be standard deviations above background. Will default to 0 (no alarm) */
+                                        nalarmstddev: number;
+                                        /** @description Alarm flag for the measurement. 1 = alarmed, 0 = not alarmed */
+                                        alarm: number;
+                                        /** @description The measurement value as a float. A/B/G/N will be interpreted as CPS. Dose Rate will be interpreted as mR/Hr */
+                                        measurement: number;
+                                        name: "alpha" | "beta" | "gamma" | "neutron" | "doserate";
+                                    }[];
+                                    physical_module?: {
+                                        location: "FRONT_LEFT" | "FRONT_RIGHT" | "REAR_LEFT" | "REAR_RIGHT" | "CAB";
+                                        /** @description Gamma counts per second */
+                                        gamma_cps: number;
+                                        /** @description Alarm level for the measurement. 0 = not alarmed, > 0 = alarm level */
+                                        gamma_alarm: number;
+                                        /** @description The gamma dose rate. Will be interpreted as uR/Hr */
+                                        gamma_dose_rate: number;
+                                    }[];
+                                    search_algorithm?: {
+                                        /** @description The Neutron localization value */
+                                        neutron_loc: number;
+                                        /** @description The Gamma localization value */
+                                        gamma_loc: number;
+                                        /** @description The Neutron localization alarm level */
+                                        neutron_loc_alarm_value: number;
+                                        /** @description The Gamma localization alarm level */
+                                        gamma_loc_alarm_value: number;
+                                        /** @description Alarm flag for the neutron localization value. 1 = alarmed, 0 = not alarmed */
+                                        neutron_loc_alarm: number;
+                                        /** @description Alarm flag for the gamma localization value. 1 = alarmed, 0 = not alarmed */
+                                        gamma_loc_alarm: number;
+                                    };
+                                    spectrum?: {
+                                        /** @description Flag for zero compression. 1 = zero compressed, 0 = not compressed */
+                                        zerocompression: number;
+                                        /** @description FOREGROUND or BACKGROUND */
+                                        type: string;
+                                        /** @description Spectrum live time in epoch time (ms) */
+                                        livetime_ms: string;
+                                        /** @description Spectrum real time in epoch time (ms) */
+                                        realtime_ms: string;
+                                        /** @description The spectral channel data */
+                                        channeldata: string;
+                                        /** @description The ID of the crystal reporting the channel data */
+                                        crystal_id?: string;
+                                    }[];
+                                    isotope?: {
+                                        /** @description The confidence value as a float representation of a percentage (88.5 NOT 0.885) */
+                                        confidence: number;
+                                        /** @description The name of the isotope */
+                                        name: string;
+                                        /** @description The type of the isotope */
+                                        type: string;
+                                    }[];
+                                    data_permissions?: {
+                                        /** @description All is true if all users should have access/permission */
+                                        all: boolean;
+                                        /** @description The list of ATAK UIDs that should have access/permission */
+                                        contact_list: string;
+                                    };
+                                    command_permissions?: {
+                                        /** @description All is true if all users should have access/permission */
+                                        all: boolean;
+                                        /** @description The list of ATAK UIDs that should have access/permission */
+                                        contact_list: string;
+                                    };
+                                };
+                                chemsensordetail?: {
+                                    sensor_data: {
+                                        /** @description The Manufacturer of the sensor in string format */
+                                        manufacturer: string;
+                                        /** @description The model of sensor in string format */
+                                        model: string;
+                                        /** @description The Serial Number of the Sensor in string format */
+                                        serialnumber: string;
+                                        /** @description The battery level as a percentage, float value */
+                                        batterylevel?: number;
+                                        /** @description The name of the given sensor in string format. Default name is Manufacturer+SerialNum */
+                                        callsign?: string;
+                                        /** @description The revision of the ChemCoT format, at writing this is "7" */
+                                        revision?: number;
+                                        /** @description General sensor health status */
+                                        status?: string;
+                                        /** @description Used internally by the CBRN plugin */
+                                        ordinal?: number;
+                                        /** @description The UID of the TAK marker that this sensor is attached to */
+                                        attachedUid?: string;
+                                        /** @description Is the data in this element representative of a simulated sensor */
+                                        simulated?: boolean;
+                                    };
+                                    detection?: {
+                                        /** @description Timestamp for the detection, epoch time (ms) */
+                                        time: string;
+                                        /** @description Chemical Name in string format */
+                                        agent: string;
+                                        /** @description Amount of chemical detected as a float. Could be mass, density, bars etc. */
+                                        quantity: number;
+                                        /** @description The units used to describe the quantity */
+                                        quantityunits: string;
+                                        /** @description Concentration of chemical in Kg/m^3 */
+                                        concentration?: number;
+                                        /** @description Alarm state of the sensor. 1 = alarm, 0 = no alarm */
+                                        alarm: number;
+                                        /** @description The confidence of the detection from the sensor as a percentage */
+                                        confidence?: number;
+                                        /** @description The mass fraction of the detection from the sensor in ppm */
+                                        massfraction?: number;
+                                        /** @description The percentage of the detection from the sensor in percent from 0-100 */
+                                        percent?: number;
+                                        /** @description The class of chemical detected. Nerve, Blood, TIC, etc. */
+                                        class?: string;
+                                        /** @description The ID number of the detection */
+                                        id?: number;
+                                    }[];
+                                };
+                                biosensordetail?: {
+                                    sensor_data: {
+                                        /** @description The Manufacturer of the sensor in string format */
+                                        manufacturer: string;
+                                        /** @description The model of sensor in string format */
+                                        model: string;
+                                        /** @description The Serial Number of the Sensor in string format */
+                                        serialnumber: string;
+                                        /** @description The battery level as a percentage, float value */
+                                        batterylevel?: number;
+                                        /** @description The name of the given sensor in string format. Default name is Manufacturer+SerialNum */
+                                        callsign?: string;
+                                        /** @description The revision of the BioCoT format */
+                                        revision?: number;
+                                        /** @description General sensor health status */
+                                        status?: string;
+                                        /** @description Used internally by the CBRN plugin */
+                                        ordinal?: number;
+                                        /** @description The UID of the TAK marker that this sensor is attached to */
+                                        attachedUid?: string;
+                                        /** @description Is the data in this element representative of a simulated sensor */
+                                        simulated?: boolean;
+                                    };
+                                    measurement?: {
+                                        /** @description Timestamp for the measurement, epoch time (ms) */
+                                        time: string;
+                                        /** @description Biological class */
+                                        bioClass?: string;
+                                        /** @description Biological type */
+                                        type?: string;
+                                        /** @description Channel identifier */
+                                        channel?: number;
+                                        /** @description Is this bio measurement harmful */
+                                        harmful?: boolean;
+                                        /** @description Dose Time */
+                                        doseTime?: number;
+                                        /** @description Amount of dose */
+                                        dose: number;
+                                        /** @description The confidence of the measurement from the sensor as a percentage */
+                                        confidence?: number;
+                                        /** @description Confirmation level */
+                                        confirmationLevel?: string;
+                                        /** @description Concentration */
+                                        concentration?: number;
+                                        /** @description Sample ID of this measurement */
+                                        sampleId?: string;
+                                        /** @description Persistency */
+                                        persistency?: string;
+                                        level?: {
+                                            /** @description The name of this measurement level */
+                                            levelName: string;
+                                            /** @description The value of this measurement level */
+                                            levelValue: string;
+                                        }[];
+                                    }[];
+                                };
+                                spatial?: {
+                                    version?: number;
+                                    attitude: {
+                                        /** @description Roll of entity in degrees. Positive indicates listing to the right. */
+                                        roll: number;
+                                        /** @description Pitch of entity in degrees. Positive indicates nose point up. */
+                                        pitch: number;
+                                        /** @description Yaw of entity in degrees. Positive indicates turned to the right. */
+                                        yaw?: number;
+                                        /** @description 1-sigma error of roll with respect to a zero mean normal Gaussian distribution. */
+                                        eRoll?: number;
+                                        /** @description 1-sigma error of pitch with respect to a zero mean normal Gaussian distribution. */
+                                        ePitch?: number;
+                                        /** @description 1-sigma error of yaw with respect to a zero mean normal Gaussian distribution. */
+                                        eYaw?: number;
+                                    };
+                                    spin: {
+                                        /** @description Degrees per second with positive indicating to the pilots right */
+                                        roll: number;
+                                        /** @description Degrees per second with positive indicating nose up. */
+                                        pitch: number;
+                                        /** @description Degrees per second with positive indicating right. */
+                                        yaw?: number;
+                                        /** @description 1-sigma error of roll with respect to a zero mean normal Gaussian distribution. */
+                                        eRoll?: number;
+                                        /** @description 1-sigma error of pitch with respect to a zero mean normal Gaussian distribution. */
+                                        ePitch?: number;
+                                        /** @description 1-sigma error of yaw with respect to a zero mean normal Gaussian distribution. */
+                                        eYaw?: number;
+                                    };
                                 };
                             };
                             path?: string;
@@ -7417,7 +9239,7 @@ export interface paths {
                                         groupOwner?: string;
                                         messageId?: string;
                                         chatroom: string;
-                                        id: string;
+                                        id?: string;
                                         senderCallsign: string;
                                         chatgrp: unknown;
                                     };
@@ -7470,6 +9292,268 @@ export interface paths {
                                     };
                                     flow?: {
                                         [key: string]: string;
+                                    };
+                                    radsensordetail?: {
+                                        sensor_data: {
+                                            /** @description epoch time in Long format */
+                                            time: string;
+                                            /** @description The model of sensor (Micro Detective, IdentiFINDER 2, etc.) in string format */
+                                            model: string;
+                                            /** @description The neutron detector status (Full, Reduced or Unknown). Not available for most sensors, default to Unknown */
+                                            neutronstatus: string;
+                                            /** @description The gamma detector status (Full, Reduced or Unknown). Not available for most sensors, default to Unknown */
+                                            gammastatus: string;
+                                            /** @description The Manufacturer of the sensor (Ortec, Nucsafe, etc.) in string format */
+                                            manufacturer: string;
+                                            /** @description The name of the given sensor in string format */
+                                            callsign?: string;
+                                            /** @description The Serial Number of the Sensor in string format */
+                                            serialnumber: string;
+                                            /** @description The battery level as a percentage, float value */
+                                            batterylevel?: number;
+                                            /** @description The ID algorithm used to ID isotopes (ex. GADRAS) */
+                                            id_algorithm?: string;
+                                            /** @description The search algorithm used (ex. RDAK, SAMBA) */
+                                            search_algorithm?: string;
+                                            /** @description The alarm algorithm used (ex. RDAK, SAMBA) */
+                                            alarm_algorithm?: string;
+                                            /** @description Used internally by the CBRN plugin */
+                                            ordinal?: number;
+                                            /** @description Identifier of this subchannel, if this event is a report from a subchannel of a master sensor */
+                                            subchannel?: string;
+                                            /** @description Used to align subchannels */
+                                            measurement_ref?: number;
+                                            /** @description Name of the master sensor, if this event is a report from a subchannel */
+                                            master_sensor_manufacturer?: string;
+                                            /** @description Serial number of the master sensor, if this event is a report from a subchannel */
+                                            master_sensor_serial?: string;
+                                            /** @description A bearing in positive degrees if the sensor reports back a direction for the detected source, -1 otherwise */
+                                            source_bearing?: number;
+                                            /** @description A scale from 0 - 0.5 giving the magnitude of the source strength in the direction of source_bearing */
+                                            source_strength?: number;
+                                            /** @description Used for sensors that can relay data from other sensors, or that can be relayed in that way */
+                                            relay_type?: string;
+                                            /** @description The location of the sensor where it's being worn on the vest */
+                                            module_location?: string;
+                                            /** @description The number from the sensor needed in order to retrieve any specific algorithm calculated data */
+                                            detector_number?: number;
+                                            /** @description The total mR configured for the sensor's current mission */
+                                            mission_total_mR?: number;
+                                            /** @description The total seconds remaining of mission time based on current configuration of sensor and acquired dose */
+                                            mission_stay_time_sec?: number;
+                                            /** @description The total uR acquired by the sensor for the current mission */
+                                            mission_acquired_uR?: number;
+                                            /** @description The temperature of the sensor in degrees celsius */
+                                            sensor_temp_deg_c?: number;
+                                            /** @description The current directional heading of the sensor */
+                                            heading?: number;
+                                            source_distance?: "MOVE_MUCH_CLOSER" | "MOVE_CLOSER" | "OPTIMAL" | "MOVE_AWAY" | "MOVE_FAR_AWAY";
+                                            /** @description The UID of the TAK marker that this sensor is attached to */
+                                            attachedUid?: string;
+                                            /** @description Is the data in this element representative of a simulated sensor */
+                                            simulated?: boolean;
+                                        };
+                                        radmeasurement?: {
+                                            /** @description Defines the alarm level, could be standard deviations above background. Will default to 0 (no alarm) */
+                                            nalarmstddev: number;
+                                            /** @description Alarm flag for the measurement. 1 = alarmed, 0 = not alarmed */
+                                            alarm: number;
+                                            /** @description The measurement value as a float. A/B/G/N will be interpreted as CPS. Dose Rate will be interpreted as mR/Hr */
+                                            measurement: number;
+                                            name: "alpha" | "beta" | "gamma" | "neutron" | "doserate";
+                                        }[];
+                                        physical_module?: {
+                                            location: "FRONT_LEFT" | "FRONT_RIGHT" | "REAR_LEFT" | "REAR_RIGHT" | "CAB";
+                                            /** @description Gamma counts per second */
+                                            gamma_cps: number;
+                                            /** @description Alarm level for the measurement. 0 = not alarmed, > 0 = alarm level */
+                                            gamma_alarm: number;
+                                            /** @description The gamma dose rate. Will be interpreted as uR/Hr */
+                                            gamma_dose_rate: number;
+                                        }[];
+                                        search_algorithm?: {
+                                            /** @description The Neutron localization value */
+                                            neutron_loc: number;
+                                            /** @description The Gamma localization value */
+                                            gamma_loc: number;
+                                            /** @description The Neutron localization alarm level */
+                                            neutron_loc_alarm_value: number;
+                                            /** @description The Gamma localization alarm level */
+                                            gamma_loc_alarm_value: number;
+                                            /** @description Alarm flag for the neutron localization value. 1 = alarmed, 0 = not alarmed */
+                                            neutron_loc_alarm: number;
+                                            /** @description Alarm flag for the gamma localization value. 1 = alarmed, 0 = not alarmed */
+                                            gamma_loc_alarm: number;
+                                        };
+                                        spectrum?: {
+                                            /** @description Flag for zero compression. 1 = zero compressed, 0 = not compressed */
+                                            zerocompression: number;
+                                            /** @description FOREGROUND or BACKGROUND */
+                                            type: string;
+                                            /** @description Spectrum live time in epoch time (ms) */
+                                            livetime_ms: string;
+                                            /** @description Spectrum real time in epoch time (ms) */
+                                            realtime_ms: string;
+                                            /** @description The spectral channel data */
+                                            channeldata: string;
+                                            /** @description The ID of the crystal reporting the channel data */
+                                            crystal_id?: string;
+                                        }[];
+                                        isotope?: {
+                                            /** @description The confidence value as a float representation of a percentage (88.5 NOT 0.885) */
+                                            confidence: number;
+                                            /** @description The name of the isotope */
+                                            name: string;
+                                            /** @description The type of the isotope */
+                                            type: string;
+                                        }[];
+                                        data_permissions?: {
+                                            /** @description All is true if all users should have access/permission */
+                                            all: boolean;
+                                            /** @description The list of ATAK UIDs that should have access/permission */
+                                            contact_list: string;
+                                        };
+                                        command_permissions?: {
+                                            /** @description All is true if all users should have access/permission */
+                                            all: boolean;
+                                            /** @description The list of ATAK UIDs that should have access/permission */
+                                            contact_list: string;
+                                        };
+                                    };
+                                    chemsensordetail?: {
+                                        sensor_data: {
+                                            /** @description The Manufacturer of the sensor in string format */
+                                            manufacturer: string;
+                                            /** @description The model of sensor in string format */
+                                            model: string;
+                                            /** @description The Serial Number of the Sensor in string format */
+                                            serialnumber: string;
+                                            /** @description The battery level as a percentage, float value */
+                                            batterylevel?: number;
+                                            /** @description The name of the given sensor in string format. Default name is Manufacturer+SerialNum */
+                                            callsign?: string;
+                                            /** @description The revision of the ChemCoT format, at writing this is "7" */
+                                            revision?: number;
+                                            /** @description General sensor health status */
+                                            status?: string;
+                                            /** @description Used internally by the CBRN plugin */
+                                            ordinal?: number;
+                                            /** @description The UID of the TAK marker that this sensor is attached to */
+                                            attachedUid?: string;
+                                            /** @description Is the data in this element representative of a simulated sensor */
+                                            simulated?: boolean;
+                                        };
+                                        detection?: {
+                                            /** @description Timestamp for the detection, epoch time (ms) */
+                                            time: string;
+                                            /** @description Chemical Name in string format */
+                                            agent: string;
+                                            /** @description Amount of chemical detected as a float. Could be mass, density, bars etc. */
+                                            quantity: number;
+                                            /** @description The units used to describe the quantity */
+                                            quantityunits: string;
+                                            /** @description Concentration of chemical in Kg/m^3 */
+                                            concentration?: number;
+                                            /** @description Alarm state of the sensor. 1 = alarm, 0 = no alarm */
+                                            alarm: number;
+                                            /** @description The confidence of the detection from the sensor as a percentage */
+                                            confidence?: number;
+                                            /** @description The mass fraction of the detection from the sensor in ppm */
+                                            massfraction?: number;
+                                            /** @description The percentage of the detection from the sensor in percent from 0-100 */
+                                            percent?: number;
+                                            /** @description The class of chemical detected. Nerve, Blood, TIC, etc. */
+                                            class?: string;
+                                            /** @description The ID number of the detection */
+                                            id?: number;
+                                        }[];
+                                    };
+                                    biosensordetail?: {
+                                        sensor_data: {
+                                            /** @description The Manufacturer of the sensor in string format */
+                                            manufacturer: string;
+                                            /** @description The model of sensor in string format */
+                                            model: string;
+                                            /** @description The Serial Number of the Sensor in string format */
+                                            serialnumber: string;
+                                            /** @description The battery level as a percentage, float value */
+                                            batterylevel?: number;
+                                            /** @description The name of the given sensor in string format. Default name is Manufacturer+SerialNum */
+                                            callsign?: string;
+                                            /** @description The revision of the BioCoT format */
+                                            revision?: number;
+                                            /** @description General sensor health status */
+                                            status?: string;
+                                            /** @description Used internally by the CBRN plugin */
+                                            ordinal?: number;
+                                            /** @description The UID of the TAK marker that this sensor is attached to */
+                                            attachedUid?: string;
+                                            /** @description Is the data in this element representative of a simulated sensor */
+                                            simulated?: boolean;
+                                        };
+                                        measurement?: {
+                                            /** @description Timestamp for the measurement, epoch time (ms) */
+                                            time: string;
+                                            /** @description Biological class */
+                                            bioClass?: string;
+                                            /** @description Biological type */
+                                            type?: string;
+                                            /** @description Channel identifier */
+                                            channel?: number;
+                                            /** @description Is this bio measurement harmful */
+                                            harmful?: boolean;
+                                            /** @description Dose Time */
+                                            doseTime?: number;
+                                            /** @description Amount of dose */
+                                            dose: number;
+                                            /** @description The confidence of the measurement from the sensor as a percentage */
+                                            confidence?: number;
+                                            /** @description Confirmation level */
+                                            confirmationLevel?: string;
+                                            /** @description Concentration */
+                                            concentration?: number;
+                                            /** @description Sample ID of this measurement */
+                                            sampleId?: string;
+                                            /** @description Persistency */
+                                            persistency?: string;
+                                            level?: {
+                                                /** @description The name of this measurement level */
+                                                levelName: string;
+                                                /** @description The value of this measurement level */
+                                                levelValue: string;
+                                            }[];
+                                        }[];
+                                    };
+                                    spatial?: {
+                                        version?: number;
+                                        attitude: {
+                                            /** @description Roll of entity in degrees. Positive indicates listing to the right. */
+                                            roll: number;
+                                            /** @description Pitch of entity in degrees. Positive indicates nose point up. */
+                                            pitch: number;
+                                            /** @description Yaw of entity in degrees. Positive indicates turned to the right. */
+                                            yaw?: number;
+                                            /** @description 1-sigma error of roll with respect to a zero mean normal Gaussian distribution. */
+                                            eRoll?: number;
+                                            /** @description 1-sigma error of pitch with respect to a zero mean normal Gaussian distribution. */
+                                            ePitch?: number;
+                                            /** @description 1-sigma error of yaw with respect to a zero mean normal Gaussian distribution. */
+                                            eYaw?: number;
+                                        };
+                                        spin: {
+                                            /** @description Degrees per second with positive indicating to the pilots right */
+                                            roll: number;
+                                            /** @description Degrees per second with positive indicating nose up. */
+                                            pitch: number;
+                                            /** @description Degrees per second with positive indicating right. */
+                                            yaw?: number;
+                                            /** @description 1-sigma error of roll with respect to a zero mean normal Gaussian distribution. */
+                                            eRoll?: number;
+                                            /** @description 1-sigma error of pitch with respect to a zero mean normal Gaussian distribution. */
+                                            ePitch?: number;
+                                            /** @description 1-sigma error of yaw with respect to a zero mean normal Gaussian distribution. */
+                                            eYaw?: number;
+                                        };
                                     };
                                 };
                                 path?: string;
@@ -7792,7 +9876,7 @@ export interface paths {
                 header?: never;
                 path: {
                     /** @description No Description */
-                    ":connectionid": "template" | number;
+                    ":connectionid": number;
                     /** @description No Description */
                     ":layerid": number;
                 };
@@ -7881,7 +9965,7 @@ export interface paths {
                 header?: never;
                 path: {
                     /** @description No Description */
-                    ":connectionid": "template" | number;
+                    ":connectionid": number;
                     /** @description No Description */
                     ":layerid": number;
                 };
@@ -7969,7 +10053,7 @@ export interface paths {
                 header?: never;
                 path: {
                     /** @description No Description */
-                    ":connectionid": "template" | number;
+                    ":connectionid": number;
                     /** @description No Description */
                     ":layerid": number;
                 };
@@ -8072,7 +10156,7 @@ export interface paths {
                 header?: never;
                 path: {
                     /** @description No Description */
-                    ":connectionid": "template" | number;
+                    ":connectionid": number;
                     /** @description No Description */
                     ":layerid": number;
                 };
@@ -8174,7 +10258,7 @@ export interface paths {
                 header?: never;
                 path: {
                     /** @description No Description */
-                    ":connectionid": "template" | number;
+                    ":connectionid": number;
                     /** @description No Description */
                     ":layerid": number;
                 };
@@ -8280,7 +10364,7 @@ export interface paths {
                 header?: never;
                 path: {
                     /** @description No Description */
-                    ":connectionid": "template" | number;
+                    ":connectionid": number;
                     /** @description No Description */
                     ":layerid": number;
                 };
@@ -8646,7 +10730,7 @@ export interface paths {
                 header?: never;
                 path: {
                     /** @description No Description */
-                    ":connectionid": "template" | number;
+                    ":connectionid": number;
                 };
                 cookie?: never;
             };
@@ -10884,7 +12968,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Register a new incoming layer config */
+        /** Register a new outgoing layer config */
         post: {
             parameters: {
                 query?: never;
@@ -11221,7 +13305,7 @@ export interface paths {
                 header?: never;
                 path: {
                     /** @description No Description */
-                    ":connectionid": "template" | number;
+                    ":connectionid": number;
                     /** @description No Description */
                     ":layerid": number;
                 };
@@ -11628,7 +13712,7 @@ export interface paths {
                 header?: never;
                 path: {
                     /** @description No Description */
-                    ":connectionid": "template" | number;
+                    ":connectionid": number;
                     /** @description No Description */
                     ":layerid": number;
                 };
@@ -11722,7 +13806,7 @@ export interface paths {
                 header?: never;
                 path: {
                     /** @description No Description */
-                    ":connectionid": "template" | number;
+                    ":connectionid": number;
                     /** @description No Description */
                     ":layerid": number;
                 };
@@ -12159,7 +14243,7 @@ export interface paths {
                 header?: never;
                 path: {
                     /** @description No Description */
-                    ":connectionid": "template" | number;
+                    ":connectionid": number;
                     /** @description No Description */
                     ":layerid": number;
                 };
@@ -14120,6 +16204,118 @@ export interface paths {
         };
         trace?: never;
     };
+    "/api/connection/0": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the admin connection (server-level connection using the server certificate) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: number;
+                            status: string;
+                            agency?: null | number;
+                            certificate: {
+                                subject: string;
+                                validFrom: string;
+                                validTo: string;
+                            };
+                            created: string;
+                            updated: string;
+                            readonly: boolean;
+                            username: null | string;
+                            name: string;
+                            description: string;
+                            enabled: boolean;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/connection/{:connectionid}/auth": {
         parameters: {
             query?: never;
@@ -14359,9 +16555,11 @@ export interface paths {
                     /** @description Order in which results are returned based on the "sort" query param */
                     order: "asc" | "desc";
                     /** @description No Description */
-                    sort: "id" | "created" | "updated" | "username" | "message" | "trace" | "enableRLS";
-                    /** @description No Description */
+                    sort: "id" | "created" | "updated" | "username" | "session_id" | "message" | "trace" | "enableRLS";
+                    /** @description Filter errors by the username that generated them */
                     username?: string;
+                    /** @description Filter errors by the session that generated them */
+                    session_id?: string;
                     /** @description Filter results by a human readable name field */
                     filter: string;
                 };
@@ -14384,6 +16582,7 @@ export interface paths {
                                 created: string;
                                 updated: string;
                                 username: string;
+                                session_id: string | null;
                                 message: string;
                                 trace: string | null;
                             }[];
@@ -14544,7 +16743,288 @@ export interface paths {
                 };
             };
         };
-        delete?: never;
+        /** Let admins bulk delete error reports by session, by username, or all errors when no filter is provided */
+        delete: {
+            parameters: {
+                query?: {
+                    /** @description Delete only errors generated by this username */
+                    username?: string;
+                    /** @description Delete only errors generated by this session */
+                    session_id?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/error/{:errorid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Let admins see a single error report */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description No Description */
+                    ":errorid": number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: number;
+                            created: string;
+                            updated: string;
+                            username: string;
+                            session_id: string | null;
+                            message: string;
+                            trace: string | null;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /** Let admins delete an individual error report */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description No Description */
+                    ":errorid": number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
         options?: never;
         head?: never;
         patch?: never;
@@ -18820,1421 +21300,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/iconset": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Iconsets */
-        get: {
-            parameters: {
-                query: {
-                    /** @description No Description */
-                    scope?: "server" | "user";
-                    /** @description Limit the number of responses returned. Use 0 to return all results without pagination; otherwise the limit is capped at 1000. */
-                    limit: number;
-                    /** @description Iterate through "pages" of items based on the "limit" query param */
-                    page: number;
-                    /** @description Order in which results are returned based on the "sort" query param */
-                    order: "asc" | "desc";
-                    /** @description No Description */
-                    sort: "uid" | "created" | "updated" | "version" | "name" | "username" | "username_internal" | "default_group" | "default_friendly" | "default_hostile" | "default_neutral" | "default_unknown" | "skip_resize" | "spritesheet_data" | "spritesheet_json" | "enableRLS";
-                    /** @description Filter results by a human readable name field */
-                    filter: string;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Successful Response */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            total: number;
-                            items: {
-                                uid: string;
-                                created: string;
-                                updated: string;
-                                version: number;
-                                name: string;
-                                username: null | string;
-                                username_internal: boolean;
-                                default_group: null | string;
-                                default_friendly: null | string;
-                                default_hostile: null | string;
-                                default_neutral: null | string;
-                                default_unknown: null | string;
-                                skip_resize: boolean;
-                            }[];
-                        };
-                    };
-                };
-                /** @description Error Response */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-            };
-        };
-        put?: never;
-        /** Create Iconset */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": {
-                        uid: string;
-                        version: number;
-                        /** @description Human readable name */
-                        name: string;
-                        /**
-                         * @description If true, the iconset will not be shown in the UI for selection
-                         * @default false
-                         */
-                        internal: boolean;
-                        scope?: "server" | "user";
-                        default_group?: string;
-                        default_friendly?: string;
-                        default_hostile?: string;
-                        default_neutral?: string;
-                        default_unknown?: string;
-                        skip_resize?: boolean;
-                    };
-                };
-            };
-            responses: {
-                /** @description Successful Response */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            uid: string;
-                            created: string;
-                            updated: string;
-                            version: number;
-                            name: string;
-                            username: null | string;
-                            username_internal: boolean;
-                            default_group: null | string;
-                            default_friendly: null | string;
-                            default_hostile: null | string;
-                            default_neutral: null | string;
-                            default_unknown: null | string;
-                            skip_resize: boolean;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/iconset/{:iconset}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Iconset */
-        get: {
-            parameters: {
-                query?: {
-                    /** @description No Description */
-                    format?: "json" | "zip";
-                    /** @description No Description */
-                    download?: boolean;
-                    /** @description Resize Images to 32x32px */
-                    resize?: boolean;
-                    /** @description No Description */
-                    token?: string;
-                };
-                header?: never;
-                path: {
-                    /** @description No Description */
-                    ":iconset": string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Successful Response */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            uid: string;
-                            created: string;
-                            updated: string;
-                            version: number;
-                            name: string;
-                            username: null | string;
-                            username_internal: boolean;
-                            default_group: null | string;
-                            default_friendly: null | string;
-                            default_hostile: null | string;
-                            default_neutral: null | string;
-                            default_unknown: null | string;
-                            skip_resize: boolean;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        /** Delete Iconset */
-        delete: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description No Description */
-                    ":iconset": string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Successful Response */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-            };
-        };
-        options?: never;
-        head?: never;
-        /** Update Iconset */
-        patch: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description No Description */
-                    ":iconset": string;
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": {
-                        public?: boolean;
-                        default_group?: string;
-                        default_friendly?: string;
-                        default_hostile?: string;
-                        default_neutral?: string;
-                        default_unknown?: string;
-                        skip_resize?: boolean;
-                    };
-                };
-            };
-            responses: {
-                /** @description Successful Response */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            uid: string;
-                            created: string;
-                            updated: string;
-                            version: number;
-                            name: string;
-                            username: null | string;
-                            username_internal: boolean;
-                            default_group: null | string;
-                            default_friendly: null | string;
-                            default_hostile: null | string;
-                            default_neutral: null | string;
-                            default_unknown: null | string;
-                            skip_resize: boolean;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-            };
-        };
-        trace?: never;
-    };
-    "/api/iconset/{:iconset}/regen": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Regenerate Iconset Spritesheet */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description No Description */
-                    ":iconset": string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Successful Response */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/iconset/{:iconset}/icon": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Create Icon */
-        post: {
-            parameters: {
-                query: {
-                    /** @description Regenerate Iconset spritesheet after upload */
-                    regen: boolean;
-                };
-                header?: never;
-                path: {
-                    /** @description No Description */
-                    ":iconset": string;
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": {
-                        /** @description Human readable name */
-                        name: string;
-                        data: string;
-                        type2525b?: null | string;
-                    };
-                };
-            };
-            responses: {
-                /** @description Successful Response */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            id: number;
-                            created: string;
-                            updated: string;
-                            name: string;
-                            format: string;
-                            iconset: string;
-                            type2525b: string | null;
-                            data: string;
-                            path: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/icon": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Icons */
-        get: {
-            parameters: {
-                query: {
-                    /** @description No Description */
-                    scope?: "server" | "user";
-                    /** @description Limit the number of responses returned. Use 0 to return all results without pagination; otherwise the limit is capped at 1000. */
-                    limit: number;
-                    /** @description Iterate through "pages" of items based on the "limit" query param */
-                    page: number;
-                    /** @description Order in which results are returned based on the "sort" query param */
-                    order: "asc" | "desc";
-                    /** @description No Description */
-                    sort?: "id" | "created" | "updated" | "name" | "format" | "iconset" | "type2525b" | "data" | "path" | "enableRLS";
-                    /** @description No Description */
-                    iconset?: string;
-                    /** @description Filter results by a human readable name field */
-                    filter: string;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Successful Response */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            total: number;
-                            items: {
-                                id: number;
-                                created: string;
-                                updated: string;
-                                name: string;
-                                format: string;
-                                iconset: string;
-                                type2525b: string | null;
-                                data: string;
-                                path: string;
-                            }[];
-                        };
-                    };
-                };
-                /** @description Error Response */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/iconset/{:iconset}/icon/{:icon}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Icon Metadata */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description No Description */
-                    ":iconset": string;
-                    /** @description No Description */
-                    ":icon": number | string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Successful Response */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            id: number;
-                            created: string;
-                            updated: string;
-                            name: string;
-                            format: string;
-                            iconset: string;
-                            type2525b: string | null;
-                            data: string;
-                            path: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        /** Remove Icon from Iconset */
-        delete: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description No Description */
-                    ":iconset": string;
-                    /** @description No Description */
-                    ":icon": number;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Successful Response */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-            };
-        };
-        options?: never;
-        head?: never;
-        /** Update Icon in Iconset */
-        patch: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description No Description */
-                    ":iconset": string;
-                    /** @description No Description */
-                    ":icon": number;
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": {
-                        name?: string;
-                        data?: string;
-                        type2525b?: null | string;
-                    };
-                };
-            };
-            responses: {
-                /** @description Successful Response */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            id: number;
-                            created: string;
-                            updated: string;
-                            name: string;
-                            format: string;
-                            iconset: string;
-                            type2525b: string | null;
-                            data: string;
-                            path: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-            };
-        };
-        trace?: never;
-    };
-    "/api/iconset/{:iconset}/sprite{:size}.json": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Spriteset JSON for CoT types */
-        get: {
-            parameters: {
-                query?: {
-                    /** @description No Description */
-                    scope?: "server" | "user";
-                    /** @description No Description */
-                    token?: string;
-                };
-                header?: never;
-                path: {
-                    /** @description No Description */
-                    ":iconset": string;
-                    /** @description No Description */
-                    ":size": string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Successful Response */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": unknown;
-                    };
-                };
-                /** @description Error Response */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/iconset/{:iconset}/sprite{:size}.png": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Return a sprite sheet for CoT Types */
-        get: {
-            parameters: {
-                query?: {
-                    /** @description No Description */
-                    token?: string;
-                };
-                header?: never;
-                path: {
-                    /** @description No Description */
-                    ":iconset": string;
-                    /** @description No Description */
-                    ":size": string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Successful Response */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                /** @description Error Response */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/login/passkey": {
         parameters: {
             query?: never;
@@ -20750,6 +21815,7 @@ export interface paths {
                             token: string;
                             access: "admin" | "agency" | "user";
                             email: string;
+                            session: string;
                             certRenewalRequired?: boolean;
                         };
                     };
@@ -21044,6 +22110,7 @@ export interface paths {
                             token: string;
                             access: "admin" | "agency" | "user";
                             email: string;
+                            session: string;
                         };
                     };
                 };
@@ -21109,118 +22176,6 @@ export interface paths {
                 };
             };
         };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/manifest.webmanifest": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Return the Web Manifest for PWA Use */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Successful Response */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            name: string;
-                            short_name: string;
-                            description: string;
-                            start_url: string;
-                            display: string;
-                            background_color: string;
-                            theme_color: string;
-                            lang: string;
-                            scope: string;
-                            icons: {
-                                src: string;
-                                sizes: string;
-                            }[];
-                            orientation: string;
-                            categories: string[];
-                        };
-                    };
-                };
-                /** @description Error Response */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -21558,7 +22513,7 @@ export interface paths {
                                     groupOwner?: string;
                                     messageId?: string;
                                     chatroom: string;
-                                    id: string;
+                                    id?: string;
                                     senderCallsign: string;
                                     chatgrp: unknown;
                                 };
@@ -21611,6 +22566,268 @@ export interface paths {
                                 };
                                 flow?: {
                                     [key: string]: string;
+                                };
+                                radsensordetail?: {
+                                    sensor_data: {
+                                        /** @description epoch time in Long format */
+                                        time: string;
+                                        /** @description The model of sensor (Micro Detective, IdentiFINDER 2, etc.) in string format */
+                                        model: string;
+                                        /** @description The neutron detector status (Full, Reduced or Unknown). Not available for most sensors, default to Unknown */
+                                        neutronstatus: string;
+                                        /** @description The gamma detector status (Full, Reduced or Unknown). Not available for most sensors, default to Unknown */
+                                        gammastatus: string;
+                                        /** @description The Manufacturer of the sensor (Ortec, Nucsafe, etc.) in string format */
+                                        manufacturer: string;
+                                        /** @description The name of the given sensor in string format */
+                                        callsign?: string;
+                                        /** @description The Serial Number of the Sensor in string format */
+                                        serialnumber: string;
+                                        /** @description The battery level as a percentage, float value */
+                                        batterylevel?: number;
+                                        /** @description The ID algorithm used to ID isotopes (ex. GADRAS) */
+                                        id_algorithm?: string;
+                                        /** @description The search algorithm used (ex. RDAK, SAMBA) */
+                                        search_algorithm?: string;
+                                        /** @description The alarm algorithm used (ex. RDAK, SAMBA) */
+                                        alarm_algorithm?: string;
+                                        /** @description Used internally by the CBRN plugin */
+                                        ordinal?: number;
+                                        /** @description Identifier of this subchannel, if this event is a report from a subchannel of a master sensor */
+                                        subchannel?: string;
+                                        /** @description Used to align subchannels */
+                                        measurement_ref?: number;
+                                        /** @description Name of the master sensor, if this event is a report from a subchannel */
+                                        master_sensor_manufacturer?: string;
+                                        /** @description Serial number of the master sensor, if this event is a report from a subchannel */
+                                        master_sensor_serial?: string;
+                                        /** @description A bearing in positive degrees if the sensor reports back a direction for the detected source, -1 otherwise */
+                                        source_bearing?: number;
+                                        /** @description A scale from 0 - 0.5 giving the magnitude of the source strength in the direction of source_bearing */
+                                        source_strength?: number;
+                                        /** @description Used for sensors that can relay data from other sensors, or that can be relayed in that way */
+                                        relay_type?: string;
+                                        /** @description The location of the sensor where it's being worn on the vest */
+                                        module_location?: string;
+                                        /** @description The number from the sensor needed in order to retrieve any specific algorithm calculated data */
+                                        detector_number?: number;
+                                        /** @description The total mR configured for the sensor's current mission */
+                                        mission_total_mR?: number;
+                                        /** @description The total seconds remaining of mission time based on current configuration of sensor and acquired dose */
+                                        mission_stay_time_sec?: number;
+                                        /** @description The total uR acquired by the sensor for the current mission */
+                                        mission_acquired_uR?: number;
+                                        /** @description The temperature of the sensor in degrees celsius */
+                                        sensor_temp_deg_c?: number;
+                                        /** @description The current directional heading of the sensor */
+                                        heading?: number;
+                                        source_distance?: "MOVE_MUCH_CLOSER" | "MOVE_CLOSER" | "OPTIMAL" | "MOVE_AWAY" | "MOVE_FAR_AWAY";
+                                        /** @description The UID of the TAK marker that this sensor is attached to */
+                                        attachedUid?: string;
+                                        /** @description Is the data in this element representative of a simulated sensor */
+                                        simulated?: boolean;
+                                    };
+                                    radmeasurement?: {
+                                        /** @description Defines the alarm level, could be standard deviations above background. Will default to 0 (no alarm) */
+                                        nalarmstddev: number;
+                                        /** @description Alarm flag for the measurement. 1 = alarmed, 0 = not alarmed */
+                                        alarm: number;
+                                        /** @description The measurement value as a float. A/B/G/N will be interpreted as CPS. Dose Rate will be interpreted as mR/Hr */
+                                        measurement: number;
+                                        name: "alpha" | "beta" | "gamma" | "neutron" | "doserate";
+                                    }[];
+                                    physical_module?: {
+                                        location: "FRONT_LEFT" | "FRONT_RIGHT" | "REAR_LEFT" | "REAR_RIGHT" | "CAB";
+                                        /** @description Gamma counts per second */
+                                        gamma_cps: number;
+                                        /** @description Alarm level for the measurement. 0 = not alarmed, > 0 = alarm level */
+                                        gamma_alarm: number;
+                                        /** @description The gamma dose rate. Will be interpreted as uR/Hr */
+                                        gamma_dose_rate: number;
+                                    }[];
+                                    search_algorithm?: {
+                                        /** @description The Neutron localization value */
+                                        neutron_loc: number;
+                                        /** @description The Gamma localization value */
+                                        gamma_loc: number;
+                                        /** @description The Neutron localization alarm level */
+                                        neutron_loc_alarm_value: number;
+                                        /** @description The Gamma localization alarm level */
+                                        gamma_loc_alarm_value: number;
+                                        /** @description Alarm flag for the neutron localization value. 1 = alarmed, 0 = not alarmed */
+                                        neutron_loc_alarm: number;
+                                        /** @description Alarm flag for the gamma localization value. 1 = alarmed, 0 = not alarmed */
+                                        gamma_loc_alarm: number;
+                                    };
+                                    spectrum?: {
+                                        /** @description Flag for zero compression. 1 = zero compressed, 0 = not compressed */
+                                        zerocompression: number;
+                                        /** @description FOREGROUND or BACKGROUND */
+                                        type: string;
+                                        /** @description Spectrum live time in epoch time (ms) */
+                                        livetime_ms: string;
+                                        /** @description Spectrum real time in epoch time (ms) */
+                                        realtime_ms: string;
+                                        /** @description The spectral channel data */
+                                        channeldata: string;
+                                        /** @description The ID of the crystal reporting the channel data */
+                                        crystal_id?: string;
+                                    }[];
+                                    isotope?: {
+                                        /** @description The confidence value as a float representation of a percentage (88.5 NOT 0.885) */
+                                        confidence: number;
+                                        /** @description The name of the isotope */
+                                        name: string;
+                                        /** @description The type of the isotope */
+                                        type: string;
+                                    }[];
+                                    data_permissions?: {
+                                        /** @description All is true if all users should have access/permission */
+                                        all: boolean;
+                                        /** @description The list of ATAK UIDs that should have access/permission */
+                                        contact_list: string;
+                                    };
+                                    command_permissions?: {
+                                        /** @description All is true if all users should have access/permission */
+                                        all: boolean;
+                                        /** @description The list of ATAK UIDs that should have access/permission */
+                                        contact_list: string;
+                                    };
+                                };
+                                chemsensordetail?: {
+                                    sensor_data: {
+                                        /** @description The Manufacturer of the sensor in string format */
+                                        manufacturer: string;
+                                        /** @description The model of sensor in string format */
+                                        model: string;
+                                        /** @description The Serial Number of the Sensor in string format */
+                                        serialnumber: string;
+                                        /** @description The battery level as a percentage, float value */
+                                        batterylevel?: number;
+                                        /** @description The name of the given sensor in string format. Default name is Manufacturer+SerialNum */
+                                        callsign?: string;
+                                        /** @description The revision of the ChemCoT format, at writing this is "7" */
+                                        revision?: number;
+                                        /** @description General sensor health status */
+                                        status?: string;
+                                        /** @description Used internally by the CBRN plugin */
+                                        ordinal?: number;
+                                        /** @description The UID of the TAK marker that this sensor is attached to */
+                                        attachedUid?: string;
+                                        /** @description Is the data in this element representative of a simulated sensor */
+                                        simulated?: boolean;
+                                    };
+                                    detection?: {
+                                        /** @description Timestamp for the detection, epoch time (ms) */
+                                        time: string;
+                                        /** @description Chemical Name in string format */
+                                        agent: string;
+                                        /** @description Amount of chemical detected as a float. Could be mass, density, bars etc. */
+                                        quantity: number;
+                                        /** @description The units used to describe the quantity */
+                                        quantityunits: string;
+                                        /** @description Concentration of chemical in Kg/m^3 */
+                                        concentration?: number;
+                                        /** @description Alarm state of the sensor. 1 = alarm, 0 = no alarm */
+                                        alarm: number;
+                                        /** @description The confidence of the detection from the sensor as a percentage */
+                                        confidence?: number;
+                                        /** @description The mass fraction of the detection from the sensor in ppm */
+                                        massfraction?: number;
+                                        /** @description The percentage of the detection from the sensor in percent from 0-100 */
+                                        percent?: number;
+                                        /** @description The class of chemical detected. Nerve, Blood, TIC, etc. */
+                                        class?: string;
+                                        /** @description The ID number of the detection */
+                                        id?: number;
+                                    }[];
+                                };
+                                biosensordetail?: {
+                                    sensor_data: {
+                                        /** @description The Manufacturer of the sensor in string format */
+                                        manufacturer: string;
+                                        /** @description The model of sensor in string format */
+                                        model: string;
+                                        /** @description The Serial Number of the Sensor in string format */
+                                        serialnumber: string;
+                                        /** @description The battery level as a percentage, float value */
+                                        batterylevel?: number;
+                                        /** @description The name of the given sensor in string format. Default name is Manufacturer+SerialNum */
+                                        callsign?: string;
+                                        /** @description The revision of the BioCoT format */
+                                        revision?: number;
+                                        /** @description General sensor health status */
+                                        status?: string;
+                                        /** @description Used internally by the CBRN plugin */
+                                        ordinal?: number;
+                                        /** @description The UID of the TAK marker that this sensor is attached to */
+                                        attachedUid?: string;
+                                        /** @description Is the data in this element representative of a simulated sensor */
+                                        simulated?: boolean;
+                                    };
+                                    measurement?: {
+                                        /** @description Timestamp for the measurement, epoch time (ms) */
+                                        time: string;
+                                        /** @description Biological class */
+                                        bioClass?: string;
+                                        /** @description Biological type */
+                                        type?: string;
+                                        /** @description Channel identifier */
+                                        channel?: number;
+                                        /** @description Is this bio measurement harmful */
+                                        harmful?: boolean;
+                                        /** @description Dose Time */
+                                        doseTime?: number;
+                                        /** @description Amount of dose */
+                                        dose: number;
+                                        /** @description The confidence of the measurement from the sensor as a percentage */
+                                        confidence?: number;
+                                        /** @description Confirmation level */
+                                        confirmationLevel?: string;
+                                        /** @description Concentration */
+                                        concentration?: number;
+                                        /** @description Sample ID of this measurement */
+                                        sampleId?: string;
+                                        /** @description Persistency */
+                                        persistency?: string;
+                                        level?: {
+                                            /** @description The name of this measurement level */
+                                            levelName: string;
+                                            /** @description The value of this measurement level */
+                                            levelValue: string;
+                                        }[];
+                                    }[];
+                                };
+                                spatial?: {
+                                    version?: number;
+                                    attitude: {
+                                        /** @description Roll of entity in degrees. Positive indicates listing to the right. */
+                                        roll: number;
+                                        /** @description Pitch of entity in degrees. Positive indicates nose point up. */
+                                        pitch: number;
+                                        /** @description Yaw of entity in degrees. Positive indicates turned to the right. */
+                                        yaw?: number;
+                                        /** @description 1-sigma error of roll with respect to a zero mean normal Gaussian distribution. */
+                                        eRoll?: number;
+                                        /** @description 1-sigma error of pitch with respect to a zero mean normal Gaussian distribution. */
+                                        ePitch?: number;
+                                        /** @description 1-sigma error of yaw with respect to a zero mean normal Gaussian distribution. */
+                                        eYaw?: number;
+                                    };
+                                    spin: {
+                                        /** @description Degrees per second with positive indicating to the pilots right */
+                                        roll: number;
+                                        /** @description Degrees per second with positive indicating nose up. */
+                                        pitch: number;
+                                        /** @description Degrees per second with positive indicating right. */
+                                        yaw?: number;
+                                        /** @description 1-sigma error of roll with respect to a zero mean normal Gaussian distribution. */
+                                        eRoll?: number;
+                                        /** @description 1-sigma error of pitch with respect to a zero mean normal Gaussian distribution. */
+                                        ePitch?: number;
+                                        /** @description 1-sigma error of yaw with respect to a zero mean normal Gaussian distribution. */
+                                        eYaw?: number;
+                                    };
                                 };
                             };
                             path?: string;
@@ -21931,7 +23148,7 @@ export interface paths {
                                         groupOwner?: string;
                                         messageId?: string;
                                         chatroom: string;
-                                        id: string;
+                                        id?: string;
                                         senderCallsign: string;
                                         chatgrp: unknown;
                                     };
@@ -21984,6 +23201,268 @@ export interface paths {
                                     };
                                     flow?: {
                                         [key: string]: string;
+                                    };
+                                    radsensordetail?: {
+                                        sensor_data: {
+                                            /** @description epoch time in Long format */
+                                            time: string;
+                                            /** @description The model of sensor (Micro Detective, IdentiFINDER 2, etc.) in string format */
+                                            model: string;
+                                            /** @description The neutron detector status (Full, Reduced or Unknown). Not available for most sensors, default to Unknown */
+                                            neutronstatus: string;
+                                            /** @description The gamma detector status (Full, Reduced or Unknown). Not available for most sensors, default to Unknown */
+                                            gammastatus: string;
+                                            /** @description The Manufacturer of the sensor (Ortec, Nucsafe, etc.) in string format */
+                                            manufacturer: string;
+                                            /** @description The name of the given sensor in string format */
+                                            callsign?: string;
+                                            /** @description The Serial Number of the Sensor in string format */
+                                            serialnumber: string;
+                                            /** @description The battery level as a percentage, float value */
+                                            batterylevel?: number;
+                                            /** @description The ID algorithm used to ID isotopes (ex. GADRAS) */
+                                            id_algorithm?: string;
+                                            /** @description The search algorithm used (ex. RDAK, SAMBA) */
+                                            search_algorithm?: string;
+                                            /** @description The alarm algorithm used (ex. RDAK, SAMBA) */
+                                            alarm_algorithm?: string;
+                                            /** @description Used internally by the CBRN plugin */
+                                            ordinal?: number;
+                                            /** @description Identifier of this subchannel, if this event is a report from a subchannel of a master sensor */
+                                            subchannel?: string;
+                                            /** @description Used to align subchannels */
+                                            measurement_ref?: number;
+                                            /** @description Name of the master sensor, if this event is a report from a subchannel */
+                                            master_sensor_manufacturer?: string;
+                                            /** @description Serial number of the master sensor, if this event is a report from a subchannel */
+                                            master_sensor_serial?: string;
+                                            /** @description A bearing in positive degrees if the sensor reports back a direction for the detected source, -1 otherwise */
+                                            source_bearing?: number;
+                                            /** @description A scale from 0 - 0.5 giving the magnitude of the source strength in the direction of source_bearing */
+                                            source_strength?: number;
+                                            /** @description Used for sensors that can relay data from other sensors, or that can be relayed in that way */
+                                            relay_type?: string;
+                                            /** @description The location of the sensor where it's being worn on the vest */
+                                            module_location?: string;
+                                            /** @description The number from the sensor needed in order to retrieve any specific algorithm calculated data */
+                                            detector_number?: number;
+                                            /** @description The total mR configured for the sensor's current mission */
+                                            mission_total_mR?: number;
+                                            /** @description The total seconds remaining of mission time based on current configuration of sensor and acquired dose */
+                                            mission_stay_time_sec?: number;
+                                            /** @description The total uR acquired by the sensor for the current mission */
+                                            mission_acquired_uR?: number;
+                                            /** @description The temperature of the sensor in degrees celsius */
+                                            sensor_temp_deg_c?: number;
+                                            /** @description The current directional heading of the sensor */
+                                            heading?: number;
+                                            source_distance?: "MOVE_MUCH_CLOSER" | "MOVE_CLOSER" | "OPTIMAL" | "MOVE_AWAY" | "MOVE_FAR_AWAY";
+                                            /** @description The UID of the TAK marker that this sensor is attached to */
+                                            attachedUid?: string;
+                                            /** @description Is the data in this element representative of a simulated sensor */
+                                            simulated?: boolean;
+                                        };
+                                        radmeasurement?: {
+                                            /** @description Defines the alarm level, could be standard deviations above background. Will default to 0 (no alarm) */
+                                            nalarmstddev: number;
+                                            /** @description Alarm flag for the measurement. 1 = alarmed, 0 = not alarmed */
+                                            alarm: number;
+                                            /** @description The measurement value as a float. A/B/G/N will be interpreted as CPS. Dose Rate will be interpreted as mR/Hr */
+                                            measurement: number;
+                                            name: "alpha" | "beta" | "gamma" | "neutron" | "doserate";
+                                        }[];
+                                        physical_module?: {
+                                            location: "FRONT_LEFT" | "FRONT_RIGHT" | "REAR_LEFT" | "REAR_RIGHT" | "CAB";
+                                            /** @description Gamma counts per second */
+                                            gamma_cps: number;
+                                            /** @description Alarm level for the measurement. 0 = not alarmed, > 0 = alarm level */
+                                            gamma_alarm: number;
+                                            /** @description The gamma dose rate. Will be interpreted as uR/Hr */
+                                            gamma_dose_rate: number;
+                                        }[];
+                                        search_algorithm?: {
+                                            /** @description The Neutron localization value */
+                                            neutron_loc: number;
+                                            /** @description The Gamma localization value */
+                                            gamma_loc: number;
+                                            /** @description The Neutron localization alarm level */
+                                            neutron_loc_alarm_value: number;
+                                            /** @description The Gamma localization alarm level */
+                                            gamma_loc_alarm_value: number;
+                                            /** @description Alarm flag for the neutron localization value. 1 = alarmed, 0 = not alarmed */
+                                            neutron_loc_alarm: number;
+                                            /** @description Alarm flag for the gamma localization value. 1 = alarmed, 0 = not alarmed */
+                                            gamma_loc_alarm: number;
+                                        };
+                                        spectrum?: {
+                                            /** @description Flag for zero compression. 1 = zero compressed, 0 = not compressed */
+                                            zerocompression: number;
+                                            /** @description FOREGROUND or BACKGROUND */
+                                            type: string;
+                                            /** @description Spectrum live time in epoch time (ms) */
+                                            livetime_ms: string;
+                                            /** @description Spectrum real time in epoch time (ms) */
+                                            realtime_ms: string;
+                                            /** @description The spectral channel data */
+                                            channeldata: string;
+                                            /** @description The ID of the crystal reporting the channel data */
+                                            crystal_id?: string;
+                                        }[];
+                                        isotope?: {
+                                            /** @description The confidence value as a float representation of a percentage (88.5 NOT 0.885) */
+                                            confidence: number;
+                                            /** @description The name of the isotope */
+                                            name: string;
+                                            /** @description The type of the isotope */
+                                            type: string;
+                                        }[];
+                                        data_permissions?: {
+                                            /** @description All is true if all users should have access/permission */
+                                            all: boolean;
+                                            /** @description The list of ATAK UIDs that should have access/permission */
+                                            contact_list: string;
+                                        };
+                                        command_permissions?: {
+                                            /** @description All is true if all users should have access/permission */
+                                            all: boolean;
+                                            /** @description The list of ATAK UIDs that should have access/permission */
+                                            contact_list: string;
+                                        };
+                                    };
+                                    chemsensordetail?: {
+                                        sensor_data: {
+                                            /** @description The Manufacturer of the sensor in string format */
+                                            manufacturer: string;
+                                            /** @description The model of sensor in string format */
+                                            model: string;
+                                            /** @description The Serial Number of the Sensor in string format */
+                                            serialnumber: string;
+                                            /** @description The battery level as a percentage, float value */
+                                            batterylevel?: number;
+                                            /** @description The name of the given sensor in string format. Default name is Manufacturer+SerialNum */
+                                            callsign?: string;
+                                            /** @description The revision of the ChemCoT format, at writing this is "7" */
+                                            revision?: number;
+                                            /** @description General sensor health status */
+                                            status?: string;
+                                            /** @description Used internally by the CBRN plugin */
+                                            ordinal?: number;
+                                            /** @description The UID of the TAK marker that this sensor is attached to */
+                                            attachedUid?: string;
+                                            /** @description Is the data in this element representative of a simulated sensor */
+                                            simulated?: boolean;
+                                        };
+                                        detection?: {
+                                            /** @description Timestamp for the detection, epoch time (ms) */
+                                            time: string;
+                                            /** @description Chemical Name in string format */
+                                            agent: string;
+                                            /** @description Amount of chemical detected as a float. Could be mass, density, bars etc. */
+                                            quantity: number;
+                                            /** @description The units used to describe the quantity */
+                                            quantityunits: string;
+                                            /** @description Concentration of chemical in Kg/m^3 */
+                                            concentration?: number;
+                                            /** @description Alarm state of the sensor. 1 = alarm, 0 = no alarm */
+                                            alarm: number;
+                                            /** @description The confidence of the detection from the sensor as a percentage */
+                                            confidence?: number;
+                                            /** @description The mass fraction of the detection from the sensor in ppm */
+                                            massfraction?: number;
+                                            /** @description The percentage of the detection from the sensor in percent from 0-100 */
+                                            percent?: number;
+                                            /** @description The class of chemical detected. Nerve, Blood, TIC, etc. */
+                                            class?: string;
+                                            /** @description The ID number of the detection */
+                                            id?: number;
+                                        }[];
+                                    };
+                                    biosensordetail?: {
+                                        sensor_data: {
+                                            /** @description The Manufacturer of the sensor in string format */
+                                            manufacturer: string;
+                                            /** @description The model of sensor in string format */
+                                            model: string;
+                                            /** @description The Serial Number of the Sensor in string format */
+                                            serialnumber: string;
+                                            /** @description The battery level as a percentage, float value */
+                                            batterylevel?: number;
+                                            /** @description The name of the given sensor in string format. Default name is Manufacturer+SerialNum */
+                                            callsign?: string;
+                                            /** @description The revision of the BioCoT format */
+                                            revision?: number;
+                                            /** @description General sensor health status */
+                                            status?: string;
+                                            /** @description Used internally by the CBRN plugin */
+                                            ordinal?: number;
+                                            /** @description The UID of the TAK marker that this sensor is attached to */
+                                            attachedUid?: string;
+                                            /** @description Is the data in this element representative of a simulated sensor */
+                                            simulated?: boolean;
+                                        };
+                                        measurement?: {
+                                            /** @description Timestamp for the measurement, epoch time (ms) */
+                                            time: string;
+                                            /** @description Biological class */
+                                            bioClass?: string;
+                                            /** @description Biological type */
+                                            type?: string;
+                                            /** @description Channel identifier */
+                                            channel?: number;
+                                            /** @description Is this bio measurement harmful */
+                                            harmful?: boolean;
+                                            /** @description Dose Time */
+                                            doseTime?: number;
+                                            /** @description Amount of dose */
+                                            dose: number;
+                                            /** @description The confidence of the measurement from the sensor as a percentage */
+                                            confidence?: number;
+                                            /** @description Confirmation level */
+                                            confirmationLevel?: string;
+                                            /** @description Concentration */
+                                            concentration?: number;
+                                            /** @description Sample ID of this measurement */
+                                            sampleId?: string;
+                                            /** @description Persistency */
+                                            persistency?: string;
+                                            level?: {
+                                                /** @description The name of this measurement level */
+                                                levelName: string;
+                                                /** @description The value of this measurement level */
+                                                levelValue: string;
+                                            }[];
+                                        }[];
+                                    };
+                                    spatial?: {
+                                        version?: number;
+                                        attitude: {
+                                            /** @description Roll of entity in degrees. Positive indicates listing to the right. */
+                                            roll: number;
+                                            /** @description Pitch of entity in degrees. Positive indicates nose point up. */
+                                            pitch: number;
+                                            /** @description Yaw of entity in degrees. Positive indicates turned to the right. */
+                                            yaw?: number;
+                                            /** @description 1-sigma error of roll with respect to a zero mean normal Gaussian distribution. */
+                                            eRoll?: number;
+                                            /** @description 1-sigma error of pitch with respect to a zero mean normal Gaussian distribution. */
+                                            ePitch?: number;
+                                            /** @description 1-sigma error of yaw with respect to a zero mean normal Gaussian distribution. */
+                                            eYaw?: number;
+                                        };
+                                        spin: {
+                                            /** @description Degrees per second with positive indicating to the pilots right */
+                                            roll: number;
+                                            /** @description Degrees per second with positive indicating nose up. */
+                                            pitch: number;
+                                            /** @description Degrees per second with positive indicating right. */
+                                            yaw?: number;
+                                            /** @description 1-sigma error of roll with respect to a zero mean normal Gaussian distribution. */
+                                            eRoll?: number;
+                                            /** @description 1-sigma error of pitch with respect to a zero mean normal Gaussian distribution. */
+                                            ePitch?: number;
+                                            /** @description 1-sigma error of yaw with respect to a zero mean normal Gaussian distribution. */
+                                            eYaw?: number;
+                                        };
                                     };
                                 };
                                 path?: string;
@@ -22260,6 +23739,216 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manifest.webmanifest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Return the Web Manifest for PWA Use */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            name: string;
+                            short_name: string;
+                            description: string;
+                            start_url: string;
+                            display: string;
+                            background_color: string;
+                            theme_color: string;
+                            lang: string;
+                            scope: string;
+                            icons: {
+                                src: string;
+                                sizes: string;
+                                type: string;
+                            }[];
+                            orientation: string;
+                            categories: string[];
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/manifest.webmanifest/logos/{:size}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Return a resized PNG logo for PWA use */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Logo size in pixels */
+                    ":size": number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -22863,6 +24552,8 @@ export interface paths {
                     format: "json" | "csv";
                     /** @description If set, the response will include a Content-Disposition Header */
                     download: boolean;
+                    /** @description No Description */
+                    token?: string;
                 };
                 header?: never;
                 path: {
@@ -22888,8 +24579,10 @@ export interface paths {
                                 missionNames: string[];
                                 servertime: string;
                                 dtg?: string;
+                                /** @description CoT UID this log entry references; appears as a clickable link in TAK clients */
+                                entryUid?: string;
                                 created: string;
-                                contentHashes: unknown[];
+                                contentHashes: string[];
                                 keywords: string[];
                             }[];
                         };
@@ -22975,6 +24668,8 @@ export interface paths {
                         /** Format: date-time */
                         dtg?: string;
                         content: string;
+                        contentHashes?: string[];
+                        entryUid?: string;
                         keywords?: string[];
                     };
                 };
@@ -23094,6 +24789,8 @@ export interface paths {
                     "application/json": {
                         /** Format: date-time */
                         dtg: string;
+                        contentHashes?: string[];
+                        entryUid?: string;
                         content: string;
                         keywords?: string[];
                     };
@@ -23116,8 +24813,10 @@ export interface paths {
                                 missionNames: string[];
                                 servertime: string;
                                 dtg?: string;
+                                /** @description CoT UID this log entry references; appears as a clickable link in TAK clients */
+                                entryUid?: string;
                                 created: string;
-                                contentHashes: unknown[];
+                                contentHashes: string[];
                                 keywords: string[];
                             };
                             messages?: string[];
@@ -23362,8 +25061,10 @@ export interface paths {
                                 missionNames: string[];
                                 servertime: string;
                                 dtg?: string;
+                                /** @description CoT UID this log entry references; appears as a clickable link in TAK clients */
+                                entryUid?: string;
                                 created: string;
-                                contentHashes: unknown[];
+                                contentHashes: string[];
                                 keywords: string[];
                             }[];
                             contents: {
@@ -23643,8 +25344,10 @@ export interface paths {
                                 missionNames: string[];
                                 servertime: string;
                                 dtg?: string;
+                                /** @description CoT UID this log entry references; appears as a clickable link in TAK clients */
+                                entryUid?: string;
                                 created: string;
-                                contentHashes: unknown[];
+                                contentHashes: string[];
                                 keywords: string[];
                             }[];
                             contents: {
@@ -23991,7 +25694,7 @@ export interface paths {
                                         groupOwner?: string;
                                         messageId?: string;
                                         chatroom: string;
-                                        id: string;
+                                        id?: string;
                                         senderCallsign: string;
                                         chatgrp: unknown;
                                     };
@@ -24044,6 +25747,268 @@ export interface paths {
                                     };
                                     flow?: {
                                         [key: string]: string;
+                                    };
+                                    radsensordetail?: {
+                                        sensor_data: {
+                                            /** @description epoch time in Long format */
+                                            time: string;
+                                            /** @description The model of sensor (Micro Detective, IdentiFINDER 2, etc.) in string format */
+                                            model: string;
+                                            /** @description The neutron detector status (Full, Reduced or Unknown). Not available for most sensors, default to Unknown */
+                                            neutronstatus: string;
+                                            /** @description The gamma detector status (Full, Reduced or Unknown). Not available for most sensors, default to Unknown */
+                                            gammastatus: string;
+                                            /** @description The Manufacturer of the sensor (Ortec, Nucsafe, etc.) in string format */
+                                            manufacturer: string;
+                                            /** @description The name of the given sensor in string format */
+                                            callsign?: string;
+                                            /** @description The Serial Number of the Sensor in string format */
+                                            serialnumber: string;
+                                            /** @description The battery level as a percentage, float value */
+                                            batterylevel?: number;
+                                            /** @description The ID algorithm used to ID isotopes (ex. GADRAS) */
+                                            id_algorithm?: string;
+                                            /** @description The search algorithm used (ex. RDAK, SAMBA) */
+                                            search_algorithm?: string;
+                                            /** @description The alarm algorithm used (ex. RDAK, SAMBA) */
+                                            alarm_algorithm?: string;
+                                            /** @description Used internally by the CBRN plugin */
+                                            ordinal?: number;
+                                            /** @description Identifier of this subchannel, if this event is a report from a subchannel of a master sensor */
+                                            subchannel?: string;
+                                            /** @description Used to align subchannels */
+                                            measurement_ref?: number;
+                                            /** @description Name of the master sensor, if this event is a report from a subchannel */
+                                            master_sensor_manufacturer?: string;
+                                            /** @description Serial number of the master sensor, if this event is a report from a subchannel */
+                                            master_sensor_serial?: string;
+                                            /** @description A bearing in positive degrees if the sensor reports back a direction for the detected source, -1 otherwise */
+                                            source_bearing?: number;
+                                            /** @description A scale from 0 - 0.5 giving the magnitude of the source strength in the direction of source_bearing */
+                                            source_strength?: number;
+                                            /** @description Used for sensors that can relay data from other sensors, or that can be relayed in that way */
+                                            relay_type?: string;
+                                            /** @description The location of the sensor where it's being worn on the vest */
+                                            module_location?: string;
+                                            /** @description The number from the sensor needed in order to retrieve any specific algorithm calculated data */
+                                            detector_number?: number;
+                                            /** @description The total mR configured for the sensor's current mission */
+                                            mission_total_mR?: number;
+                                            /** @description The total seconds remaining of mission time based on current configuration of sensor and acquired dose */
+                                            mission_stay_time_sec?: number;
+                                            /** @description The total uR acquired by the sensor for the current mission */
+                                            mission_acquired_uR?: number;
+                                            /** @description The temperature of the sensor in degrees celsius */
+                                            sensor_temp_deg_c?: number;
+                                            /** @description The current directional heading of the sensor */
+                                            heading?: number;
+                                            source_distance?: "MOVE_MUCH_CLOSER" | "MOVE_CLOSER" | "OPTIMAL" | "MOVE_AWAY" | "MOVE_FAR_AWAY";
+                                            /** @description The UID of the TAK marker that this sensor is attached to */
+                                            attachedUid?: string;
+                                            /** @description Is the data in this element representative of a simulated sensor */
+                                            simulated?: boolean;
+                                        };
+                                        radmeasurement?: {
+                                            /** @description Defines the alarm level, could be standard deviations above background. Will default to 0 (no alarm) */
+                                            nalarmstddev: number;
+                                            /** @description Alarm flag for the measurement. 1 = alarmed, 0 = not alarmed */
+                                            alarm: number;
+                                            /** @description The measurement value as a float. A/B/G/N will be interpreted as CPS. Dose Rate will be interpreted as mR/Hr */
+                                            measurement: number;
+                                            name: "alpha" | "beta" | "gamma" | "neutron" | "doserate";
+                                        }[];
+                                        physical_module?: {
+                                            location: "FRONT_LEFT" | "FRONT_RIGHT" | "REAR_LEFT" | "REAR_RIGHT" | "CAB";
+                                            /** @description Gamma counts per second */
+                                            gamma_cps: number;
+                                            /** @description Alarm level for the measurement. 0 = not alarmed, > 0 = alarm level */
+                                            gamma_alarm: number;
+                                            /** @description The gamma dose rate. Will be interpreted as uR/Hr */
+                                            gamma_dose_rate: number;
+                                        }[];
+                                        search_algorithm?: {
+                                            /** @description The Neutron localization value */
+                                            neutron_loc: number;
+                                            /** @description The Gamma localization value */
+                                            gamma_loc: number;
+                                            /** @description The Neutron localization alarm level */
+                                            neutron_loc_alarm_value: number;
+                                            /** @description The Gamma localization alarm level */
+                                            gamma_loc_alarm_value: number;
+                                            /** @description Alarm flag for the neutron localization value. 1 = alarmed, 0 = not alarmed */
+                                            neutron_loc_alarm: number;
+                                            /** @description Alarm flag for the gamma localization value. 1 = alarmed, 0 = not alarmed */
+                                            gamma_loc_alarm: number;
+                                        };
+                                        spectrum?: {
+                                            /** @description Flag for zero compression. 1 = zero compressed, 0 = not compressed */
+                                            zerocompression: number;
+                                            /** @description FOREGROUND or BACKGROUND */
+                                            type: string;
+                                            /** @description Spectrum live time in epoch time (ms) */
+                                            livetime_ms: string;
+                                            /** @description Spectrum real time in epoch time (ms) */
+                                            realtime_ms: string;
+                                            /** @description The spectral channel data */
+                                            channeldata: string;
+                                            /** @description The ID of the crystal reporting the channel data */
+                                            crystal_id?: string;
+                                        }[];
+                                        isotope?: {
+                                            /** @description The confidence value as a float representation of a percentage (88.5 NOT 0.885) */
+                                            confidence: number;
+                                            /** @description The name of the isotope */
+                                            name: string;
+                                            /** @description The type of the isotope */
+                                            type: string;
+                                        }[];
+                                        data_permissions?: {
+                                            /** @description All is true if all users should have access/permission */
+                                            all: boolean;
+                                            /** @description The list of ATAK UIDs that should have access/permission */
+                                            contact_list: string;
+                                        };
+                                        command_permissions?: {
+                                            /** @description All is true if all users should have access/permission */
+                                            all: boolean;
+                                            /** @description The list of ATAK UIDs that should have access/permission */
+                                            contact_list: string;
+                                        };
+                                    };
+                                    chemsensordetail?: {
+                                        sensor_data: {
+                                            /** @description The Manufacturer of the sensor in string format */
+                                            manufacturer: string;
+                                            /** @description The model of sensor in string format */
+                                            model: string;
+                                            /** @description The Serial Number of the Sensor in string format */
+                                            serialnumber: string;
+                                            /** @description The battery level as a percentage, float value */
+                                            batterylevel?: number;
+                                            /** @description The name of the given sensor in string format. Default name is Manufacturer+SerialNum */
+                                            callsign?: string;
+                                            /** @description The revision of the ChemCoT format, at writing this is "7" */
+                                            revision?: number;
+                                            /** @description General sensor health status */
+                                            status?: string;
+                                            /** @description Used internally by the CBRN plugin */
+                                            ordinal?: number;
+                                            /** @description The UID of the TAK marker that this sensor is attached to */
+                                            attachedUid?: string;
+                                            /** @description Is the data in this element representative of a simulated sensor */
+                                            simulated?: boolean;
+                                        };
+                                        detection?: {
+                                            /** @description Timestamp for the detection, epoch time (ms) */
+                                            time: string;
+                                            /** @description Chemical Name in string format */
+                                            agent: string;
+                                            /** @description Amount of chemical detected as a float. Could be mass, density, bars etc. */
+                                            quantity: number;
+                                            /** @description The units used to describe the quantity */
+                                            quantityunits: string;
+                                            /** @description Concentration of chemical in Kg/m^3 */
+                                            concentration?: number;
+                                            /** @description Alarm state of the sensor. 1 = alarm, 0 = no alarm */
+                                            alarm: number;
+                                            /** @description The confidence of the detection from the sensor as a percentage */
+                                            confidence?: number;
+                                            /** @description The mass fraction of the detection from the sensor in ppm */
+                                            massfraction?: number;
+                                            /** @description The percentage of the detection from the sensor in percent from 0-100 */
+                                            percent?: number;
+                                            /** @description The class of chemical detected. Nerve, Blood, TIC, etc. */
+                                            class?: string;
+                                            /** @description The ID number of the detection */
+                                            id?: number;
+                                        }[];
+                                    };
+                                    biosensordetail?: {
+                                        sensor_data: {
+                                            /** @description The Manufacturer of the sensor in string format */
+                                            manufacturer: string;
+                                            /** @description The model of sensor in string format */
+                                            model: string;
+                                            /** @description The Serial Number of the Sensor in string format */
+                                            serialnumber: string;
+                                            /** @description The battery level as a percentage, float value */
+                                            batterylevel?: number;
+                                            /** @description The name of the given sensor in string format. Default name is Manufacturer+SerialNum */
+                                            callsign?: string;
+                                            /** @description The revision of the BioCoT format */
+                                            revision?: number;
+                                            /** @description General sensor health status */
+                                            status?: string;
+                                            /** @description Used internally by the CBRN plugin */
+                                            ordinal?: number;
+                                            /** @description The UID of the TAK marker that this sensor is attached to */
+                                            attachedUid?: string;
+                                            /** @description Is the data in this element representative of a simulated sensor */
+                                            simulated?: boolean;
+                                        };
+                                        measurement?: {
+                                            /** @description Timestamp for the measurement, epoch time (ms) */
+                                            time: string;
+                                            /** @description Biological class */
+                                            bioClass?: string;
+                                            /** @description Biological type */
+                                            type?: string;
+                                            /** @description Channel identifier */
+                                            channel?: number;
+                                            /** @description Is this bio measurement harmful */
+                                            harmful?: boolean;
+                                            /** @description Dose Time */
+                                            doseTime?: number;
+                                            /** @description Amount of dose */
+                                            dose: number;
+                                            /** @description The confidence of the measurement from the sensor as a percentage */
+                                            confidence?: number;
+                                            /** @description Confirmation level */
+                                            confirmationLevel?: string;
+                                            /** @description Concentration */
+                                            concentration?: number;
+                                            /** @description Sample ID of this measurement */
+                                            sampleId?: string;
+                                            /** @description Persistency */
+                                            persistency?: string;
+                                            level?: {
+                                                /** @description The name of this measurement level */
+                                                levelName: string;
+                                                /** @description The value of this measurement level */
+                                                levelValue: string;
+                                            }[];
+                                        }[];
+                                    };
+                                    spatial?: {
+                                        version?: number;
+                                        attitude: {
+                                            /** @description Roll of entity in degrees. Positive indicates listing to the right. */
+                                            roll: number;
+                                            /** @description Pitch of entity in degrees. Positive indicates nose point up. */
+                                            pitch: number;
+                                            /** @description Yaw of entity in degrees. Positive indicates turned to the right. */
+                                            yaw?: number;
+                                            /** @description 1-sigma error of roll with respect to a zero mean normal Gaussian distribution. */
+                                            eRoll?: number;
+                                            /** @description 1-sigma error of pitch with respect to a zero mean normal Gaussian distribution. */
+                                            ePitch?: number;
+                                            /** @description 1-sigma error of yaw with respect to a zero mean normal Gaussian distribution. */
+                                            eYaw?: number;
+                                        };
+                                        spin: {
+                                            /** @description Degrees per second with positive indicating to the pilots right */
+                                            roll: number;
+                                            /** @description Degrees per second with positive indicating nose up. */
+                                            pitch: number;
+                                            /** @description Degrees per second with positive indicating right. */
+                                            yaw?: number;
+                                            /** @description 1-sigma error of roll with respect to a zero mean normal Gaussian distribution. */
+                                            eRoll?: number;
+                                            /** @description 1-sigma error of pitch with respect to a zero mean normal Gaussian distribution. */
+                                            ePitch?: number;
+                                            /** @description 1-sigma error of yaw with respect to a zero mean normal Gaussian distribution. */
+                                            eYaw?: number;
+                                        };
                                     };
                                 };
                                 path?: string;
@@ -24554,8 +26519,10 @@ export interface paths {
                                     missionNames: string[];
                                     servertime: string;
                                     dtg?: string;
+                                    /** @description CoT UID this log entry references; appears as a clickable link in TAK clients */
+                                    entryUid?: string;
                                     created: string;
-                                    contentHashes: unknown[];
+                                    contentHashes: string[];
                                     keywords: string[];
                                 }[];
                                 contents: {
@@ -24766,8 +26733,10 @@ export interface paths {
                                 missionNames: string[];
                                 servertime: string;
                                 dtg?: string;
+                                /** @description CoT UID this log entry references; appears as a clickable link in TAK clients */
+                                entryUid?: string;
                                 created: string;
-                                contentHashes: unknown[];
+                                contentHashes: string[];
                                 keywords: string[];
                             }[];
                             contents: {
@@ -29397,7 +31366,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Mission Template Palettes */
+        /** List Mission Template Palette Features */
         get: {
             parameters: {
                 query: {
@@ -29408,7 +31377,7 @@ export interface paths {
                     /** @description Order in which results are returned based on the "sort" query param */
                     order: "asc" | "desc";
                     /** @description No Description */
-                    sort: "uuid" | "name" | "created" | "updated" | "template" | "enableRLS";
+                    sort: "uuid" | "created" | "updated" | "name" | "template" | "type" | "style" | "enableRLS";
                     /** @description Filter results by a human readable name field */
                     filter: string;
                 };
@@ -29431,129 +31400,11 @@ export interface paths {
                             total: number;
                             items: {
                                 uuid: string;
-                                name: string;
                                 created: string;
                                 updated: string;
+                                name: string;
                                 /** Format: uuid */
                                 template: string;
-                                features: {
-                                    uuid: string;
-                                    created: string;
-                                    updated: string;
-                                    name: string;
-                                    /** Format: uuid */
-                                    palette: string;
-                                    type: string;
-                                    style: (string | number | boolean | null) | unknown[] | {
-                                        [key: string]: unknown;
-                                    };
-                                }[];
-                            }[];
-                        };
-                    };
-                };
-                /** @description Error Response */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-            };
-        };
-        put?: never;
-        /** Create a new Mission Template Palette */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description No Description */
-                    ":mission": string;
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": {
-                        name: string;
-                    };
-                };
-            };
-            responses: {
-                /** @description Successful Response */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            uuid: string;
-                            name: string;
-                            created: string;
-                            updated: string;
-                            /** Format: uuid */
-                            template: string;
-                            features: {
-                                uuid: string;
-                                created: string;
-                                updated: string;
-                                name: string;
-                                /** Format: uuid */
-                                palette: string;
                                 type: string;
                                 style: (string | number | boolean | null) | unknown[] | {
                                     [key: string]: unknown;
@@ -29624,10 +31475,440 @@ export interface paths {
                 };
             };
         };
+        put?: never;
+        /** Create a new Mission Template Palette Feature */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description No Description */
+                    ":mission": string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        type: "Point" | "LineString" | "Polygon";
+                        name: string;
+                        style: {
+                            "marker-color"?: string;
+                            "marker-opacity"?: string;
+                            icon?: string;
+                            stroke?: string;
+                            "stroke-style"?: string;
+                            "stroke-opacity"?: string;
+                            "stroke-width"?: string;
+                            fill?: string;
+                            "fill-opacity"?: string;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            uuid: string;
+                            created: string;
+                            updated: string;
+                            name: string;
+                            /** Format: uuid */
+                            template: string;
+                            type: string;
+                            style: (string | number | boolean | null) | unknown[] | {
+                                [key: string]: unknown;
+                            };
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/template/mission/{:mission}/palette/{:feature}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Mission Template Palette Feature */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description No Description */
+                    ":mission": string;
+                    /** @description No Description */
+                    ":feature": string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            uuid: string;
+                            created: string;
+                            updated: string;
+                            name: string;
+                            /** Format: uuid */
+                            template: string;
+                            type: string;
+                            style: (string | number | boolean | null) | unknown[] | {
+                                [key: string]: unknown;
+                            };
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /** Delete a Mission Template Palette Feature */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description No Description */
+                    ":mission": string;
+                    /** @description No Description */
+                    ":feature": string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** Update properties of a Mission Template Palette Feature */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description No Description */
+                    ":mission": string;
+                    /** @description No Description */
+                    ":feature": string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        type?: "Point" | "LineString" | "Polygon";
+                        name?: string;
+                        style?: {
+                            "marker-color"?: string;
+                            "marker-opacity"?: string;
+                            icon?: string;
+                            stroke?: string;
+                            "stroke-style"?: string;
+                            "stroke-opacity"?: string;
+                            "stroke-width"?: string;
+                            fill?: string;
+                            "fill-opacity"?: string;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            uuid: string;
+                            created: string;
+                            updated: string;
+                            name: string;
+                            /** Format: uuid */
+                            template: string;
+                            type: string;
+                            style: (string | number | boolean | null) | unknown[] | {
+                                [key: string]: unknown;
+                            };
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
         trace?: never;
     };
     "/api/template/mission/{:mission}/palette/{:palette}": {
@@ -31064,7 +33345,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get TileJSON */
+        /** Get TileJSON for PMTiles asset */
         get: {
             parameters: {
                 query?: {
@@ -31466,7 +33747,7 @@ export interface paths {
                     /** @description Order in which results are returned based on the "sort" query param */
                     order: "asc" | "desc";
                     /** @description No Description */
-                    sort: "id" | "username" | "created" | "updated" | "read" | "chatroom" | "sender_callsign" | "sender_uid" | "message_id" | "message" | "enableRLS";
+                    sort: "id" | "username" | "created" | "updated" | "read" | "chatroom" | "sender_callsign" | "sender_uid" | "message_id" | "message" | "status" | "enableRLS";
                 };
                 header?: never;
                 path: {
@@ -31665,6 +33946,8 @@ export interface paths {
                     deleted: boolean;
                     /** @description Set Content-Disposition to download the file */
                     download: boolean;
+                    /** @description Filter features by callsign (case-insensitive) */
+                    filter?: string;
                     /** @description No Description */
                     token?: string;
                     /** @description No Description */
@@ -31884,7 +34167,7 @@ export interface paths {
                                         groupOwner?: string;
                                         messageId?: string;
                                         chatroom: string;
-                                        id: string;
+                                        id?: string;
                                         senderCallsign: string;
                                         chatgrp: unknown;
                                     };
@@ -31937,6 +34220,268 @@ export interface paths {
                                     };
                                     flow?: {
                                         [key: string]: string;
+                                    };
+                                    radsensordetail?: {
+                                        sensor_data: {
+                                            /** @description epoch time in Long format */
+                                            time: string;
+                                            /** @description The model of sensor (Micro Detective, IdentiFINDER 2, etc.) in string format */
+                                            model: string;
+                                            /** @description The neutron detector status (Full, Reduced or Unknown). Not available for most sensors, default to Unknown */
+                                            neutronstatus: string;
+                                            /** @description The gamma detector status (Full, Reduced or Unknown). Not available for most sensors, default to Unknown */
+                                            gammastatus: string;
+                                            /** @description The Manufacturer of the sensor (Ortec, Nucsafe, etc.) in string format */
+                                            manufacturer: string;
+                                            /** @description The name of the given sensor in string format */
+                                            callsign?: string;
+                                            /** @description The Serial Number of the Sensor in string format */
+                                            serialnumber: string;
+                                            /** @description The battery level as a percentage, float value */
+                                            batterylevel?: number;
+                                            /** @description The ID algorithm used to ID isotopes (ex. GADRAS) */
+                                            id_algorithm?: string;
+                                            /** @description The search algorithm used (ex. RDAK, SAMBA) */
+                                            search_algorithm?: string;
+                                            /** @description The alarm algorithm used (ex. RDAK, SAMBA) */
+                                            alarm_algorithm?: string;
+                                            /** @description Used internally by the CBRN plugin */
+                                            ordinal?: number;
+                                            /** @description Identifier of this subchannel, if this event is a report from a subchannel of a master sensor */
+                                            subchannel?: string;
+                                            /** @description Used to align subchannels */
+                                            measurement_ref?: number;
+                                            /** @description Name of the master sensor, if this event is a report from a subchannel */
+                                            master_sensor_manufacturer?: string;
+                                            /** @description Serial number of the master sensor, if this event is a report from a subchannel */
+                                            master_sensor_serial?: string;
+                                            /** @description A bearing in positive degrees if the sensor reports back a direction for the detected source, -1 otherwise */
+                                            source_bearing?: number;
+                                            /** @description A scale from 0 - 0.5 giving the magnitude of the source strength in the direction of source_bearing */
+                                            source_strength?: number;
+                                            /** @description Used for sensors that can relay data from other sensors, or that can be relayed in that way */
+                                            relay_type?: string;
+                                            /** @description The location of the sensor where it's being worn on the vest */
+                                            module_location?: string;
+                                            /** @description The number from the sensor needed in order to retrieve any specific algorithm calculated data */
+                                            detector_number?: number;
+                                            /** @description The total mR configured for the sensor's current mission */
+                                            mission_total_mR?: number;
+                                            /** @description The total seconds remaining of mission time based on current configuration of sensor and acquired dose */
+                                            mission_stay_time_sec?: number;
+                                            /** @description The total uR acquired by the sensor for the current mission */
+                                            mission_acquired_uR?: number;
+                                            /** @description The temperature of the sensor in degrees celsius */
+                                            sensor_temp_deg_c?: number;
+                                            /** @description The current directional heading of the sensor */
+                                            heading?: number;
+                                            source_distance?: "MOVE_MUCH_CLOSER" | "MOVE_CLOSER" | "OPTIMAL" | "MOVE_AWAY" | "MOVE_FAR_AWAY";
+                                            /** @description The UID of the TAK marker that this sensor is attached to */
+                                            attachedUid?: string;
+                                            /** @description Is the data in this element representative of a simulated sensor */
+                                            simulated?: boolean;
+                                        };
+                                        radmeasurement?: {
+                                            /** @description Defines the alarm level, could be standard deviations above background. Will default to 0 (no alarm) */
+                                            nalarmstddev: number;
+                                            /** @description Alarm flag for the measurement. 1 = alarmed, 0 = not alarmed */
+                                            alarm: number;
+                                            /** @description The measurement value as a float. A/B/G/N will be interpreted as CPS. Dose Rate will be interpreted as mR/Hr */
+                                            measurement: number;
+                                            name: "alpha" | "beta" | "gamma" | "neutron" | "doserate";
+                                        }[];
+                                        physical_module?: {
+                                            location: "FRONT_LEFT" | "FRONT_RIGHT" | "REAR_LEFT" | "REAR_RIGHT" | "CAB";
+                                            /** @description Gamma counts per second */
+                                            gamma_cps: number;
+                                            /** @description Alarm level for the measurement. 0 = not alarmed, > 0 = alarm level */
+                                            gamma_alarm: number;
+                                            /** @description The gamma dose rate. Will be interpreted as uR/Hr */
+                                            gamma_dose_rate: number;
+                                        }[];
+                                        search_algorithm?: {
+                                            /** @description The Neutron localization value */
+                                            neutron_loc: number;
+                                            /** @description The Gamma localization value */
+                                            gamma_loc: number;
+                                            /** @description The Neutron localization alarm level */
+                                            neutron_loc_alarm_value: number;
+                                            /** @description The Gamma localization alarm level */
+                                            gamma_loc_alarm_value: number;
+                                            /** @description Alarm flag for the neutron localization value. 1 = alarmed, 0 = not alarmed */
+                                            neutron_loc_alarm: number;
+                                            /** @description Alarm flag for the gamma localization value. 1 = alarmed, 0 = not alarmed */
+                                            gamma_loc_alarm: number;
+                                        };
+                                        spectrum?: {
+                                            /** @description Flag for zero compression. 1 = zero compressed, 0 = not compressed */
+                                            zerocompression: number;
+                                            /** @description FOREGROUND or BACKGROUND */
+                                            type: string;
+                                            /** @description Spectrum live time in epoch time (ms) */
+                                            livetime_ms: string;
+                                            /** @description Spectrum real time in epoch time (ms) */
+                                            realtime_ms: string;
+                                            /** @description The spectral channel data */
+                                            channeldata: string;
+                                            /** @description The ID of the crystal reporting the channel data */
+                                            crystal_id?: string;
+                                        }[];
+                                        isotope?: {
+                                            /** @description The confidence value as a float representation of a percentage (88.5 NOT 0.885) */
+                                            confidence: number;
+                                            /** @description The name of the isotope */
+                                            name: string;
+                                            /** @description The type of the isotope */
+                                            type: string;
+                                        }[];
+                                        data_permissions?: {
+                                            /** @description All is true if all users should have access/permission */
+                                            all: boolean;
+                                            /** @description The list of ATAK UIDs that should have access/permission */
+                                            contact_list: string;
+                                        };
+                                        command_permissions?: {
+                                            /** @description All is true if all users should have access/permission */
+                                            all: boolean;
+                                            /** @description The list of ATAK UIDs that should have access/permission */
+                                            contact_list: string;
+                                        };
+                                    };
+                                    chemsensordetail?: {
+                                        sensor_data: {
+                                            /** @description The Manufacturer of the sensor in string format */
+                                            manufacturer: string;
+                                            /** @description The model of sensor in string format */
+                                            model: string;
+                                            /** @description The Serial Number of the Sensor in string format */
+                                            serialnumber: string;
+                                            /** @description The battery level as a percentage, float value */
+                                            batterylevel?: number;
+                                            /** @description The name of the given sensor in string format. Default name is Manufacturer+SerialNum */
+                                            callsign?: string;
+                                            /** @description The revision of the ChemCoT format, at writing this is "7" */
+                                            revision?: number;
+                                            /** @description General sensor health status */
+                                            status?: string;
+                                            /** @description Used internally by the CBRN plugin */
+                                            ordinal?: number;
+                                            /** @description The UID of the TAK marker that this sensor is attached to */
+                                            attachedUid?: string;
+                                            /** @description Is the data in this element representative of a simulated sensor */
+                                            simulated?: boolean;
+                                        };
+                                        detection?: {
+                                            /** @description Timestamp for the detection, epoch time (ms) */
+                                            time: string;
+                                            /** @description Chemical Name in string format */
+                                            agent: string;
+                                            /** @description Amount of chemical detected as a float. Could be mass, density, bars etc. */
+                                            quantity: number;
+                                            /** @description The units used to describe the quantity */
+                                            quantityunits: string;
+                                            /** @description Concentration of chemical in Kg/m^3 */
+                                            concentration?: number;
+                                            /** @description Alarm state of the sensor. 1 = alarm, 0 = no alarm */
+                                            alarm: number;
+                                            /** @description The confidence of the detection from the sensor as a percentage */
+                                            confidence?: number;
+                                            /** @description The mass fraction of the detection from the sensor in ppm */
+                                            massfraction?: number;
+                                            /** @description The percentage of the detection from the sensor in percent from 0-100 */
+                                            percent?: number;
+                                            /** @description The class of chemical detected. Nerve, Blood, TIC, etc. */
+                                            class?: string;
+                                            /** @description The ID number of the detection */
+                                            id?: number;
+                                        }[];
+                                    };
+                                    biosensordetail?: {
+                                        sensor_data: {
+                                            /** @description The Manufacturer of the sensor in string format */
+                                            manufacturer: string;
+                                            /** @description The model of sensor in string format */
+                                            model: string;
+                                            /** @description The Serial Number of the Sensor in string format */
+                                            serialnumber: string;
+                                            /** @description The battery level as a percentage, float value */
+                                            batterylevel?: number;
+                                            /** @description The name of the given sensor in string format. Default name is Manufacturer+SerialNum */
+                                            callsign?: string;
+                                            /** @description The revision of the BioCoT format */
+                                            revision?: number;
+                                            /** @description General sensor health status */
+                                            status?: string;
+                                            /** @description Used internally by the CBRN plugin */
+                                            ordinal?: number;
+                                            /** @description The UID of the TAK marker that this sensor is attached to */
+                                            attachedUid?: string;
+                                            /** @description Is the data in this element representative of a simulated sensor */
+                                            simulated?: boolean;
+                                        };
+                                        measurement?: {
+                                            /** @description Timestamp for the measurement, epoch time (ms) */
+                                            time: string;
+                                            /** @description Biological class */
+                                            bioClass?: string;
+                                            /** @description Biological type */
+                                            type?: string;
+                                            /** @description Channel identifier */
+                                            channel?: number;
+                                            /** @description Is this bio measurement harmful */
+                                            harmful?: boolean;
+                                            /** @description Dose Time */
+                                            doseTime?: number;
+                                            /** @description Amount of dose */
+                                            dose: number;
+                                            /** @description The confidence of the measurement from the sensor as a percentage */
+                                            confidence?: number;
+                                            /** @description Confirmation level */
+                                            confirmationLevel?: string;
+                                            /** @description Concentration */
+                                            concentration?: number;
+                                            /** @description Sample ID of this measurement */
+                                            sampleId?: string;
+                                            /** @description Persistency */
+                                            persistency?: string;
+                                            level?: {
+                                                /** @description The name of this measurement level */
+                                                levelName: string;
+                                                /** @description The value of this measurement level */
+                                                levelValue: string;
+                                            }[];
+                                        }[];
+                                    };
+                                    spatial?: {
+                                        version?: number;
+                                        attitude: {
+                                            /** @description Roll of entity in degrees. Positive indicates listing to the right. */
+                                            roll: number;
+                                            /** @description Pitch of entity in degrees. Positive indicates nose point up. */
+                                            pitch: number;
+                                            /** @description Yaw of entity in degrees. Positive indicates turned to the right. */
+                                            yaw?: number;
+                                            /** @description 1-sigma error of roll with respect to a zero mean normal Gaussian distribution. */
+                                            eRoll?: number;
+                                            /** @description 1-sigma error of pitch with respect to a zero mean normal Gaussian distribution. */
+                                            ePitch?: number;
+                                            /** @description 1-sigma error of yaw with respect to a zero mean normal Gaussian distribution. */
+                                            eYaw?: number;
+                                        };
+                                        spin: {
+                                            /** @description Degrees per second with positive indicating to the pilots right */
+                                            roll: number;
+                                            /** @description Degrees per second with positive indicating nose up. */
+                                            pitch: number;
+                                            /** @description Degrees per second with positive indicating right. */
+                                            yaw?: number;
+                                            /** @description 1-sigma error of roll with respect to a zero mean normal Gaussian distribution. */
+                                            eRoll?: number;
+                                            /** @description 1-sigma error of pitch with respect to a zero mean normal Gaussian distribution. */
+                                            ePitch?: number;
+                                            /** @description 1-sigma error of yaw with respect to a zero mean normal Gaussian distribution. */
+                                            eYaw?: number;
+                                        };
                                     };
                                 };
                                 path: string;
@@ -32229,7 +34774,7 @@ export interface paths {
                                 groupOwner?: string;
                                 messageId?: string;
                                 chatroom: string;
-                                id: string;
+                                id?: string;
                                 senderCallsign: string;
                                 chatgrp: unknown;
                             };
@@ -32282,6 +34827,268 @@ export interface paths {
                             };
                             flow?: {
                                 [key: string]: string;
+                            };
+                            radsensordetail?: {
+                                sensor_data: {
+                                    /** @description epoch time in Long format */
+                                    time: string;
+                                    /** @description The model of sensor (Micro Detective, IdentiFINDER 2, etc.) in string format */
+                                    model: string;
+                                    /** @description The neutron detector status (Full, Reduced or Unknown). Not available for most sensors, default to Unknown */
+                                    neutronstatus: string;
+                                    /** @description The gamma detector status (Full, Reduced or Unknown). Not available for most sensors, default to Unknown */
+                                    gammastatus: string;
+                                    /** @description The Manufacturer of the sensor (Ortec, Nucsafe, etc.) in string format */
+                                    manufacturer: string;
+                                    /** @description The name of the given sensor in string format */
+                                    callsign?: string;
+                                    /** @description The Serial Number of the Sensor in string format */
+                                    serialnumber: string;
+                                    /** @description The battery level as a percentage, float value */
+                                    batterylevel?: number;
+                                    /** @description The ID algorithm used to ID isotopes (ex. GADRAS) */
+                                    id_algorithm?: string;
+                                    /** @description The search algorithm used (ex. RDAK, SAMBA) */
+                                    search_algorithm?: string;
+                                    /** @description The alarm algorithm used (ex. RDAK, SAMBA) */
+                                    alarm_algorithm?: string;
+                                    /** @description Used internally by the CBRN plugin */
+                                    ordinal?: number;
+                                    /** @description Identifier of this subchannel, if this event is a report from a subchannel of a master sensor */
+                                    subchannel?: string;
+                                    /** @description Used to align subchannels */
+                                    measurement_ref?: number;
+                                    /** @description Name of the master sensor, if this event is a report from a subchannel */
+                                    master_sensor_manufacturer?: string;
+                                    /** @description Serial number of the master sensor, if this event is a report from a subchannel */
+                                    master_sensor_serial?: string;
+                                    /** @description A bearing in positive degrees if the sensor reports back a direction for the detected source, -1 otherwise */
+                                    source_bearing?: number;
+                                    /** @description A scale from 0 - 0.5 giving the magnitude of the source strength in the direction of source_bearing */
+                                    source_strength?: number;
+                                    /** @description Used for sensors that can relay data from other sensors, or that can be relayed in that way */
+                                    relay_type?: string;
+                                    /** @description The location of the sensor where it's being worn on the vest */
+                                    module_location?: string;
+                                    /** @description The number from the sensor needed in order to retrieve any specific algorithm calculated data */
+                                    detector_number?: number;
+                                    /** @description The total mR configured for the sensor's current mission */
+                                    mission_total_mR?: number;
+                                    /** @description The total seconds remaining of mission time based on current configuration of sensor and acquired dose */
+                                    mission_stay_time_sec?: number;
+                                    /** @description The total uR acquired by the sensor for the current mission */
+                                    mission_acquired_uR?: number;
+                                    /** @description The temperature of the sensor in degrees celsius */
+                                    sensor_temp_deg_c?: number;
+                                    /** @description The current directional heading of the sensor */
+                                    heading?: number;
+                                    source_distance?: "MOVE_MUCH_CLOSER" | "MOVE_CLOSER" | "OPTIMAL" | "MOVE_AWAY" | "MOVE_FAR_AWAY";
+                                    /** @description The UID of the TAK marker that this sensor is attached to */
+                                    attachedUid?: string;
+                                    /** @description Is the data in this element representative of a simulated sensor */
+                                    simulated?: boolean;
+                                };
+                                radmeasurement?: {
+                                    /** @description Defines the alarm level, could be standard deviations above background. Will default to 0 (no alarm) */
+                                    nalarmstddev: number;
+                                    /** @description Alarm flag for the measurement. 1 = alarmed, 0 = not alarmed */
+                                    alarm: number;
+                                    /** @description The measurement value as a float. A/B/G/N will be interpreted as CPS. Dose Rate will be interpreted as mR/Hr */
+                                    measurement: number;
+                                    name: "alpha" | "beta" | "gamma" | "neutron" | "doserate";
+                                }[];
+                                physical_module?: {
+                                    location: "FRONT_LEFT" | "FRONT_RIGHT" | "REAR_LEFT" | "REAR_RIGHT" | "CAB";
+                                    /** @description Gamma counts per second */
+                                    gamma_cps: number;
+                                    /** @description Alarm level for the measurement. 0 = not alarmed, > 0 = alarm level */
+                                    gamma_alarm: number;
+                                    /** @description The gamma dose rate. Will be interpreted as uR/Hr */
+                                    gamma_dose_rate: number;
+                                }[];
+                                search_algorithm?: {
+                                    /** @description The Neutron localization value */
+                                    neutron_loc: number;
+                                    /** @description The Gamma localization value */
+                                    gamma_loc: number;
+                                    /** @description The Neutron localization alarm level */
+                                    neutron_loc_alarm_value: number;
+                                    /** @description The Gamma localization alarm level */
+                                    gamma_loc_alarm_value: number;
+                                    /** @description Alarm flag for the neutron localization value. 1 = alarmed, 0 = not alarmed */
+                                    neutron_loc_alarm: number;
+                                    /** @description Alarm flag for the gamma localization value. 1 = alarmed, 0 = not alarmed */
+                                    gamma_loc_alarm: number;
+                                };
+                                spectrum?: {
+                                    /** @description Flag for zero compression. 1 = zero compressed, 0 = not compressed */
+                                    zerocompression: number;
+                                    /** @description FOREGROUND or BACKGROUND */
+                                    type: string;
+                                    /** @description Spectrum live time in epoch time (ms) */
+                                    livetime_ms: string;
+                                    /** @description Spectrum real time in epoch time (ms) */
+                                    realtime_ms: string;
+                                    /** @description The spectral channel data */
+                                    channeldata: string;
+                                    /** @description The ID of the crystal reporting the channel data */
+                                    crystal_id?: string;
+                                }[];
+                                isotope?: {
+                                    /** @description The confidence value as a float representation of a percentage (88.5 NOT 0.885) */
+                                    confidence: number;
+                                    /** @description The name of the isotope */
+                                    name: string;
+                                    /** @description The type of the isotope */
+                                    type: string;
+                                }[];
+                                data_permissions?: {
+                                    /** @description All is true if all users should have access/permission */
+                                    all: boolean;
+                                    /** @description The list of ATAK UIDs that should have access/permission */
+                                    contact_list: string;
+                                };
+                                command_permissions?: {
+                                    /** @description All is true if all users should have access/permission */
+                                    all: boolean;
+                                    /** @description The list of ATAK UIDs that should have access/permission */
+                                    contact_list: string;
+                                };
+                            };
+                            chemsensordetail?: {
+                                sensor_data: {
+                                    /** @description The Manufacturer of the sensor in string format */
+                                    manufacturer: string;
+                                    /** @description The model of sensor in string format */
+                                    model: string;
+                                    /** @description The Serial Number of the Sensor in string format */
+                                    serialnumber: string;
+                                    /** @description The battery level as a percentage, float value */
+                                    batterylevel?: number;
+                                    /** @description The name of the given sensor in string format. Default name is Manufacturer+SerialNum */
+                                    callsign?: string;
+                                    /** @description The revision of the ChemCoT format, at writing this is "7" */
+                                    revision?: number;
+                                    /** @description General sensor health status */
+                                    status?: string;
+                                    /** @description Used internally by the CBRN plugin */
+                                    ordinal?: number;
+                                    /** @description The UID of the TAK marker that this sensor is attached to */
+                                    attachedUid?: string;
+                                    /** @description Is the data in this element representative of a simulated sensor */
+                                    simulated?: boolean;
+                                };
+                                detection?: {
+                                    /** @description Timestamp for the detection, epoch time (ms) */
+                                    time: string;
+                                    /** @description Chemical Name in string format */
+                                    agent: string;
+                                    /** @description Amount of chemical detected as a float. Could be mass, density, bars etc. */
+                                    quantity: number;
+                                    /** @description The units used to describe the quantity */
+                                    quantityunits: string;
+                                    /** @description Concentration of chemical in Kg/m^3 */
+                                    concentration?: number;
+                                    /** @description Alarm state of the sensor. 1 = alarm, 0 = no alarm */
+                                    alarm: number;
+                                    /** @description The confidence of the detection from the sensor as a percentage */
+                                    confidence?: number;
+                                    /** @description The mass fraction of the detection from the sensor in ppm */
+                                    massfraction?: number;
+                                    /** @description The percentage of the detection from the sensor in percent from 0-100 */
+                                    percent?: number;
+                                    /** @description The class of chemical detected. Nerve, Blood, TIC, etc. */
+                                    class?: string;
+                                    /** @description The ID number of the detection */
+                                    id?: number;
+                                }[];
+                            };
+                            biosensordetail?: {
+                                sensor_data: {
+                                    /** @description The Manufacturer of the sensor in string format */
+                                    manufacturer: string;
+                                    /** @description The model of sensor in string format */
+                                    model: string;
+                                    /** @description The Serial Number of the Sensor in string format */
+                                    serialnumber: string;
+                                    /** @description The battery level as a percentage, float value */
+                                    batterylevel?: number;
+                                    /** @description The name of the given sensor in string format. Default name is Manufacturer+SerialNum */
+                                    callsign?: string;
+                                    /** @description The revision of the BioCoT format */
+                                    revision?: number;
+                                    /** @description General sensor health status */
+                                    status?: string;
+                                    /** @description Used internally by the CBRN plugin */
+                                    ordinal?: number;
+                                    /** @description The UID of the TAK marker that this sensor is attached to */
+                                    attachedUid?: string;
+                                    /** @description Is the data in this element representative of a simulated sensor */
+                                    simulated?: boolean;
+                                };
+                                measurement?: {
+                                    /** @description Timestamp for the measurement, epoch time (ms) */
+                                    time: string;
+                                    /** @description Biological class */
+                                    bioClass?: string;
+                                    /** @description Biological type */
+                                    type?: string;
+                                    /** @description Channel identifier */
+                                    channel?: number;
+                                    /** @description Is this bio measurement harmful */
+                                    harmful?: boolean;
+                                    /** @description Dose Time */
+                                    doseTime?: number;
+                                    /** @description Amount of dose */
+                                    dose: number;
+                                    /** @description The confidence of the measurement from the sensor as a percentage */
+                                    confidence?: number;
+                                    /** @description Confirmation level */
+                                    confirmationLevel?: string;
+                                    /** @description Concentration */
+                                    concentration?: number;
+                                    /** @description Sample ID of this measurement */
+                                    sampleId?: string;
+                                    /** @description Persistency */
+                                    persistency?: string;
+                                    level?: {
+                                        /** @description The name of this measurement level */
+                                        levelName: string;
+                                        /** @description The value of this measurement level */
+                                        levelValue: string;
+                                    }[];
+                                }[];
+                            };
+                            spatial?: {
+                                version?: number;
+                                attitude: {
+                                    /** @description Roll of entity in degrees. Positive indicates listing to the right. */
+                                    roll: number;
+                                    /** @description Pitch of entity in degrees. Positive indicates nose point up. */
+                                    pitch: number;
+                                    /** @description Yaw of entity in degrees. Positive indicates turned to the right. */
+                                    yaw?: number;
+                                    /** @description 1-sigma error of roll with respect to a zero mean normal Gaussian distribution. */
+                                    eRoll?: number;
+                                    /** @description 1-sigma error of pitch with respect to a zero mean normal Gaussian distribution. */
+                                    ePitch?: number;
+                                    /** @description 1-sigma error of yaw with respect to a zero mean normal Gaussian distribution. */
+                                    eYaw?: number;
+                                };
+                                spin: {
+                                    /** @description Degrees per second with positive indicating to the pilots right */
+                                    roll: number;
+                                    /** @description Degrees per second with positive indicating nose up. */
+                                    pitch: number;
+                                    /** @description Degrees per second with positive indicating right. */
+                                    yaw?: number;
+                                    /** @description 1-sigma error of roll with respect to a zero mean normal Gaussian distribution. */
+                                    eRoll?: number;
+                                    /** @description 1-sigma error of pitch with respect to a zero mean normal Gaussian distribution. */
+                                    ePitch?: number;
+                                    /** @description 1-sigma error of yaw with respect to a zero mean normal Gaussian distribution. */
+                                    eYaw?: number;
+                                };
                             };
                         };
                         path: string;
@@ -32502,7 +35309,7 @@ export interface paths {
                                     groupOwner?: string;
                                     messageId?: string;
                                     chatroom: string;
-                                    id: string;
+                                    id?: string;
                                     senderCallsign: string;
                                     chatgrp: unknown;
                                 };
@@ -32555,6 +35362,268 @@ export interface paths {
                                 };
                                 flow?: {
                                     [key: string]: string;
+                                };
+                                radsensordetail?: {
+                                    sensor_data: {
+                                        /** @description epoch time in Long format */
+                                        time: string;
+                                        /** @description The model of sensor (Micro Detective, IdentiFINDER 2, etc.) in string format */
+                                        model: string;
+                                        /** @description The neutron detector status (Full, Reduced or Unknown). Not available for most sensors, default to Unknown */
+                                        neutronstatus: string;
+                                        /** @description The gamma detector status (Full, Reduced or Unknown). Not available for most sensors, default to Unknown */
+                                        gammastatus: string;
+                                        /** @description The Manufacturer of the sensor (Ortec, Nucsafe, etc.) in string format */
+                                        manufacturer: string;
+                                        /** @description The name of the given sensor in string format */
+                                        callsign?: string;
+                                        /** @description The Serial Number of the Sensor in string format */
+                                        serialnumber: string;
+                                        /** @description The battery level as a percentage, float value */
+                                        batterylevel?: number;
+                                        /** @description The ID algorithm used to ID isotopes (ex. GADRAS) */
+                                        id_algorithm?: string;
+                                        /** @description The search algorithm used (ex. RDAK, SAMBA) */
+                                        search_algorithm?: string;
+                                        /** @description The alarm algorithm used (ex. RDAK, SAMBA) */
+                                        alarm_algorithm?: string;
+                                        /** @description Used internally by the CBRN plugin */
+                                        ordinal?: number;
+                                        /** @description Identifier of this subchannel, if this event is a report from a subchannel of a master sensor */
+                                        subchannel?: string;
+                                        /** @description Used to align subchannels */
+                                        measurement_ref?: number;
+                                        /** @description Name of the master sensor, if this event is a report from a subchannel */
+                                        master_sensor_manufacturer?: string;
+                                        /** @description Serial number of the master sensor, if this event is a report from a subchannel */
+                                        master_sensor_serial?: string;
+                                        /** @description A bearing in positive degrees if the sensor reports back a direction for the detected source, -1 otherwise */
+                                        source_bearing?: number;
+                                        /** @description A scale from 0 - 0.5 giving the magnitude of the source strength in the direction of source_bearing */
+                                        source_strength?: number;
+                                        /** @description Used for sensors that can relay data from other sensors, or that can be relayed in that way */
+                                        relay_type?: string;
+                                        /** @description The location of the sensor where it's being worn on the vest */
+                                        module_location?: string;
+                                        /** @description The number from the sensor needed in order to retrieve any specific algorithm calculated data */
+                                        detector_number?: number;
+                                        /** @description The total mR configured for the sensor's current mission */
+                                        mission_total_mR?: number;
+                                        /** @description The total seconds remaining of mission time based on current configuration of sensor and acquired dose */
+                                        mission_stay_time_sec?: number;
+                                        /** @description The total uR acquired by the sensor for the current mission */
+                                        mission_acquired_uR?: number;
+                                        /** @description The temperature of the sensor in degrees celsius */
+                                        sensor_temp_deg_c?: number;
+                                        /** @description The current directional heading of the sensor */
+                                        heading?: number;
+                                        source_distance?: "MOVE_MUCH_CLOSER" | "MOVE_CLOSER" | "OPTIMAL" | "MOVE_AWAY" | "MOVE_FAR_AWAY";
+                                        /** @description The UID of the TAK marker that this sensor is attached to */
+                                        attachedUid?: string;
+                                        /** @description Is the data in this element representative of a simulated sensor */
+                                        simulated?: boolean;
+                                    };
+                                    radmeasurement?: {
+                                        /** @description Defines the alarm level, could be standard deviations above background. Will default to 0 (no alarm) */
+                                        nalarmstddev: number;
+                                        /** @description Alarm flag for the measurement. 1 = alarmed, 0 = not alarmed */
+                                        alarm: number;
+                                        /** @description The measurement value as a float. A/B/G/N will be interpreted as CPS. Dose Rate will be interpreted as mR/Hr */
+                                        measurement: number;
+                                        name: "alpha" | "beta" | "gamma" | "neutron" | "doserate";
+                                    }[];
+                                    physical_module?: {
+                                        location: "FRONT_LEFT" | "FRONT_RIGHT" | "REAR_LEFT" | "REAR_RIGHT" | "CAB";
+                                        /** @description Gamma counts per second */
+                                        gamma_cps: number;
+                                        /** @description Alarm level for the measurement. 0 = not alarmed, > 0 = alarm level */
+                                        gamma_alarm: number;
+                                        /** @description The gamma dose rate. Will be interpreted as uR/Hr */
+                                        gamma_dose_rate: number;
+                                    }[];
+                                    search_algorithm?: {
+                                        /** @description The Neutron localization value */
+                                        neutron_loc: number;
+                                        /** @description The Gamma localization value */
+                                        gamma_loc: number;
+                                        /** @description The Neutron localization alarm level */
+                                        neutron_loc_alarm_value: number;
+                                        /** @description The Gamma localization alarm level */
+                                        gamma_loc_alarm_value: number;
+                                        /** @description Alarm flag for the neutron localization value. 1 = alarmed, 0 = not alarmed */
+                                        neutron_loc_alarm: number;
+                                        /** @description Alarm flag for the gamma localization value. 1 = alarmed, 0 = not alarmed */
+                                        gamma_loc_alarm: number;
+                                    };
+                                    spectrum?: {
+                                        /** @description Flag for zero compression. 1 = zero compressed, 0 = not compressed */
+                                        zerocompression: number;
+                                        /** @description FOREGROUND or BACKGROUND */
+                                        type: string;
+                                        /** @description Spectrum live time in epoch time (ms) */
+                                        livetime_ms: string;
+                                        /** @description Spectrum real time in epoch time (ms) */
+                                        realtime_ms: string;
+                                        /** @description The spectral channel data */
+                                        channeldata: string;
+                                        /** @description The ID of the crystal reporting the channel data */
+                                        crystal_id?: string;
+                                    }[];
+                                    isotope?: {
+                                        /** @description The confidence value as a float representation of a percentage (88.5 NOT 0.885) */
+                                        confidence: number;
+                                        /** @description The name of the isotope */
+                                        name: string;
+                                        /** @description The type of the isotope */
+                                        type: string;
+                                    }[];
+                                    data_permissions?: {
+                                        /** @description All is true if all users should have access/permission */
+                                        all: boolean;
+                                        /** @description The list of ATAK UIDs that should have access/permission */
+                                        contact_list: string;
+                                    };
+                                    command_permissions?: {
+                                        /** @description All is true if all users should have access/permission */
+                                        all: boolean;
+                                        /** @description The list of ATAK UIDs that should have access/permission */
+                                        contact_list: string;
+                                    };
+                                };
+                                chemsensordetail?: {
+                                    sensor_data: {
+                                        /** @description The Manufacturer of the sensor in string format */
+                                        manufacturer: string;
+                                        /** @description The model of sensor in string format */
+                                        model: string;
+                                        /** @description The Serial Number of the Sensor in string format */
+                                        serialnumber: string;
+                                        /** @description The battery level as a percentage, float value */
+                                        batterylevel?: number;
+                                        /** @description The name of the given sensor in string format. Default name is Manufacturer+SerialNum */
+                                        callsign?: string;
+                                        /** @description The revision of the ChemCoT format, at writing this is "7" */
+                                        revision?: number;
+                                        /** @description General sensor health status */
+                                        status?: string;
+                                        /** @description Used internally by the CBRN plugin */
+                                        ordinal?: number;
+                                        /** @description The UID of the TAK marker that this sensor is attached to */
+                                        attachedUid?: string;
+                                        /** @description Is the data in this element representative of a simulated sensor */
+                                        simulated?: boolean;
+                                    };
+                                    detection?: {
+                                        /** @description Timestamp for the detection, epoch time (ms) */
+                                        time: string;
+                                        /** @description Chemical Name in string format */
+                                        agent: string;
+                                        /** @description Amount of chemical detected as a float. Could be mass, density, bars etc. */
+                                        quantity: number;
+                                        /** @description The units used to describe the quantity */
+                                        quantityunits: string;
+                                        /** @description Concentration of chemical in Kg/m^3 */
+                                        concentration?: number;
+                                        /** @description Alarm state of the sensor. 1 = alarm, 0 = no alarm */
+                                        alarm: number;
+                                        /** @description The confidence of the detection from the sensor as a percentage */
+                                        confidence?: number;
+                                        /** @description The mass fraction of the detection from the sensor in ppm */
+                                        massfraction?: number;
+                                        /** @description The percentage of the detection from the sensor in percent from 0-100 */
+                                        percent?: number;
+                                        /** @description The class of chemical detected. Nerve, Blood, TIC, etc. */
+                                        class?: string;
+                                        /** @description The ID number of the detection */
+                                        id?: number;
+                                    }[];
+                                };
+                                biosensordetail?: {
+                                    sensor_data: {
+                                        /** @description The Manufacturer of the sensor in string format */
+                                        manufacturer: string;
+                                        /** @description The model of sensor in string format */
+                                        model: string;
+                                        /** @description The Serial Number of the Sensor in string format */
+                                        serialnumber: string;
+                                        /** @description The battery level as a percentage, float value */
+                                        batterylevel?: number;
+                                        /** @description The name of the given sensor in string format. Default name is Manufacturer+SerialNum */
+                                        callsign?: string;
+                                        /** @description The revision of the BioCoT format */
+                                        revision?: number;
+                                        /** @description General sensor health status */
+                                        status?: string;
+                                        /** @description Used internally by the CBRN plugin */
+                                        ordinal?: number;
+                                        /** @description The UID of the TAK marker that this sensor is attached to */
+                                        attachedUid?: string;
+                                        /** @description Is the data in this element representative of a simulated sensor */
+                                        simulated?: boolean;
+                                    };
+                                    measurement?: {
+                                        /** @description Timestamp for the measurement, epoch time (ms) */
+                                        time: string;
+                                        /** @description Biological class */
+                                        bioClass?: string;
+                                        /** @description Biological type */
+                                        type?: string;
+                                        /** @description Channel identifier */
+                                        channel?: number;
+                                        /** @description Is this bio measurement harmful */
+                                        harmful?: boolean;
+                                        /** @description Dose Time */
+                                        doseTime?: number;
+                                        /** @description Amount of dose */
+                                        dose: number;
+                                        /** @description The confidence of the measurement from the sensor as a percentage */
+                                        confidence?: number;
+                                        /** @description Confirmation level */
+                                        confirmationLevel?: string;
+                                        /** @description Concentration */
+                                        concentration?: number;
+                                        /** @description Sample ID of this measurement */
+                                        sampleId?: string;
+                                        /** @description Persistency */
+                                        persistency?: string;
+                                        level?: {
+                                            /** @description The name of this measurement level */
+                                            levelName: string;
+                                            /** @description The value of this measurement level */
+                                            levelValue: string;
+                                        }[];
+                                    }[];
+                                };
+                                spatial?: {
+                                    version?: number;
+                                    attitude: {
+                                        /** @description Roll of entity in degrees. Positive indicates listing to the right. */
+                                        roll: number;
+                                        /** @description Pitch of entity in degrees. Positive indicates nose point up. */
+                                        pitch: number;
+                                        /** @description Yaw of entity in degrees. Positive indicates turned to the right. */
+                                        yaw?: number;
+                                        /** @description 1-sigma error of roll with respect to a zero mean normal Gaussian distribution. */
+                                        eRoll?: number;
+                                        /** @description 1-sigma error of pitch with respect to a zero mean normal Gaussian distribution. */
+                                        ePitch?: number;
+                                        /** @description 1-sigma error of yaw with respect to a zero mean normal Gaussian distribution. */
+                                        eYaw?: number;
+                                    };
+                                    spin: {
+                                        /** @description Degrees per second with positive indicating to the pilots right */
+                                        roll: number;
+                                        /** @description Degrees per second with positive indicating nose up. */
+                                        pitch: number;
+                                        /** @description Degrees per second with positive indicating right. */
+                                        yaw?: number;
+                                        /** @description 1-sigma error of roll with respect to a zero mean normal Gaussian distribution. */
+                                        eRoll?: number;
+                                        /** @description 1-sigma error of pitch with respect to a zero mean normal Gaussian distribution. */
+                                        ePitch?: number;
+                                        /** @description 1-sigma error of yaw with respect to a zero mean normal Gaussian distribution. */
+                                        eYaw?: number;
+                                    };
                                 };
                             };
                             path: string;
@@ -32951,7 +36020,7 @@ export interface paths {
                                     groupOwner?: string;
                                     messageId?: string;
                                     chatroom: string;
-                                    id: string;
+                                    id?: string;
                                     senderCallsign: string;
                                     chatgrp: unknown;
                                 };
@@ -33004,6 +36073,268 @@ export interface paths {
                                 };
                                 flow?: {
                                     [key: string]: string;
+                                };
+                                radsensordetail?: {
+                                    sensor_data: {
+                                        /** @description epoch time in Long format */
+                                        time: string;
+                                        /** @description The model of sensor (Micro Detective, IdentiFINDER 2, etc.) in string format */
+                                        model: string;
+                                        /** @description The neutron detector status (Full, Reduced or Unknown). Not available for most sensors, default to Unknown */
+                                        neutronstatus: string;
+                                        /** @description The gamma detector status (Full, Reduced or Unknown). Not available for most sensors, default to Unknown */
+                                        gammastatus: string;
+                                        /** @description The Manufacturer of the sensor (Ortec, Nucsafe, etc.) in string format */
+                                        manufacturer: string;
+                                        /** @description The name of the given sensor in string format */
+                                        callsign?: string;
+                                        /** @description The Serial Number of the Sensor in string format */
+                                        serialnumber: string;
+                                        /** @description The battery level as a percentage, float value */
+                                        batterylevel?: number;
+                                        /** @description The ID algorithm used to ID isotopes (ex. GADRAS) */
+                                        id_algorithm?: string;
+                                        /** @description The search algorithm used (ex. RDAK, SAMBA) */
+                                        search_algorithm?: string;
+                                        /** @description The alarm algorithm used (ex. RDAK, SAMBA) */
+                                        alarm_algorithm?: string;
+                                        /** @description Used internally by the CBRN plugin */
+                                        ordinal?: number;
+                                        /** @description Identifier of this subchannel, if this event is a report from a subchannel of a master sensor */
+                                        subchannel?: string;
+                                        /** @description Used to align subchannels */
+                                        measurement_ref?: number;
+                                        /** @description Name of the master sensor, if this event is a report from a subchannel */
+                                        master_sensor_manufacturer?: string;
+                                        /** @description Serial number of the master sensor, if this event is a report from a subchannel */
+                                        master_sensor_serial?: string;
+                                        /** @description A bearing in positive degrees if the sensor reports back a direction for the detected source, -1 otherwise */
+                                        source_bearing?: number;
+                                        /** @description A scale from 0 - 0.5 giving the magnitude of the source strength in the direction of source_bearing */
+                                        source_strength?: number;
+                                        /** @description Used for sensors that can relay data from other sensors, or that can be relayed in that way */
+                                        relay_type?: string;
+                                        /** @description The location of the sensor where it's being worn on the vest */
+                                        module_location?: string;
+                                        /** @description The number from the sensor needed in order to retrieve any specific algorithm calculated data */
+                                        detector_number?: number;
+                                        /** @description The total mR configured for the sensor's current mission */
+                                        mission_total_mR?: number;
+                                        /** @description The total seconds remaining of mission time based on current configuration of sensor and acquired dose */
+                                        mission_stay_time_sec?: number;
+                                        /** @description The total uR acquired by the sensor for the current mission */
+                                        mission_acquired_uR?: number;
+                                        /** @description The temperature of the sensor in degrees celsius */
+                                        sensor_temp_deg_c?: number;
+                                        /** @description The current directional heading of the sensor */
+                                        heading?: number;
+                                        source_distance?: "MOVE_MUCH_CLOSER" | "MOVE_CLOSER" | "OPTIMAL" | "MOVE_AWAY" | "MOVE_FAR_AWAY";
+                                        /** @description The UID of the TAK marker that this sensor is attached to */
+                                        attachedUid?: string;
+                                        /** @description Is the data in this element representative of a simulated sensor */
+                                        simulated?: boolean;
+                                    };
+                                    radmeasurement?: {
+                                        /** @description Defines the alarm level, could be standard deviations above background. Will default to 0 (no alarm) */
+                                        nalarmstddev: number;
+                                        /** @description Alarm flag for the measurement. 1 = alarmed, 0 = not alarmed */
+                                        alarm: number;
+                                        /** @description The measurement value as a float. A/B/G/N will be interpreted as CPS. Dose Rate will be interpreted as mR/Hr */
+                                        measurement: number;
+                                        name: "alpha" | "beta" | "gamma" | "neutron" | "doserate";
+                                    }[];
+                                    physical_module?: {
+                                        location: "FRONT_LEFT" | "FRONT_RIGHT" | "REAR_LEFT" | "REAR_RIGHT" | "CAB";
+                                        /** @description Gamma counts per second */
+                                        gamma_cps: number;
+                                        /** @description Alarm level for the measurement. 0 = not alarmed, > 0 = alarm level */
+                                        gamma_alarm: number;
+                                        /** @description The gamma dose rate. Will be interpreted as uR/Hr */
+                                        gamma_dose_rate: number;
+                                    }[];
+                                    search_algorithm?: {
+                                        /** @description The Neutron localization value */
+                                        neutron_loc: number;
+                                        /** @description The Gamma localization value */
+                                        gamma_loc: number;
+                                        /** @description The Neutron localization alarm level */
+                                        neutron_loc_alarm_value: number;
+                                        /** @description The Gamma localization alarm level */
+                                        gamma_loc_alarm_value: number;
+                                        /** @description Alarm flag for the neutron localization value. 1 = alarmed, 0 = not alarmed */
+                                        neutron_loc_alarm: number;
+                                        /** @description Alarm flag for the gamma localization value. 1 = alarmed, 0 = not alarmed */
+                                        gamma_loc_alarm: number;
+                                    };
+                                    spectrum?: {
+                                        /** @description Flag for zero compression. 1 = zero compressed, 0 = not compressed */
+                                        zerocompression: number;
+                                        /** @description FOREGROUND or BACKGROUND */
+                                        type: string;
+                                        /** @description Spectrum live time in epoch time (ms) */
+                                        livetime_ms: string;
+                                        /** @description Spectrum real time in epoch time (ms) */
+                                        realtime_ms: string;
+                                        /** @description The spectral channel data */
+                                        channeldata: string;
+                                        /** @description The ID of the crystal reporting the channel data */
+                                        crystal_id?: string;
+                                    }[];
+                                    isotope?: {
+                                        /** @description The confidence value as a float representation of a percentage (88.5 NOT 0.885) */
+                                        confidence: number;
+                                        /** @description The name of the isotope */
+                                        name: string;
+                                        /** @description The type of the isotope */
+                                        type: string;
+                                    }[];
+                                    data_permissions?: {
+                                        /** @description All is true if all users should have access/permission */
+                                        all: boolean;
+                                        /** @description The list of ATAK UIDs that should have access/permission */
+                                        contact_list: string;
+                                    };
+                                    command_permissions?: {
+                                        /** @description All is true if all users should have access/permission */
+                                        all: boolean;
+                                        /** @description The list of ATAK UIDs that should have access/permission */
+                                        contact_list: string;
+                                    };
+                                };
+                                chemsensordetail?: {
+                                    sensor_data: {
+                                        /** @description The Manufacturer of the sensor in string format */
+                                        manufacturer: string;
+                                        /** @description The model of sensor in string format */
+                                        model: string;
+                                        /** @description The Serial Number of the Sensor in string format */
+                                        serialnumber: string;
+                                        /** @description The battery level as a percentage, float value */
+                                        batterylevel?: number;
+                                        /** @description The name of the given sensor in string format. Default name is Manufacturer+SerialNum */
+                                        callsign?: string;
+                                        /** @description The revision of the ChemCoT format, at writing this is "7" */
+                                        revision?: number;
+                                        /** @description General sensor health status */
+                                        status?: string;
+                                        /** @description Used internally by the CBRN plugin */
+                                        ordinal?: number;
+                                        /** @description The UID of the TAK marker that this sensor is attached to */
+                                        attachedUid?: string;
+                                        /** @description Is the data in this element representative of a simulated sensor */
+                                        simulated?: boolean;
+                                    };
+                                    detection?: {
+                                        /** @description Timestamp for the detection, epoch time (ms) */
+                                        time: string;
+                                        /** @description Chemical Name in string format */
+                                        agent: string;
+                                        /** @description Amount of chemical detected as a float. Could be mass, density, bars etc. */
+                                        quantity: number;
+                                        /** @description The units used to describe the quantity */
+                                        quantityunits: string;
+                                        /** @description Concentration of chemical in Kg/m^3 */
+                                        concentration?: number;
+                                        /** @description Alarm state of the sensor. 1 = alarm, 0 = no alarm */
+                                        alarm: number;
+                                        /** @description The confidence of the detection from the sensor as a percentage */
+                                        confidence?: number;
+                                        /** @description The mass fraction of the detection from the sensor in ppm */
+                                        massfraction?: number;
+                                        /** @description The percentage of the detection from the sensor in percent from 0-100 */
+                                        percent?: number;
+                                        /** @description The class of chemical detected. Nerve, Blood, TIC, etc. */
+                                        class?: string;
+                                        /** @description The ID number of the detection */
+                                        id?: number;
+                                    }[];
+                                };
+                                biosensordetail?: {
+                                    sensor_data: {
+                                        /** @description The Manufacturer of the sensor in string format */
+                                        manufacturer: string;
+                                        /** @description The model of sensor in string format */
+                                        model: string;
+                                        /** @description The Serial Number of the Sensor in string format */
+                                        serialnumber: string;
+                                        /** @description The battery level as a percentage, float value */
+                                        batterylevel?: number;
+                                        /** @description The name of the given sensor in string format. Default name is Manufacturer+SerialNum */
+                                        callsign?: string;
+                                        /** @description The revision of the BioCoT format */
+                                        revision?: number;
+                                        /** @description General sensor health status */
+                                        status?: string;
+                                        /** @description Used internally by the CBRN plugin */
+                                        ordinal?: number;
+                                        /** @description The UID of the TAK marker that this sensor is attached to */
+                                        attachedUid?: string;
+                                        /** @description Is the data in this element representative of a simulated sensor */
+                                        simulated?: boolean;
+                                    };
+                                    measurement?: {
+                                        /** @description Timestamp for the measurement, epoch time (ms) */
+                                        time: string;
+                                        /** @description Biological class */
+                                        bioClass?: string;
+                                        /** @description Biological type */
+                                        type?: string;
+                                        /** @description Channel identifier */
+                                        channel?: number;
+                                        /** @description Is this bio measurement harmful */
+                                        harmful?: boolean;
+                                        /** @description Dose Time */
+                                        doseTime?: number;
+                                        /** @description Amount of dose */
+                                        dose: number;
+                                        /** @description The confidence of the measurement from the sensor as a percentage */
+                                        confidence?: number;
+                                        /** @description Confirmation level */
+                                        confirmationLevel?: string;
+                                        /** @description Concentration */
+                                        concentration?: number;
+                                        /** @description Sample ID of this measurement */
+                                        sampleId?: string;
+                                        /** @description Persistency */
+                                        persistency?: string;
+                                        level?: {
+                                            /** @description The name of this measurement level */
+                                            levelName: string;
+                                            /** @description The value of this measurement level */
+                                            levelValue: string;
+                                        }[];
+                                    }[];
+                                };
+                                spatial?: {
+                                    version?: number;
+                                    attitude: {
+                                        /** @description Roll of entity in degrees. Positive indicates listing to the right. */
+                                        roll: number;
+                                        /** @description Pitch of entity in degrees. Positive indicates nose point up. */
+                                        pitch: number;
+                                        /** @description Yaw of entity in degrees. Positive indicates turned to the right. */
+                                        yaw?: number;
+                                        /** @description 1-sigma error of roll with respect to a zero mean normal Gaussian distribution. */
+                                        eRoll?: number;
+                                        /** @description 1-sigma error of pitch with respect to a zero mean normal Gaussian distribution. */
+                                        ePitch?: number;
+                                        /** @description 1-sigma error of yaw with respect to a zero mean normal Gaussian distribution. */
+                                        eYaw?: number;
+                                    };
+                                    spin: {
+                                        /** @description Degrees per second with positive indicating to the pilots right */
+                                        roll: number;
+                                        /** @description Degrees per second with positive indicating nose up. */
+                                        pitch: number;
+                                        /** @description Degrees per second with positive indicating right. */
+                                        yaw?: number;
+                                        /** @description 1-sigma error of roll with respect to a zero mean normal Gaussian distribution. */
+                                        eRoll?: number;
+                                        /** @description 1-sigma error of pitch with respect to a zero mean normal Gaussian distribution. */
+                                        ePitch?: number;
+                                        /** @description 1-sigma error of yaw with respect to a zero mean normal Gaussian distribution. */
+                                        eYaw?: number;
+                                    };
                                 };
                             };
                             path: string;
@@ -33626,6 +36957,124 @@ export interface paths {
         };
         trace?: never;
     };
+    "/api/profile/location": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Submit a live location update for the authenticated user.
+         *                 Only the raw coordinates are required — all profile fields
+         *                 (callsign, TAK type, group, role, remarks) are read from the
+         *                 authenticated user's saved profile, and the CoT UID is derived
+         *                 server-side from their email.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        longitude: number;
+                        latitude: number;
+                        altitude?: number;
+                        accuracy?: number;
+                        altitudeAccuracy?: number;
+                        speed?: number;
+                        bearing?: number;
+                        time?: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/profile/overlay": {
         parameters: {
             query?: never;
@@ -34230,6 +37679,728 @@ export interface paths {
                 };
             };
         };
+        trace?: never;
+    };
+    "/api/profile/paging": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Return a list of notification/paging sources for the authenticated user */
+        get: {
+            parameters: {
+                query: {
+                    /** @description Limit the number of responses returned */
+                    limit: number;
+                    /** @description Iterate through "pages" of items based on the "limit" query param */
+                    page: number;
+                    /** @description Order in which results are returned based on the "sort" query param */
+                    order: "asc" | "desc";
+                    /** @description No Description */
+                    sort: "id" | "username" | "seed" | "verified" | "created" | "updated" | "enabled" | "type" | "value" | "enableRLS";
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            total: number;
+                            items: {
+                                id: number;
+                                username: string;
+                                verified: boolean;
+                                enabled: boolean;
+                                type: string;
+                                value: string;
+                                created: string;
+                                updated: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create a new paging source. For SMS/Email a verification code is sent to the provided address/number. Push sources are device-managed and require no verification. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        type: "sms" | "email" | "push";
+                        value?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: number;
+                            username: string;
+                            verified: boolean;
+                            enabled: boolean;
+                            type: string;
+                            value: string;
+                            created: string;
+                            updated: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/profile/paging/{:pagingid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Return a single paging source belonging to the authenticated user */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description No Description */
+                    ":pagingid": number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: number;
+                            username: string;
+                            verified: boolean;
+                            enabled: boolean;
+                            type: string;
+                            value: string;
+                            created: string;
+                            updated: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /** Delete a paging source belonging to the authenticated user */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description No Description */
+                    ":pagingid": number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** Update a paging source. Changing the value resets verification and resends a new code. */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description No Description */
+                    ":pagingid": number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        enabled?: boolean;
+                        value?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: number;
+                            username: string;
+                            verified: boolean;
+                            enabled: boolean;
+                            type: string;
+                            value: string;
+                            created: string;
+                            updated: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/api/profile/paging/{:pagingid}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit the 6-digit TOTP code sent to the paging source. On success, the source is marked verified. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description No Description */
+                    ":pagingid": number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        code: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: number;
+                            username: string;
+                            verified: boolean;
+                            enabled: boolean;
+                            type: string;
+                            value: string;
+                            created: string;
+                            updated: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/profile/paging/{:pagingid}/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resend the verification code to the paging source using the existing seed. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description No Description */
+                    ":pagingid": number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/profile/token": {
@@ -35060,7 +39231,7 @@ export interface paths {
                             username: string;
                             created: string;
                             updated: string;
-                            phone: string;
+                            tak_phone: string;
                             last_login: string;
                             /** @description Does the user have an active CloudTAK Session */
                             active: boolean;
@@ -35096,6 +39267,10 @@ export interface paths {
                             display_distance: "meter" | "kilometer" | "mile";
                             display_elevation: "meter" | "feet";
                             display_speed: "m/s" | "km/h" | "mi/h";
+                            display_radiation_dose: "sieverts" | "rems";
+                            geometry_point_type?: string;
+                            geometry_point_color?: string;
+                            geometry_point_icon?: string;
                         };
                     };
                 };
@@ -35177,19 +39352,17 @@ export interface paths {
             requestBody: {
                 content: {
                     "application/json": {
-                        display_stale?: "Immediate" | "10 Minutes" | "30 Minutes" | "1 Hour" | "Never";
-                        display_distance?: "meter" | "kilometer" | "mile";
-                        display_elevation?: "meter" | "feet";
-                        display_projection?: "mercator" | "globe";
-                        display_speed?: "m/s" | "km/h" | "mi/h";
-                        display_zoom?: "always" | "conditional" | "never";
-                        display_style?: "System Default" | "Light" | "Dark";
-                        display_coordinate?: "dd" | "dm" | "dms" | "mgrs" | "utm";
-                        display_icon_rotation?: boolean;
-                        display_text?: "Small" | "Medium" | "Large";
-                        geometry_point_type?: string;
-                        geometry_point_color?: string;
-                        geometry_point_icon?: string;
+                        tak_callsign?: string;
+                        tak_remarks?: string;
+                        tak_group?: "White" | "Yellow" | "Orange" | "Magenta" | "Red" | "Maroon" | "Purple" | "Dark Blue" | "Blue" | "Cyan" | "Teal" | "Green" | "Dark Green" | "Brown";
+                        tak_role?: "Team Member" | "Team Lead" | "HQ" | "Sniper" | "Medic" | "Forward Observer" | "RTO" | "K9";
+                        tak_type?: string;
+                        tak_loc?: {
+                            /** @constant */
+                            type: "Point";
+                            coordinates: number[];
+                        } | null;
+                        tak_loc_freq?: number;
                         menu_order?: {
                             /** @description Menu Key */
                             key: string;
@@ -35199,16 +39372,21 @@ export interface paths {
                              */
                             visibility: "full" | "partial" | "hidden";
                         }[];
-                        tak_callsign?: string;
-                        tak_remarks?: string;
-                        tak_group?: "White" | "Yellow" | "Orange" | "Magenta" | "Red" | "Maroon" | "Purple" | "Dark Blue" | "Blue" | "Cyan" | "Teal" | "Green" | "Dark Green" | "Brown";
-                        tak_type?: string;
-                        tak_role?: "Team Member" | "Team Lead" | "HQ" | "Sniper" | "Medic" | "Forward Observer" | "RTO" | "K9";
-                        tak_loc_freq?: number;
-                        tak_loc?: null | {
-                            type: string;
-                            coordinates: number[];
-                        };
+                        display_projection?: "mercator" | "globe";
+                        display_zoom?: "always" | "conditional" | "never";
+                        display_style?: "System Default" | "Light" | "Dark";
+                        display_coordinate?: "dd" | "dm" | "dms" | "mgrs" | "utm";
+                        display_icon_rotation?: boolean;
+                        display_stale?: "Immediate" | "10 Minutes" | "30 Minutes" | "1 Hour" | "Never";
+                        display_text?: "Small" | "Medium" | "Large";
+                        display_distance?: "meter" | "kilometer" | "mile";
+                        display_elevation?: "meter" | "feet";
+                        display_speed?: "m/s" | "km/h" | "mi/h";
+                        display_radiation_dose?: "sieverts" | "rems";
+                        geometry_point_type?: string;
+                        geometry_point_color?: string;
+                        geometry_point_icon?: string;
+                        tak_phone?: string;
                     };
                 };
             };
@@ -35223,7 +39401,7 @@ export interface paths {
                             username: string;
                             created: string;
                             updated: string;
-                            phone: string;
+                            tak_phone: string;
                             last_login: string;
                             /** @description Does the user have an active CloudTAK Session */
                             active: boolean;
@@ -35259,6 +39437,10 @@ export interface paths {
                             display_distance: "meter" | "kilometer" | "mile";
                             display_elevation: "meter" | "feet";
                             display_speed: "m/s" | "km/h" | "mi/h";
+                            display_radiation_dose: "sieverts" | "rems";
+                            geometry_point_type?: string;
+                            geometry_point_color?: string;
+                            geometry_point_icon?: string;
                         };
                     };
                 };
@@ -35374,114 +39556,6 @@ export interface paths {
                             body: unknown;
                             /** @enum {string} */
                             encoding?: "base64";
-                        };
-                    };
-                };
-                /** @description Error Response */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/retention": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Run a retention action */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": {
-                        action: string;
-                    };
-                };
-            };
-            responses: {
-                /** @description Successful Response */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            name: string;
-                            status: "success" | "error";
-                            deleted: number;
-                            duration: number;
-                            message?: string;
                         };
                     };
                 };
@@ -36044,6 +40118,114 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/retention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run a retention action */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        action: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            name: string;
+                            status: "success" | "error";
+                            deleted: number;
+                            duration: number;
+                            message?: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/server/tileset": {
         parameters: {
             query?: never;
@@ -36306,6 +40488,16 @@ export interface paths {
                         "application/json": {
                             id: number;
                             status: string;
+                            /**
+                             * @description The connected status of the Admin Connection (connection 0)
+                             * @default unknown
+                             */
+                            connection_status: "live" | "dead" | "unknown";
+                            /**
+                             * @description Whether the Admin Connection (connection 0) is enabled in the connection pool
+                             * @default true
+                             */
+                            connection: boolean;
                             created: string;
                             updated: string;
                             version: string;
@@ -36405,6 +40597,8 @@ export interface paths {
                         api: string;
                         webtak: string;
                         name?: string;
+                        /** @description Enable or disable the Admin Connection (connection 0) in the connection pool */
+                        connection?: boolean;
                         username?: string;
                         password?: string;
                         auth?: {
@@ -36424,6 +40618,16 @@ export interface paths {
                         "application/json": {
                             id: number;
                             status: string;
+                            /**
+                             * @description The connected status of the Admin Connection (connection 0)
+                             * @default unknown
+                             */
+                            connection_status: "live" | "dead" | "unknown";
+                            /**
+                             * @description Whether the Admin Connection (connection 0) is enabled in the connection pool
+                             * @default true
+                             */
+                            connection: boolean;
                             created: string;
                             updated: string;
                             version: string;
@@ -37552,6 +41756,1942 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/iconset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Iconsets */
+        get: {
+            parameters: {
+                query: {
+                    /** @description No Description */
+                    scope?: "server" | "user";
+                    /** @description Limit the number of responses returned. Use 0 to return all results without pagination; otherwise the limit is capped at 1000. */
+                    limit: number;
+                    /** @description Iterate through "pages" of items based on the "limit" query param */
+                    page: number;
+                    /** @description Order in which results are returned based on the "sort" query param */
+                    order: "asc" | "desc";
+                    /** @description No Description */
+                    sort: "uid" | "created" | "updated" | "version" | "name" | "username" | "username_internal" | "default_group" | "default_friendly" | "default_hostile" | "default_neutral" | "default_unknown" | "skip_resize" | "spritesheet_data" | "spritesheet_json" | "enableRLS";
+                    /** @description Filter results by a human readable name field */
+                    filter: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            total: number;
+                            items: {
+                                uid: string;
+                                created: string;
+                                updated: string;
+                                version: number;
+                                name: string;
+                                username: null | string;
+                                username_internal: boolean;
+                                default_group: null | string;
+                                default_friendly: null | string;
+                                default_hostile: null | string;
+                                default_neutral: null | string;
+                                default_unknown: null | string;
+                                skip_resize: boolean;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create Iconset */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        uid: string;
+                        version: number;
+                        /** @description Human readable name */
+                        name: string;
+                        /**
+                         * @description If true, the iconset will not be shown in the UI for selection
+                         * @default false
+                         */
+                        internal: boolean;
+                        scope?: "server" | "user";
+                        default_group?: string;
+                        default_friendly?: string;
+                        default_hostile?: string;
+                        default_neutral?: string;
+                        default_unknown?: string;
+                        skip_resize?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            uid: string;
+                            created: string;
+                            updated: string;
+                            version: number;
+                            name: string;
+                            username: null | string;
+                            username_internal: boolean;
+                            default_group: null | string;
+                            default_friendly: null | string;
+                            default_hostile: null | string;
+                            default_neutral: null | string;
+                            default_unknown: null | string;
+                            skip_resize: boolean;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/iconset/{:iconset}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Iconset */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description No Description */
+                    format?: "json" | "zip";
+                    /** @description No Description */
+                    download?: boolean;
+                    /** @description Resize Images to 32x32px */
+                    resize?: boolean;
+                    /** @description No Description */
+                    token?: string;
+                };
+                header?: never;
+                path: {
+                    /** @description No Description */
+                    ":iconset": string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            uid: string;
+                            created: string;
+                            updated: string;
+                            version: number;
+                            name: string;
+                            username: null | string;
+                            username_internal: boolean;
+                            default_group: null | string;
+                            default_friendly: null | string;
+                            default_hostile: null | string;
+                            default_neutral: null | string;
+                            default_unknown: null | string;
+                            skip_resize: boolean;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /** Delete Iconset */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description No Description */
+                    ":iconset": string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** Update Iconset */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description No Description */
+                    ":iconset": string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        public?: boolean;
+                        default_group?: string;
+                        default_friendly?: string;
+                        default_hostile?: string;
+                        default_neutral?: string;
+                        default_unknown?: string;
+                        skip_resize?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            uid: string;
+                            created: string;
+                            updated: string;
+                            version: number;
+                            name: string;
+                            username: null | string;
+                            username_internal: boolean;
+                            default_group: null | string;
+                            default_friendly: null | string;
+                            default_hostile: null | string;
+                            default_neutral: null | string;
+                            default_unknown: null | string;
+                            skip_resize: boolean;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/api/iconset/{:iconset}/regen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Regenerate Iconset Spritesheet */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description No Description */
+                    ":iconset": string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/iconset/{:iconset}/icon": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Icon */
+        post: {
+            parameters: {
+                query: {
+                    /** @description Regenerate Iconset spritesheet after upload */
+                    regen: boolean;
+                };
+                header?: never;
+                path: {
+                    /** @description No Description */
+                    ":iconset": string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @description Human readable name */
+                        name: string;
+                        data: string;
+                        type2525b?: null | string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: number;
+                            created: string;
+                            updated: string;
+                            name: string;
+                            format: string;
+                            iconset: string;
+                            type2525b: string | null;
+                            data: string;
+                            path: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/icon": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Icons */
+        get: {
+            parameters: {
+                query: {
+                    /** @description No Description */
+                    scope?: "server" | "user";
+                    /** @description Limit the number of responses returned. Use 0 to return all results without pagination; otherwise the limit is capped at 1000. */
+                    limit: number;
+                    /** @description Iterate through "pages" of items based on the "limit" query param */
+                    page: number;
+                    /** @description Order in which results are returned based on the "sort" query param */
+                    order: "asc" | "desc";
+                    /** @description No Description */
+                    sort?: "id" | "created" | "updated" | "name" | "format" | "iconset" | "type2525b" | "data" | "path" | "enableRLS";
+                    /** @description No Description */
+                    iconset?: string;
+                    /** @description Filter results by a human readable name field */
+                    filter: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            total: number;
+                            items: {
+                                id: number;
+                                created: string;
+                                updated: string;
+                                name: string;
+                                format: string;
+                                iconset: string;
+                                type2525b: string | null;
+                                data: string;
+                                path: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/iconset/{:iconset}/icon/{:icon}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Icon Metadata */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description No Description */
+                    ":iconset": string;
+                    /** @description No Description */
+                    ":icon": number | string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: number;
+                            created: string;
+                            updated: string;
+                            name: string;
+                            format: string;
+                            iconset: string;
+                            type2525b: string | null;
+                            data: string;
+                            path: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /** Remove Icon from Iconset */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description No Description */
+                    ":iconset": string;
+                    /** @description No Description */
+                    ":icon": number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** Update Icon in Iconset */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description No Description */
+                    ":iconset": string;
+                    /** @description No Description */
+                    ":icon": number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        name?: string;
+                        data?: string;
+                        type2525b?: null | string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: number;
+                            created: string;
+                            updated: string;
+                            name: string;
+                            format: string;
+                            iconset: string;
+                            type2525b: string | null;
+                            data: string;
+                            path: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/api/iconset/{:iconset}/sprite{:size}.json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Spriteset JSON for CoT types */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description No Description */
+                    scope?: "server" | "user";
+                    /** @description No Description */
+                    token?: string;
+                };
+                header?: never;
+                path: {
+                    /** @description No Description */
+                    ":iconset": string;
+                    /** @description No Description */
+                    ":size": string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": unknown;
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/iconset/{:iconset}/sprite{:size}.png": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Return a sprite sheet for CoT Types */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description No Description */
+                    token?: string;
+                };
+                header?: never;
+                path: {
+                    /** @description No Description */
+                    ":iconset": string;
+                    /** @description No Description */
+                    ":size": string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/user": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Let Admins see users of the system */
+        get: {
+            parameters: {
+                query: {
+                    /** @description Limit the number of responses returned */
+                    limit: number;
+                    /** @description Iterate through "pages" of items based on the "limit" query param */
+                    page: number;
+                    /** @description Order in which results are returned based on the "sort" query param */
+                    order: "asc" | "desc";
+                    /** @description No Description */
+                    sort: "id" | "name" | "username" | "last_login" | "auth" | "created" | "updated" | "phone" | "system_admin" | "agency_admin" | "enableRLS";
+                    /** @description Filter results by a human readable name field */
+                    filter: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            total: number;
+                            items: {
+                                username: string;
+                                created: string;
+                                updated: string;
+                                last_login: string;
+                                /** @description Does the user have an active CloudTAK Session */
+                                active: boolean;
+                                system_admin: boolean;
+                                agency_admin: number[];
+                            }[];
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/user/{:username}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Let Admins see a given user of the system */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description No Description */
+                    ":username": string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            username: string;
+                            created: string;
+                            updated: string;
+                            tak_phone: string;
+                            last_login: string;
+                            /** @description Does the user have an active CloudTAK Session */
+                            active: boolean;
+                            system_admin: boolean;
+                            agency_admin: number[];
+                            tak_callsign: string;
+                            tak_remarks: string;
+                            tak_group: "White" | "Yellow" | "Orange" | "Magenta" | "Red" | "Maroon" | "Purple" | "Dark Blue" | "Blue" | "Cyan" | "Teal" | "Green" | "Dark Green" | "Brown";
+                            tak_role: "Team Member" | "Team Lead" | "HQ" | "Sniper" | "Medic" | "Forward Observer" | "RTO" | "K9";
+                            tak_type: string;
+                            tak_loc: {
+                                /** @constant */
+                                type: "Point";
+                                coordinates: number[];
+                            } | null;
+                            tak_loc_freq: number;
+                            menu_order: {
+                                /** @description Menu Key */
+                                key: string;
+                                /**
+                                 * @description Menu Visibility
+                                 * @default full
+                                 */
+                                visibility: "full" | "partial" | "hidden";
+                            }[];
+                            display_projection: "mercator" | "globe";
+                            display_zoom: "always" | "conditional" | "never";
+                            display_style: "System Default" | "Light" | "Dark";
+                            display_coordinate: "dd" | "dm" | "dms" | "mgrs" | "utm";
+                            display_icon_rotation: boolean;
+                            display_stale: "Immediate" | "10 Minutes" | "30 Minutes" | "1 Hour" | "Never";
+                            display_text: "Small" | "Medium" | "Large";
+                            display_distance: "meter" | "kilometer" | "mile";
+                            display_elevation: "meter" | "feet";
+                            display_speed: "m/s" | "km/h" | "mi/h";
+                            display_radiation_dose: "sieverts" | "rems";
+                            geometry_point_type?: string;
+                            geometry_point_color?: string;
+                            geometry_point_icon?: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update a User */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description No Description */
+                    ":username": string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        tak_callsign?: string;
+                        tak_remarks?: string;
+                        tak_group?: "White" | "Yellow" | "Orange" | "Magenta" | "Red" | "Maroon" | "Purple" | "Dark Blue" | "Blue" | "Cyan" | "Teal" | "Green" | "Dark Green" | "Brown";
+                        tak_type?: string;
+                        tak_role?: "Team Member" | "Team Lead" | "HQ" | "Sniper" | "Medic" | "Forward Observer" | "RTO" | "K9";
+                        system_admin?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            username: string;
+                            created: string;
+                            updated: string;
+                            tak_phone: string;
+                            last_login: string;
+                            /** @description Does the user have an active CloudTAK Session */
+                            active: boolean;
+                            system_admin: boolean;
+                            agency_admin: number[];
+                            tak_callsign: string;
+                            tak_remarks: string;
+                            tak_group: "White" | "Yellow" | "Orange" | "Magenta" | "Red" | "Maroon" | "Purple" | "Dark Blue" | "Blue" | "Cyan" | "Teal" | "Green" | "Dark Green" | "Brown";
+                            tak_role: "Team Member" | "Team Lead" | "HQ" | "Sniper" | "Medic" | "Forward Observer" | "RTO" | "K9";
+                            tak_type: string;
+                            tak_loc: {
+                                /** @constant */
+                                type: "Point";
+                                coordinates: number[];
+                            } | null;
+                            tak_loc_freq: number;
+                            menu_order: {
+                                /** @description Menu Key */
+                                key: string;
+                                /**
+                                 * @description Menu Visibility
+                                 * @default full
+                                 */
+                                visibility: "full" | "partial" | "hidden";
+                            }[];
+                            display_projection: "mercator" | "globe";
+                            display_zoom: "always" | "conditional" | "never";
+                            display_style: "System Default" | "Light" | "Dark";
+                            display_coordinate: "dd" | "dm" | "dms" | "mgrs" | "utm";
+                            display_icon_rotation: boolean;
+                            display_stale: "Immediate" | "10 Minutes" | "30 Minutes" | "1 Hour" | "Never";
+                            display_text: "Small" | "Medium" | "Large";
+                            display_distance: "meter" | "kilometer" | "mile";
+                            display_elevation: "meter" | "feet";
+                            display_speed: "m/s" | "km/h" | "mi/h";
+                            display_radiation_dose: "sieverts" | "rems";
+                            geometry_point_type?: string;
+                            geometry_point_color?: string;
+                            geometry_point_icon?: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/api/user/{:username}/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Let Admins list login sessions for a given user */
+        get: {
+            parameters: {
+                query: {
+                    /** @description Limit the number of responses returned */
+                    limit: number;
+                    /** @description Iterate through "pages" of items based on the "limit" query param */
+                    page: number;
+                    /** @description Order in which results are returned based on the "sort" query param */
+                    order: "asc" | "desc";
+                    /** @description No Description */
+                    sort: "id" | "username" | "created" | "ip" | "device_type" | "browser" | "os" | "user_agent" | "enableRLS";
+                };
+                header?: never;
+                path: {
+                    /** @description No Description */
+                    ":username": string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            total: number;
+                            items: {
+                                id: string;
+                                username: string;
+                                created: string;
+                                ip: string;
+                                device_type: string;
+                                browser: string;
+                                os: string;
+                                user_agent: string;
+                                active: boolean;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/type/cot": {
         parameters: {
             query?: never;
@@ -37694,520 +43834,6 @@ export interface paths {
                             cot: string;
                             desc: string;
                             full?: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/user": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Let Admins see users of the system */
-        get: {
-            parameters: {
-                query: {
-                    /** @description Limit the number of responses returned */
-                    limit: number;
-                    /** @description Iterate through "pages" of items based on the "limit" query param */
-                    page: number;
-                    /** @description Order in which results are returned based on the "sort" query param */
-                    order: "asc" | "desc";
-                    /** @description No Description */
-                    sort: "id" | "name" | "username" | "last_login" | "auth" | "created" | "updated" | "phone" | "system_admin" | "agency_admin" | "enableRLS";
-                    /** @description Filter results by a human readable name field */
-                    filter: string;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Successful Response */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            total: number;
-                            items: {
-                                username: string;
-                                created: string;
-                                updated: string;
-                                phone: string;
-                                last_login: string;
-                                /** @description Does the user have an active CloudTAK Session */
-                                active: boolean;
-                                system_admin: boolean;
-                                agency_admin: number[];
-                            }[];
-                        };
-                    };
-                };
-                /** @description Error Response */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/user/{:username}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Let Admins see a given user of the system */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description No Description */
-                    ":username": string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Successful Response */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            username: string;
-                            created: string;
-                            updated: string;
-                            phone: string;
-                            last_login: string;
-                            /** @description Does the user have an active CloudTAK Session */
-                            active: boolean;
-                            system_admin: boolean;
-                            agency_admin: number[];
-                            tak_callsign: string;
-                            tak_remarks: string;
-                            tak_group: "White" | "Yellow" | "Orange" | "Magenta" | "Red" | "Maroon" | "Purple" | "Dark Blue" | "Blue" | "Cyan" | "Teal" | "Green" | "Dark Green" | "Brown";
-                            tak_role: "Team Member" | "Team Lead" | "HQ" | "Sniper" | "Medic" | "Forward Observer" | "RTO" | "K9";
-                            tak_type: string;
-                            tak_loc: {
-                                /** @constant */
-                                type: "Point";
-                                coordinates: number[];
-                            } | null;
-                            tak_loc_freq: number;
-                            menu_order: {
-                                /** @description Menu Key */
-                                key: string;
-                                /**
-                                 * @description Menu Visibility
-                                 * @default full
-                                 */
-                                visibility: "full" | "partial" | "hidden";
-                            }[];
-                            display_projection: "mercator" | "globe";
-                            display_zoom: "always" | "conditional" | "never";
-                            display_style: "System Default" | "Light" | "Dark";
-                            display_coordinate: "dd" | "dm" | "dms" | "mgrs" | "utm";
-                            display_icon_rotation: boolean;
-                            display_stale: "Immediate" | "10 Minutes" | "30 Minutes" | "1 Hour" | "Never";
-                            display_text: "Small" | "Medium" | "Large";
-                            display_distance: "meter" | "kilometer" | "mile";
-                            display_elevation: "meter" | "feet";
-                            display_speed: "m/s" | "km/h" | "mi/h";
-                        };
-                    };
-                };
-                /** @description Error Response */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Update a User */
-        patch: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    /** @description No Description */
-                    ":username": string;
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": {
-                        tak_callsign?: string;
-                        tak_remarks?: string;
-                        tak_group?: "White" | "Yellow" | "Orange" | "Magenta" | "Red" | "Maroon" | "Purple" | "Dark Blue" | "Blue" | "Cyan" | "Teal" | "Green" | "Dark Green" | "Brown";
-                        tak_type?: string;
-                        tak_role?: "Team Member" | "Team Lead" | "HQ" | "Sniper" | "Medic" | "Forward Observer" | "RTO" | "K9";
-                        system_admin?: boolean;
-                    };
-                };
-            };
-            responses: {
-                /** @description Successful Response */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            username: string;
-                            created: string;
-                            updated: string;
-                            phone: string;
-                            last_login: string;
-                            /** @description Does the user have an active CloudTAK Session */
-                            active: boolean;
-                            system_admin: boolean;
-                            agency_admin: number[];
-                            tak_callsign: string;
-                            tak_remarks: string;
-                            tak_group: "White" | "Yellow" | "Orange" | "Magenta" | "Red" | "Maroon" | "Purple" | "Dark Blue" | "Blue" | "Cyan" | "Teal" | "Green" | "Dark Green" | "Brown";
-                            tak_role: "Team Member" | "Team Lead" | "HQ" | "Sniper" | "Medic" | "Forward Observer" | "RTO" | "K9";
-                            tak_type: string;
-                            tak_loc: {
-                                /** @constant */
-                                type: "Point";
-                                coordinates: number[];
-                            } | null;
-                            tak_loc_freq: number;
-                            menu_order: {
-                                /** @description Menu Key */
-                                key: string;
-                                /**
-                                 * @description Menu Visibility
-                                 * @default full
-                                 */
-                                visibility: "full" | "partial" | "hidden";
-                            }[];
-                            display_projection: "mercator" | "globe";
-                            display_zoom: "always" | "conditional" | "never";
-                            display_style: "System Default" | "Light" | "Dark";
-                            display_coordinate: "dd" | "dm" | "dms" | "mgrs" | "utm";
-                            display_icon_rotation: boolean;
-                            display_stale: "Immediate" | "10 Minutes" | "30 Minutes" | "1 Hour" | "Never";
-                            display_text: "Small" | "Medium" | "Large";
-                            display_distance: "meter" | "kilometer" | "mile";
-                            display_elevation: "meter" | "feet";
-                            display_speed: "m/s" | "km/h" | "mi/h";
-                        };
-                    };
-                };
-                /** @description Error Response */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-                /** @description Error Response */
-                500: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            status: number;
-                            message: string;
-                        };
-                    };
-                };
-            };
-        };
-        trace?: never;
-    };
-    "/api/user/{:username}/session": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Let Admins list login sessions for a given user */
-        get: {
-            parameters: {
-                query: {
-                    /** @description Limit the number of responses returned */
-                    limit: number;
-                    /** @description Iterate through "pages" of items based on the "limit" query param */
-                    page: number;
-                    /** @description Order in which results are returned based on the "sort" query param */
-                    order: "asc" | "desc";
-                    /** @description No Description */
-                    sort: "id" | "username" | "created" | "ip" | "device_type" | "browser" | "os" | "user_agent" | "enableRLS";
-                };
-                header?: never;
-                path: {
-                    /** @description No Description */
-                    ":username": string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Successful Response */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            total: number;
-                            items: {
-                                id: number;
-                                username: string;
-                                created: string;
-                                ip: string;
-                                device_type: string;
-                                browser: string;
-                                os: string;
-                                user_agent: string;
-                                active: boolean;
-                            }[];
                         };
                     };
                 };
@@ -39872,6 +45498,610 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/search/reverse/{:longitude}/{:latitude}/sun": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get sun phase information for a given point */
+        get: {
+            parameters: {
+                query: {
+                    /** @description No Description */
+                    altitude: number;
+                };
+                header?: never;
+                path: {
+                    /** @description No Description */
+                    ":latitude": number;
+                    /** @description No Description */
+                    ":longitude": number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            sun: {
+                                /** @description sunrise (top edge of the sun appears on the horizon) */
+                                sunrise: string | null;
+                                /** @description sunrise ends (bottom edge of the sun touches the horizon) */
+                                sunriseEnd: string | null;
+                                /** @description morning golden hour (soft light, best time for photography) ends */
+                                goldenHourEnd: string | null;
+                                /** @description solar noon (sun is in the highest position) */
+                                solarNoon: string | null;
+                                /** @description evening golden hour starts */
+                                goldenHour: string | null;
+                                /** @description sunset starts (bottom edge of the sun touches the horizon) */
+                                sunsetStart: string | null;
+                                /** @description sunset (sun disappears below the horizon, evening civil twilight starts) */
+                                sunset: string | null;
+                                /** @description dusk (evening nautical twilight starts) */
+                                dusk: string | null;
+                                /** @description nautical dusk (evening astronomical twilight starts) */
+                                nauticalDusk: string | null;
+                                /** @description night starts (dark enough for astronomical observations) */
+                                night: string | null;
+                                /** @description nadir (darkest moment of the night, sun is in the lowest position) */
+                                nadir: string | null;
+                                /** @description night ends (morning astronomical twilight starts) */
+                                nightEnd: string | null;
+                                /** @description nautical dawn (morning nautical twilight starts) */
+                                nauticalDawn: string | null;
+                                /** @description dawn (morning nautical twilight ends, morning civil twilight starts) */
+                                dawn: string | null;
+                            };
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/search/reverse/{:longitude}/{:latitude}/magnetic": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get magnetic declination information for a given point */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description No Description */
+                    ":latitude": number;
+                    /** @description No Description */
+                    ":longitude": number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            magnetic: {
+                                declination: number;
+                                inclination: number;
+                            };
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/search/reverse/{:longitude}/{:latitude}/weather": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get weather forecast for a given point */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description No Description */
+                    ":latitude": number;
+                    /** @description No Description */
+                    ":longitude": number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            weather: null | {
+                                type: string;
+                                properties: {
+                                    units: string;
+                                    forecastGenerator: string;
+                                    generatedAt: string;
+                                    updateTime: string;
+                                    validTimes: string;
+                                    elevation: {
+                                        unitCode: string;
+                                        value: number;
+                                    };
+                                    periods: {
+                                        number: number;
+                                        name: string;
+                                        startTime: string;
+                                        endTime: string;
+                                        isDaytime: boolean;
+                                        temperature: number;
+                                        temperatureUnit: string;
+                                        temperatureTrend: unknown;
+                                        probabilityOfPrecipitation: {
+                                            unitCode: string;
+                                            value: number;
+                                        };
+                                        dewpoint: {
+                                            unitCode: string;
+                                            value: number;
+                                        };
+                                        relativeHumidity: {
+                                            unitCode: string;
+                                            value: number;
+                                        };
+                                        windSpeed: string;
+                                        windDirection: string;
+                                        icon: string;
+                                        shortForecast: string;
+                                        detailedForecast: string;
+                                    }[];
+                                };
+                                geometry: {
+                                    type: string;
+                                    coordinates: number[][][];
+                                };
+                            };
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/search/reverse/{:longitude}/{:latitude}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get reverse geocoding information for a given point */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description No Description */
+                    provider?: string;
+                };
+                header?: never;
+                path: {
+                    /** @description No Description */
+                    ":latitude": number;
+                    /** @description No Description */
+                    ":longitude": number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            reverse: null | {
+                                LongLabel: string;
+                                ShortLabel: string;
+                                Addr_type: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/search/reverse/{:longitude}/{:latitude}/elevation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get elevation information for a given point */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description No Description */
+                    elevation?: number;
+                };
+                header?: never;
+                path: {
+                    /** @description No Description */
+                    ":latitude": number;
+                    /** @description No Description */
+                    ":longitude": number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Successful Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            elevation: null | string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description Error Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            status: number;
+                            message: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/search/route": {
         parameters: {
             query?: never;
@@ -40103,7 +46333,7 @@ export interface paths {
                                         groupOwner?: string;
                                         messageId?: string;
                                         chatroom: string;
-                                        id: string;
+                                        id?: string;
                                         senderCallsign: string;
                                         chatgrp: unknown;
                                     };
@@ -40156,6 +46386,268 @@ export interface paths {
                                     };
                                     flow?: {
                                         [key: string]: string;
+                                    };
+                                    radsensordetail?: {
+                                        sensor_data: {
+                                            /** @description epoch time in Long format */
+                                            time: string;
+                                            /** @description The model of sensor (Micro Detective, IdentiFINDER 2, etc.) in string format */
+                                            model: string;
+                                            /** @description The neutron detector status (Full, Reduced or Unknown). Not available for most sensors, default to Unknown */
+                                            neutronstatus: string;
+                                            /** @description The gamma detector status (Full, Reduced or Unknown). Not available for most sensors, default to Unknown */
+                                            gammastatus: string;
+                                            /** @description The Manufacturer of the sensor (Ortec, Nucsafe, etc.) in string format */
+                                            manufacturer: string;
+                                            /** @description The name of the given sensor in string format */
+                                            callsign?: string;
+                                            /** @description The Serial Number of the Sensor in string format */
+                                            serialnumber: string;
+                                            /** @description The battery level as a percentage, float value */
+                                            batterylevel?: number;
+                                            /** @description The ID algorithm used to ID isotopes (ex. GADRAS) */
+                                            id_algorithm?: string;
+                                            /** @description The search algorithm used (ex. RDAK, SAMBA) */
+                                            search_algorithm?: string;
+                                            /** @description The alarm algorithm used (ex. RDAK, SAMBA) */
+                                            alarm_algorithm?: string;
+                                            /** @description Used internally by the CBRN plugin */
+                                            ordinal?: number;
+                                            /** @description Identifier of this subchannel, if this event is a report from a subchannel of a master sensor */
+                                            subchannel?: string;
+                                            /** @description Used to align subchannels */
+                                            measurement_ref?: number;
+                                            /** @description Name of the master sensor, if this event is a report from a subchannel */
+                                            master_sensor_manufacturer?: string;
+                                            /** @description Serial number of the master sensor, if this event is a report from a subchannel */
+                                            master_sensor_serial?: string;
+                                            /** @description A bearing in positive degrees if the sensor reports back a direction for the detected source, -1 otherwise */
+                                            source_bearing?: number;
+                                            /** @description A scale from 0 - 0.5 giving the magnitude of the source strength in the direction of source_bearing */
+                                            source_strength?: number;
+                                            /** @description Used for sensors that can relay data from other sensors, or that can be relayed in that way */
+                                            relay_type?: string;
+                                            /** @description The location of the sensor where it's being worn on the vest */
+                                            module_location?: string;
+                                            /** @description The number from the sensor needed in order to retrieve any specific algorithm calculated data */
+                                            detector_number?: number;
+                                            /** @description The total mR configured for the sensor's current mission */
+                                            mission_total_mR?: number;
+                                            /** @description The total seconds remaining of mission time based on current configuration of sensor and acquired dose */
+                                            mission_stay_time_sec?: number;
+                                            /** @description The total uR acquired by the sensor for the current mission */
+                                            mission_acquired_uR?: number;
+                                            /** @description The temperature of the sensor in degrees celsius */
+                                            sensor_temp_deg_c?: number;
+                                            /** @description The current directional heading of the sensor */
+                                            heading?: number;
+                                            source_distance?: "MOVE_MUCH_CLOSER" | "MOVE_CLOSER" | "OPTIMAL" | "MOVE_AWAY" | "MOVE_FAR_AWAY";
+                                            /** @description The UID of the TAK marker that this sensor is attached to */
+                                            attachedUid?: string;
+                                            /** @description Is the data in this element representative of a simulated sensor */
+                                            simulated?: boolean;
+                                        };
+                                        radmeasurement?: {
+                                            /** @description Defines the alarm level, could be standard deviations above background. Will default to 0 (no alarm) */
+                                            nalarmstddev: number;
+                                            /** @description Alarm flag for the measurement. 1 = alarmed, 0 = not alarmed */
+                                            alarm: number;
+                                            /** @description The measurement value as a float. A/B/G/N will be interpreted as CPS. Dose Rate will be interpreted as mR/Hr */
+                                            measurement: number;
+                                            name: "alpha" | "beta" | "gamma" | "neutron" | "doserate";
+                                        }[];
+                                        physical_module?: {
+                                            location: "FRONT_LEFT" | "FRONT_RIGHT" | "REAR_LEFT" | "REAR_RIGHT" | "CAB";
+                                            /** @description Gamma counts per second */
+                                            gamma_cps: number;
+                                            /** @description Alarm level for the measurement. 0 = not alarmed, > 0 = alarm level */
+                                            gamma_alarm: number;
+                                            /** @description The gamma dose rate. Will be interpreted as uR/Hr */
+                                            gamma_dose_rate: number;
+                                        }[];
+                                        search_algorithm?: {
+                                            /** @description The Neutron localization value */
+                                            neutron_loc: number;
+                                            /** @description The Gamma localization value */
+                                            gamma_loc: number;
+                                            /** @description The Neutron localization alarm level */
+                                            neutron_loc_alarm_value: number;
+                                            /** @description The Gamma localization alarm level */
+                                            gamma_loc_alarm_value: number;
+                                            /** @description Alarm flag for the neutron localization value. 1 = alarmed, 0 = not alarmed */
+                                            neutron_loc_alarm: number;
+                                            /** @description Alarm flag for the gamma localization value. 1 = alarmed, 0 = not alarmed */
+                                            gamma_loc_alarm: number;
+                                        };
+                                        spectrum?: {
+                                            /** @description Flag for zero compression. 1 = zero compressed, 0 = not compressed */
+                                            zerocompression: number;
+                                            /** @description FOREGROUND or BACKGROUND */
+                                            type: string;
+                                            /** @description Spectrum live time in epoch time (ms) */
+                                            livetime_ms: string;
+                                            /** @description Spectrum real time in epoch time (ms) */
+                                            realtime_ms: string;
+                                            /** @description The spectral channel data */
+                                            channeldata: string;
+                                            /** @description The ID of the crystal reporting the channel data */
+                                            crystal_id?: string;
+                                        }[];
+                                        isotope?: {
+                                            /** @description The confidence value as a float representation of a percentage (88.5 NOT 0.885) */
+                                            confidence: number;
+                                            /** @description The name of the isotope */
+                                            name: string;
+                                            /** @description The type of the isotope */
+                                            type: string;
+                                        }[];
+                                        data_permissions?: {
+                                            /** @description All is true if all users should have access/permission */
+                                            all: boolean;
+                                            /** @description The list of ATAK UIDs that should have access/permission */
+                                            contact_list: string;
+                                        };
+                                        command_permissions?: {
+                                            /** @description All is true if all users should have access/permission */
+                                            all: boolean;
+                                            /** @description The list of ATAK UIDs that should have access/permission */
+                                            contact_list: string;
+                                        };
+                                    };
+                                    chemsensordetail?: {
+                                        sensor_data: {
+                                            /** @description The Manufacturer of the sensor in string format */
+                                            manufacturer: string;
+                                            /** @description The model of sensor in string format */
+                                            model: string;
+                                            /** @description The Serial Number of the Sensor in string format */
+                                            serialnumber: string;
+                                            /** @description The battery level as a percentage, float value */
+                                            batterylevel?: number;
+                                            /** @description The name of the given sensor in string format. Default name is Manufacturer+SerialNum */
+                                            callsign?: string;
+                                            /** @description The revision of the ChemCoT format, at writing this is "7" */
+                                            revision?: number;
+                                            /** @description General sensor health status */
+                                            status?: string;
+                                            /** @description Used internally by the CBRN plugin */
+                                            ordinal?: number;
+                                            /** @description The UID of the TAK marker that this sensor is attached to */
+                                            attachedUid?: string;
+                                            /** @description Is the data in this element representative of a simulated sensor */
+                                            simulated?: boolean;
+                                        };
+                                        detection?: {
+                                            /** @description Timestamp for the detection, epoch time (ms) */
+                                            time: string;
+                                            /** @description Chemical Name in string format */
+                                            agent: string;
+                                            /** @description Amount of chemical detected as a float. Could be mass, density, bars etc. */
+                                            quantity: number;
+                                            /** @description The units used to describe the quantity */
+                                            quantityunits: string;
+                                            /** @description Concentration of chemical in Kg/m^3 */
+                                            concentration?: number;
+                                            /** @description Alarm state of the sensor. 1 = alarm, 0 = no alarm */
+                                            alarm: number;
+                                            /** @description The confidence of the detection from the sensor as a percentage */
+                                            confidence?: number;
+                                            /** @description The mass fraction of the detection from the sensor in ppm */
+                                            massfraction?: number;
+                                            /** @description The percentage of the detection from the sensor in percent from 0-100 */
+                                            percent?: number;
+                                            /** @description The class of chemical detected. Nerve, Blood, TIC, etc. */
+                                            class?: string;
+                                            /** @description The ID number of the detection */
+                                            id?: number;
+                                        }[];
+                                    };
+                                    biosensordetail?: {
+                                        sensor_data: {
+                                            /** @description The Manufacturer of the sensor in string format */
+                                            manufacturer: string;
+                                            /** @description The model of sensor in string format */
+                                            model: string;
+                                            /** @description The Serial Number of the Sensor in string format */
+                                            serialnumber: string;
+                                            /** @description The battery level as a percentage, float value */
+                                            batterylevel?: number;
+                                            /** @description The name of the given sensor in string format. Default name is Manufacturer+SerialNum */
+                                            callsign?: string;
+                                            /** @description The revision of the BioCoT format */
+                                            revision?: number;
+                                            /** @description General sensor health status */
+                                            status?: string;
+                                            /** @description Used internally by the CBRN plugin */
+                                            ordinal?: number;
+                                            /** @description The UID of the TAK marker that this sensor is attached to */
+                                            attachedUid?: string;
+                                            /** @description Is the data in this element representative of a simulated sensor */
+                                            simulated?: boolean;
+                                        };
+                                        measurement?: {
+                                            /** @description Timestamp for the measurement, epoch time (ms) */
+                                            time: string;
+                                            /** @description Biological class */
+                                            bioClass?: string;
+                                            /** @description Biological type */
+                                            type?: string;
+                                            /** @description Channel identifier */
+                                            channel?: number;
+                                            /** @description Is this bio measurement harmful */
+                                            harmful?: boolean;
+                                            /** @description Dose Time */
+                                            doseTime?: number;
+                                            /** @description Amount of dose */
+                                            dose: number;
+                                            /** @description The confidence of the measurement from the sensor as a percentage */
+                                            confidence?: number;
+                                            /** @description Confirmation level */
+                                            confirmationLevel?: string;
+                                            /** @description Concentration */
+                                            concentration?: number;
+                                            /** @description Sample ID of this measurement */
+                                            sampleId?: string;
+                                            /** @description Persistency */
+                                            persistency?: string;
+                                            level?: {
+                                                /** @description The name of this measurement level */
+                                                levelName: string;
+                                                /** @description The value of this measurement level */
+                                                levelValue: string;
+                                            }[];
+                                        }[];
+                                    };
+                                    spatial?: {
+                                        version?: number;
+                                        attitude: {
+                                            /** @description Roll of entity in degrees. Positive indicates listing to the right. */
+                                            roll: number;
+                                            /** @description Pitch of entity in degrees. Positive indicates nose point up. */
+                                            pitch: number;
+                                            /** @description Yaw of entity in degrees. Positive indicates turned to the right. */
+                                            yaw?: number;
+                                            /** @description 1-sigma error of roll with respect to a zero mean normal Gaussian distribution. */
+                                            eRoll?: number;
+                                            /** @description 1-sigma error of pitch with respect to a zero mean normal Gaussian distribution. */
+                                            ePitch?: number;
+                                            /** @description 1-sigma error of yaw with respect to a zero mean normal Gaussian distribution. */
+                                            eYaw?: number;
+                                        };
+                                        spin: {
+                                            /** @description Degrees per second with positive indicating to the pilots right */
+                                            roll: number;
+                                            /** @description Degrees per second with positive indicating nose up. */
+                                            pitch: number;
+                                            /** @description Degrees per second with positive indicating right. */
+                                            yaw?: number;
+                                            /** @description 1-sigma error of roll with respect to a zero mean normal Gaussian distribution. */
+                                            eRoll?: number;
+                                            /** @description 1-sigma error of pitch with respect to a zero mean normal Gaussian distribution. */
+                                            ePitch?: number;
+                                            /** @description 1-sigma error of yaw with respect to a zero mean normal Gaussian distribution. */
+                                            eYaw?: number;
+                                        };
                                     };
                                 };
                                 path?: string;

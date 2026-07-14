@@ -54,6 +54,12 @@
                                     :inline='true'
                                 />
                                 <p
+                                    v-else-if='isOffline'
+                                    class='text-white fw-semibold p-0 mb-0'
+                                >
+                                    —
+                                </p>
+                                <p
                                     v-else
                                     class='text-white fw-semibold p-0 mb-0'
                                     v-text='subscriptions.length + " Users"'
@@ -234,6 +240,7 @@
                 <img
                     :src='missionQRURL'
                     class='invite-qr-image img-fluid'
+                    :style='appStore.resolvedTheme === "dark" ? { filter: "invert(1)" } : undefined'
                 >
             </div>
         </div>
@@ -268,7 +275,12 @@ import {
 import MenuTemplate from '../../util/MenuTemplate.vue';
 import OverlayManager from '../../../../base/overlay.ts';
 import { useMapStore } from '../../../../stores/map.ts';
+import { useDeviceStore } from '../../../../stores/device.ts';
+import { useAppStore } from '../../../../stores/app.ts';
 const mapStore = useMapStore();
+const deviceStore = useDeviceStore();
+const appStore = useAppStore();
+const isOffline = computed(() => !deviceStore.network.isOnline);
 
 const emit = defineEmits(['refresh']);
 
@@ -402,6 +414,7 @@ const loading = ref({
 });
 
 async function fetchSubscriptions() {
+    if (isOffline.value) return;
     loading.value.users = true;
     subscriptions.value = await props.subscription.subscriptions();
     loading.value.users = false;

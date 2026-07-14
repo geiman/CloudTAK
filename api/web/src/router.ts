@@ -21,6 +21,10 @@ const router = VueRouter.createRouter({
                 path: 'menu',
                 name: 'home-menu',
                 children: [{
+                    path: '',
+                    name: 'home-menu-main',
+                    component: () => import('./components/CloudTAK/MainMenuContents.vue')
+                },{
                     path: 'settings',
                     name: 'home-menu-settings',
                     component: MenuSettings
@@ -32,6 +36,14 @@ const router = VueRouter.createRouter({
                     path: 'settings/passkeys',
                     name: 'home-menu-settings-passkeys',
                     component: () => import('./components/CloudTAK/Menu/MenuSettingsPasskeys.vue')
+                },{
+                    path: 'settings/sessions',
+                    name: 'home-menu-settings-sessions',
+                    component: () => import('./components/CloudTAK/Menu/MenuSettingsSessions.vue')
+                },{
+                    path: 'settings/paging',
+                    name: 'home-menu-settings-paging',
+                    component: () => import('./components/CloudTAK/Menu/MenuSettingsPaging.vue')
                 },{
                     path: 'settings/callsign',
                     name: 'home-menu-settings-callsign',

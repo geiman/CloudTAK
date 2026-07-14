@@ -29,13 +29,32 @@
                 />
             </div>
 
-            <div class='col-12 py-2'>
-                <TablerInput
-                    v-model='paging.filter'
-                    icon='search'
-                    placeholder='Filter'
-                />
-            </div>
+            <SearchSortFilter
+                v-model='paging.filter'
+                v-model:sort='sort'
+                :sort-options='sortOptions'
+                placeholder='Filter'
+            >
+                <template #sort-icon>
+                    <template v-if='sort'>
+                        <component
+                            :is='sortTypeIcon'
+                            :size='20'
+                            stroke='1'
+                        />
+                        <component
+                            :is='sortDirectionIcon'
+                            :size='20'
+                            stroke='1'
+                        />
+                    </template>
+                    <IconArrowsSort
+                        v-else
+                        :size='20'
+                        stroke='1'
+                    />
+                </template>
+            </SearchSortFilter>
 
             <TablerLoading v-if='loading' />
             <TablerAlert
@@ -54,49 +73,10 @@
                     :key='imported.id'
                     class='col-12 py-1'
                 >
-                    <StandardItem
-                        class='d-flex align-items-center py-2 px-3'
+                    <StandardItemImport
+                        :imp='imported'
                         @click='router.push(`/menu/imports/${imported.id}`)'
-                    >
-                        <div class='col-auto'>
-                            <Status
-                                :dark='true'
-                                :status='imported.status'
-                            />
-                        </div>
-                        <div
-                            v-tooltip='`${imported.source} Import`'
-                            class='col-auto mx-2'
-                        >
-                            <IconAmbulance
-                                v-if='imported.source === "Mission"'
-                                :size='32'
-                                stroke='0.5'
-                            />
-                            <IconPackages
-                                v-else-if='imported.source === "Package"'
-                                :size='32'
-                                stroke='0.5'
-                            />
-                            <IconFile
-                                v-else
-                                :size='32'
-                                stroke='0.5'
-                            />
-                        </div>
-                        <div
-                            class='mx-2 col d-flex flex-column'
-                        >
-                            <div
-                                class='text-break'
-                                v-text='imported.name'
-                            />
-                            <div
-                                class='subheader'
-                                v-text='timeDiff(imported.created)'
-                            />
-                        </div>
-                    </StandardItem>
+                    />
                 </div>
             </template>
 
@@ -116,13 +96,12 @@
 </template>
 
 <script setup lang='ts'>
-import { ref, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import type { ImportList } from '../../../../src/types.ts';
 import { server, stdurl } from '../../../../src/std.ts';
 import {
     TablerNone,
-    TablerInput,
     TablerAlert,
     TablerIconButton,
     TablerRefreshButton,
@@ -131,14 +110,15 @@ import {
 } from '@tak-ps/vue-tabler';
 import {
     IconUpload,
-    IconFile,
-    IconAmbulance,
-    IconPackages,
+    IconLetterCase,
+    IconClock,
+    IconArrowUp,
+    IconArrowDown,
+    IconArrowsSort,
 } from '@tabler/icons-vue';
 import MenuTemplate from '../util/MenuTemplate.vue';
-import StandardItem from '../util/StandardItem.vue';
-import Status from '../../util/StatusDot.vue';
-import timeDiff from '../../../timediff.ts';
+import SearchSortFilter from '../util/SearchSortFilter.vue';
+import StandardItemImport from '../util/StandardItemImport.vue';
 import Upload from '../../util/Upload.vue';
 
 const router = useRouter();
@@ -152,6 +132,11 @@ const paging = ref({
     page: 0
 });
 
+const sort = ref('Newest → Oldest');
+const sortOptions = ['Newest → Oldest', 'Oldest → Newest', 'A → Z', 'Z → A'];
+const sortTypeIcon = computed(() => (sort.value === 'A → Z' || sort.value === 'Z → A') ? IconLetterCase : IconClock);
+const sortDirectionIcon = computed(() => (sort.value === 'Oldest → Newest' || sort.value === 'A → Z') ? IconArrowUp : IconArrowDown);
+
 const list = ref<ImportList>({
     total: 0,
     items: []
@@ -159,6 +144,10 @@ const list = ref<ImportList>({
 
 watch(paging.value, async function() {
     await fetchList()
+});
+
+watch(sort, async () => {
+    await fetchList();
 });
 
 onMounted(async () => {
@@ -179,11 +168,11 @@ async function fetchList() {
         const res = await server.GET('/api/import', {
             params: {
                 query: {
-                    order: 'desc',
+                    order: (sort.value === 'Oldest → Newest' || sort.value === 'A → Z') ? 'asc' : 'desc',
                     page: paging.value.page,
                     limit: paging.value.limit,
                     filter: paging.value.filter,
-                    sort: 'created',
+                    sort: (sort.value === 'A → Z' || sort.value === 'Z → A') ? 'name' : 'created',
                 }
             }
         });

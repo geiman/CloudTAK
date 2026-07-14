@@ -5,24 +5,39 @@
     "ios": {
         "path": "ios",
         "includePlugins": [
+            "@capgo/capacitor-updater",
             "@capacitor-community/keep-awake",
+            "@capacitor-firebase/messaging",
             "@capacitor/app",
             "@capacitor/browser",
+            "@capacitor/network",
             "@capacitor/camera",
             "@capacitor/clipboard",
             "@capacitor/geolocation",
             "@capacitor/haptics",
             "@capacitor/keyboard",
             "@capacitor/preferences",
-            "@capacitor/status-bar"
+            "@capacitor/status-bar",
+            "@capgo/background-geolocation",
+            "@capgo/capacitor-compass"
         ]
     },
     "android": {
-        "path": "android"
+        "path": "android",
+        "useLegacyBridge": true
     },
     "plugins": {
         "FirebaseMessaging": {
-            "presentationOptions": ["alert", "badge", "sound"]
+            "presentationOptions": [
+                "alert",
+                "badge",
+                "sound"
+            ]
+        },
+        "CapacitorUpdater": {
+            "appId": "io.cloudtak.app",
+            "version": "13.45.1",
+            "autoUpdate": "atBackground"
         }
     }
 }

@@ -1,7 +1,6 @@
 <template>
     <MenuTemplate
         name='Saved Features'
-        :loading='!mapStore.isLoaded'
     >
         <template #buttons>
             <TablerDropdown>
@@ -61,6 +60,7 @@
                             displaytype='menu'
                             class='cloudtak-hover'
                             label='Delete All Features'
+                            @click.stop
                             @delete='deleteFeatures'
                         />
                     </div>
@@ -69,11 +69,67 @@
         </template>
         <template #default>
             <div class='my-2'>
-                <TablerInput
+                <SearchSortFilter
                     v-model='query.filter'
-                    icon='search'
-                    placeholder='Search'
-                />
+                    v-model:sort='sort'
+                    :sort-options='sortOptions'
+                    :active-filters='activeFilterCount'
+                >
+                    <template #sort-icon>
+                        <component
+                            :is='sortTypeIcon'
+                            :size='20'
+                            stroke='1'
+                        />
+                        <component
+                            :is='sortDirectionIcon'
+                            :size='20'
+                            stroke='1'
+                        />
+                    </template>
+                    <template #filters>
+                        <div class='d-flex flex-column'>
+                            <div class='d-flex align-items-center justify-content-between px-3 py-2'>
+                                <strong class='small text-uppercase text-white-50'>Filters</strong>
+                                <button
+                                    v-if='activeFilterCount > 0'
+                                    type='button'
+                                    class='btn btn-link btn-sm p-0'
+                                    @click='clearGeometryFilters'
+                                >
+                                    Clear
+                                </button>
+                            </div>
+                            <div class='px-3 pb-2 d-flex flex-column gap-2'>
+                                <div>
+                                    <div class='small text-uppercase text-white-50 mb-1'>
+                                        Geometry
+                                    </div>
+                                    <label
+                                        v-for='opt in geometryFilterOptions'
+                                        :key='opt.value'
+                                        class='form-check mb-1'
+                                    >
+                                        <input
+                                            class='form-check-input'
+                                            type='checkbox'
+                                            :checked='geometryTypes.includes(opt.value)'
+                                            @change='toggleGeometryType(opt.value)'
+                                        >
+                                        <span class='form-check-label d-flex align-items-center gap-1'>
+                                            <component
+                                                :is='opt.icon'
+                                                :size='14'
+                                                stroke='1'
+                                            />
+                                            {{ opt.label }}
+                                        </span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </SearchSortFilter>
             </div>
 
             <div class='my-2 d-flex align-items-center justify-content-between'>
@@ -121,10 +177,13 @@
                     <PathBrowser
                         v-if='currentFolders.length'
                         :nodes='currentFolders'
+                        :visibility-toggle='true'
+                        :is-node-hidden='isFolderHidden'
                         @navigate='navigateToFolder'
                         @delete='deletePath'
                         @rename='openEditModal'
                         @folder-drop='onFolderDrop'
+                        @toggle-visibility='toggleFolderVisibility'
                     />
 
                     <div
@@ -133,13 +192,14 @@
                         class='mt-2'
                     >
                         <Feature
-                            v-for='cot of currentItems.values()'
+                            v-for='cot of sortedItems'
                             :id='cot.id'
                             :key='cot.id'
                             :select='true'
                             :grip-handle='true'
                             :delete-button='true'
                             :info-button='true'
+                            :visibility-toggle='true'
                             :feature='cot'
                         />
                     </div>
@@ -184,12 +244,15 @@
 
 <script setup lang='ts'>
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount, useTemplateRef } from 'vue';
-import { Preferences } from '@capacitor/preferences';
 import COT from '../../../base/cot.ts';
+import FeatureManager from '../../../base/feature.ts';
+import type { Feature_ExportFormat } from '../../../base/feature.ts';
 import PathManager from '../../../base/path-manager.ts';
 import type { PathNode } from '../../../base/path-manager.ts';
+import { FeatureVisibility, GENERAL_SOURCE_ID } from '../../../stores/modules/feature-visibility.ts';
 import { useRouter } from 'vue-router';
 import MenuTemplate from '../util/MenuTemplate.vue';
+import SearchSortFilter from '../util/SearchSortFilter.vue';
 import PathBrowser from '../util/PathBrowser.vue';
 import PathBreadcrumb from '../util/PathBreadcrumb.vue';
 import Feature from '../util/FeatureRow.vue';
@@ -205,7 +268,6 @@ import {
     TablerModal,
     TablerButton
 } from '@tak-ps/vue-tabler';
-import { std } from '../../../std.ts';
 import type { WorkerMessage } from '../../../base/events.ts';
 import { WorkerMessageType } from '../../../base/events.ts';
 import {
@@ -214,6 +276,13 @@ import {
     IconTrash,
     IconDownload,
     IconDotsVertical,
+    IconClock,
+    IconLetterCase,
+    IconArrowUp,
+    IconArrowDown,
+    IconPoint,
+    IconLine,
+    IconPolygon,
 } from '@tabler/icons-vue';
 import Sortable from 'sortablejs';
 import type { SortableEvent } from 'sortablejs'
@@ -261,6 +330,14 @@ const currentFolders = computed(() => {
     return node ? node.children : [];
 });
 
+function isFolderHidden(node: PathNode<COT>): boolean {
+    return FeatureVisibility.isPathHidden(GENERAL_SOURCE_ID, node.fullPath);
+}
+
+function toggleFolderVisibility(node: PathNode<COT>): void {
+    FeatureVisibility.togglePath(GENERAL_SOURCE_ID, node.fullPath);
+}
+
 const folderModal = ref<{
     shown: boolean;
     name: string;
@@ -274,9 +351,70 @@ const dragging = ref(false);
 const draggedId = ref<string | undefined>();
 const loading = ref(true);
 
+const sortOptions = ['Newest → Oldest', 'Oldest → Newest', 'Alphabetical A→Z', 'Alphabetical Z→A'];
+const sort = ref('Newest → Oldest');
+
+const geometryFilterOptions = [
+    { value: 'Point', label: 'Point', icon: IconPoint },
+    { value: 'LineString', label: 'LineString', icon: IconLine },
+    { value: 'Polygon', label: 'Polygon', icon: IconPolygon },
+];
+
+const geometryTypes = ref<string[]>([]);
+const activeFilterCount = computed(() => geometryTypes.value.length);
+
+function toggleGeometryType(type: string): void {
+    if (geometryTypes.value.includes(type)) {
+        geometryTypes.value = geometryTypes.value.filter(t => t !== type);
+    } else {
+        geometryTypes.value = [...geometryTypes.value, type];
+    }
+}
+
+function clearGeometryFilters(): void {
+    geometryTypes.value = [];
+}
+
+const sortTypeIcon = computed(() => sort.value.startsWith('Alphabetical') ? IconLetterCase : IconClock);
+const sortDirectionIcon = computed(() => (sort.value === 'Oldest → Newest' || sort.value === 'Alphabetical A→Z') ? IconArrowUp : IconArrowDown);
+
+const sortedItems = computed((): COT[] => {
+    const arr = Array.from(currentItems.value);
+    if (sort.value === 'Oldest → Newest') {
+        return arr.sort((a, b) => {
+            const ta = a.properties.time ? new Date(a.properties.time).getTime() : 0;
+            const tb = b.properties.time ? new Date(b.properties.time).getTime() : 0;
+            return ta - tb;
+        });
+    } else if (sort.value === 'Alphabetical A→Z') {
+        return arr.sort((a, b) => {
+            const ca = (a.properties.callsign ?? '').toLowerCase();
+            const cb = (b.properties.callsign ?? '').toLowerCase();
+            return ca.localeCompare(cb);
+        });
+    } else if (sort.value === 'Alphabetical Z→A') {
+        return arr.sort((a, b) => {
+            const ca = (a.properties.callsign ?? '').toLowerCase();
+            const cb = (b.properties.callsign ?? '').toLowerCase();
+            return cb.localeCompare(ca);
+        });
+    } else {
+        // Newest → Oldest (default)
+        return arr.sort((a, b) => {
+            const ta = a.properties.time ? new Date(a.properties.time).getTime() : 0;
+            const tb = b.properties.time ? new Date(b.properties.time).getTime() : 0;
+            return tb - ta;
+        });
+    }
+});
+
 
 
 watch(query.value, async () => {
+    await refresh();
+})
+
+watch(geometryTypes, async () => {
     await refresh();
 })
 
@@ -478,11 +616,23 @@ async function onFolderDrop(node: PathNode<COT>) {
 async function refresh(load = false): Promise<void> {
     if (load) loading.value = true;
 
+    let geomFilter = '';
+    if (geometryTypes.value.length > 0) {
+        const clauses = geometryTypes.value.flatMap(t => {
+            if (t === 'Point') return ['geometry.type = "Point"', 'geometry.type = "MultiPoint"'];
+            if (t === 'LineString') return ['geometry.type = "LineString"', 'geometry.type = "MultiLineString"'];
+            if (t === 'Polygon') return ['geometry.type = "Polygon"', 'geometry.type = "MultiPolygon"'];
+            return [];
+        });
+        geomFilter = `and (${clauses.join(' or ')})`;
+    }
+
     cots.value = new Set(Array.from(await mapStore.worker.db
         .filter(`
             properties.archived
             and path = "/"
             and $contains($lowercase(properties.callsign), "${query.value.filter.toLowerCase()}")
+            ${geomFilter}
         `)))
 
     const flatPaths = (await mapStore.worker.db.paths())
@@ -517,11 +667,8 @@ async function refresh(load = false): Promise<void> {
     })
 }
 
-async function download(format: string): Promise<void> {
-    const { value: token } = await Preferences.get({ key: 'token' });
-    await std(`/api/profile/feature?format=${format}&download=true${token ? `&token=${encodeURIComponent(token)}` : ''}`, {
-        download: true
-    });
+async function download(format: Feature_ExportFormat): Promise<void> {
+    await FeatureManager.download({ format });
 }
 
 async function navigateToFolder(node: PathNode<COT>): Promise<void> {
@@ -562,9 +709,7 @@ async function deleteFeatures(): Promise<void> {
             skipNetwork: true
         });
 
-        await std('/api/profile/feature', {
-            method: 'DELETE'
-        });
+        await FeatureManager.delete();
 
         loading.value = false;
     } catch (err) {
@@ -590,10 +735,34 @@ async function deletePath(node: PathNode<COT>): Promise<void> {
     // Delete COTs for this path and all descendant paths
     const allPaths = PathManager.flatPaths([node]);
     for (const p of allPaths) {
-        await mapStore.worker.db.filterRemove(`path = "${p}" and properties.archived`);
+        await FeatureManager.delete({ path: p, permanent: true });
+        const cots = await mapStore.worker.db.pathFeatures(p);
+        await Promise.allSettled([...cots].map((cot) => mapStore.worker.db.remove(cot.id, { skipNetwork: true })));
     }
 
     await refresh();
 }
 
 </script>
+
+<style scoped>
+:deep(.form-check-input) {
+    background-color: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+:deep(.form-check-input:checked) {
+    background-color: var(--tblr-primary);
+    border-color: var(--tblr-primary);
+}
+
+[data-bs-theme='light'] :deep(.form-check-input) {
+    background-color: #fff;
+    border-color: rgba(0, 0, 0, 0.25);
+}
+
+[data-bs-theme='light'] :deep(.form-check-input:checked) {
+    background-color: var(--tblr-primary);
+    border-color: var(--tblr-primary);
+}
+</style>

@@ -4,7 +4,7 @@
 */
 
 import { std } from '../std.ts';
-import { db } from '../database.ts';
+import { db, withDbRetry } from '../database.ts';
 import type { DBSubscriptionChanges } from '../database.ts';
 import { LngLatBounds } from 'maplibre-gl'
 import jsonata from 'jsonata';
@@ -34,6 +34,10 @@ export default class AtlasDatabase {
 
     cots: Map<string, COT>;
 
+    // Archived feature ids as last seen from the server - used by
+    // loadArchive() to prune features deleted remotely
+    archiveIds: Set<string>;
+
     // Stores Active Mission if present
     mission?: string;
 
@@ -59,6 +63,7 @@ export default class AtlasDatabase {
         this.atlas = atlas;
 
         this.cots = new Map();
+        this.archiveIds = new Set();
 
         this.pendingCreate = new Map();
         this.pendingUpdate = new Map();
@@ -143,6 +148,10 @@ export default class AtlasDatabase {
         const display_stale = (await ProfileConfig.get('display_stale'))?.value || 'Immediate';
 
         for (const cot of this.cots.values()) {
+            // The user's own position is drawn by the GeolocateControl puck
+            // rather than as a CoT marker on the map.
+            if (cot.is_self) continue;
+
             const stale = new Date(cot.properties.stale).getTime();
 
             if (this.pendingHidden.has(String(cot.id))) {
@@ -195,7 +204,7 @@ export default class AtlasDatabase {
 
         for (const id of this.pendingUnhide.values()) {
             const cot = this.cots.get(id);
-            if (!cot) continue;
+            if (!cot || cot.is_self) continue;
 
             const render = cot.as_rendered();
             diff.add.push(render);
@@ -204,7 +213,7 @@ export default class AtlasDatabase {
         this.pendingUnhide.clear();
 
         for (const cot of this.pendingCreate.values()) {
-            if (staleDelete.has(cot.id) || this.pendingDelete.has(cot.id)) continue;
+            if (cot.is_self || staleDelete.has(cot.id) || this.pendingDelete.has(cot.id)) continue;
             const render = cot.as_rendered();
             diff.add.push(render);
         }
@@ -212,7 +221,7 @@ export default class AtlasDatabase {
         this.pendingCreate.clear();
 
         for (const cot of this.pendingUpdate.values()) {
-            if (staleDelete.has(cot.id) || this.pendingDelete.has(cot.id)) continue;
+            if (cot.is_self || staleDelete.has(cot.id) || this.pendingDelete.has(cot.id)) continue;
 
             const render = cot.as_rendered();
 
@@ -229,7 +238,7 @@ export default class AtlasDatabase {
 
         for (const id of staleDelete) {
             this.cots.delete(id);
-            await db.feature.delete(id);
+            await withDbRetry(() => db.feature.delete(id));
         }
 
         for (const id of this.pendingDelete) {
@@ -239,7 +248,7 @@ export default class AtlasDatabase {
             diff.remove.push(cot.vectorId());
 
             this.cots.delete(id);
-            await db.feature.delete(id);
+            await withDbRetry(() => db.feature.delete(id));
         }
 
         this.pendingDelete.clear();
@@ -286,6 +295,7 @@ export default class AtlasDatabase {
         const expression = jsonata(filter);
 
         for (const cot of this.cots.values()) {
+            if (this.pendingDelete.has(cot.id)) continue;
             if (await expression.evaluate(cot.as_feature()) === true) {
                 cots.add(cot);
             }
@@ -383,18 +393,39 @@ export default class AtlasDatabase {
 
     /**
      * Load Archived CoTs
+     *
+     * Reconciles the local store against the server's archive: features are
+     * added/updated idempotently and archived features that were previously
+     * loaded from the server but no longer exist there (deleted by another
+     * client, possibly while this client was disconnected) are removed
+     * locally. Only ids in `archiveIds` (seen from the server on a prior
+     * load) are prune candidates, so a freshly drawn feature whose PUT is
+     * still in flight is never removed.
      */
     async loadArchive(): Promise<void> {
         const archive = await std('/api/profile/feature', {
             token: this.atlas.token
         }) as APIList<Feature>;
 
+        const serverIds = new Set<string>(archive.items.map((f) => String(f.id)));
+
         for (const a of archive.items) {
-            this.add(a, {
+            await this.add(a, {
                 skipSave: true,
                 skipBroadcast: true
             });
         }
+
+        for (const id of this.archiveIds) {
+            if (serverIds.has(id)) continue;
+
+            const cot = this.cots.get(id);
+            if (!cot || !cot.properties.archived || cot.origin.mode !== OriginMode.CONNECTION) continue;
+
+            await this.remove(id, { skipNetwork: true });
+        }
+
+        this.archiveIds = serverIds;
 
         this.atlas.postMessage({
             type: WorkerMessageType.Feature_Archived_Added,
@@ -442,23 +473,23 @@ export default class AtlasDatabase {
                 this.pendingDelete.add(breadcrumbId);
             }
 
-            await db.feature.delete(breadcrumbId);
+            await withDbRetry(() => db.feature.delete(breadcrumbId));
         }
 
         if (cot.origin.mode === OriginMode.CONNECTION) {
             this.pendingDelete.add(id);
 
             if (cot.properties.archived) {
-                this.atlas.postMessage({
-                    type: WorkerMessageType.Feature_Archived_Removed
-                });
-
                 if (!opts.skipNetwork) {
                     await std(`/api/profile/feature/${id}`, {
                         token: this.atlas.token,
                         method: 'DELETE'
                     });
                 }
+
+                this.atlas.postMessage({
+                    type: WorkerMessageType.Feature_Archived_Removed
+                });
             }
         } else if (cot.origin.mode === OriginMode.MISSION && cot.origin.mode_id) {
             const subscription = await Subscription.from(cot.origin.mode_id, this.atlas.token, {
@@ -692,13 +723,22 @@ export default class AtlasDatabase {
             return exists;
         } else {
             if (exists) {
-                await exists.update({
+                const changed = await exists.update({
                     path: feat.path,
                     properties: feat.properties,
                     geometry: feat.geometry
                 }, { skipSave: opts.skipSave })
 
-                this.pendingUpdate.set(exists.id, exists);
+                // Only queue a map update when the CoT actually changed and it
+                // isn't still waiting to be added. A pending-create COT is
+                // mutated in place, so also pushing it to pendingUpdate would
+                // emit a duplicate add+update for the same feature id in one
+                // diff. This keeps idempotent re-adds (loadArchive / feature
+                // sync events, including a client receiving its own change)
+                // from disturbing a freshly drawn, not-yet-flushed feature.
+                if (changed && !this.pendingCreate.has(exists.id)) {
+                    this.pendingUpdate.set(exists.id, exists);
+                }
 
                 // Sync profile if this is the user's own COT
                 if (exists.is_self) {
@@ -742,12 +782,13 @@ export default class AtlasDatabase {
                 this.pendingCreate.set(exists.id, exists);
                 this.cots.set(exists.id, exists);
 
-                await db.feature.put({
-                    id: exists.id,
-                    path: exists.path,
-                    properties: exists.properties,
-                    geometry: exists.geometry
-                });
+                const created = exists;
+                await withDbRetry(() => db.feature.put({
+                    id: created.id,
+                    path: created.path,
+                    properties: created.properties,
+                    geometry: created.geometry
+                }));
 
                 if (opts.skipBroadcast !== true && exists.properties.archived) {
                     this.atlas.postMessage({

@@ -1,19 +1,16 @@
 import { db } from '../database.ts'
-import { std, stdurl } from '../std.ts';
+import { server } from '../std.ts';
 import SubscriptionLog from './subscription-log.ts';
 import SubscriptionChanges from './subscription-changes.ts';
 import SubscriptionContents from './subscription-contents.ts';
 import SubscriptionFeature from './subscription-feature.ts';
+import SubscriptionLayer from './subscription-layer.ts';
 import SubscriptionChat from './subscription-chat.ts';
 import MissionTemplate from './mission-template.ts';
 import type {
     Mission,
     MissionRole,
     MissionList,
-    MissionLayer,
-    MissionLayerList,
-    MissionLayer_Create,
-    MissionLayer_Update,
     MissionSubscriptions,
     MissionInvite
 } from '../types.ts';
@@ -56,6 +53,7 @@ export default class Subscription {
     change: SubscriptionChanges;
     contents: SubscriptionContents;
     feature: SubscriptionFeature;
+    layer: SubscriptionLayer;
     chat: SubscriptionChat;
 
     token: string;
@@ -101,6 +99,11 @@ export default class Subscription {
         });
 
         this.feature = new SubscriptionFeature(this, {
+            missiontoken: opts.missiontoken,
+            token: opts.token
+        });
+
+        this.layer = new SubscriptionLayer(this, {
             missiontoken: opts.missiontoken,
             token: opts.token
         });
@@ -207,21 +210,28 @@ export default class Subscription {
         } else {
             if (!opts.subscribed) opts.subscribed = false;
 
-            const url = stdurl('/api/marti/missions/' + encodeURIComponent(guid));
+            const { data: mission, error: missionError } = await server.GET('/api/marti/missions/{:name}', {
+                params: {
+                    path: { ':name': guid },
+                    query: { changes: false, logs: false }
+                },
+                headers: Subscription.headers(opts.missiontoken)
+            });
 
-            const mission = await std(url, {
-                headers: Subscription.headers(opts.missiontoken),
-                token: opts.token
-            }) as Mission;
+            if (missionError || !mission) throw new Error('Failed to load mission');
 
-            const role = await std('/api/marti/missions/' + encodeURIComponent(guid) + '/role', {
-                headers: Subscription.headers(opts.missiontoken),
-                token: opts.token
-            }) as MissionRole;
+            const { data: role, error: roleError } = await server.GET('/api/marti/missions/{:name}/role', {
+                params: {
+                    path: { ':name': guid }
+                },
+                headers: Subscription.headers(opts.missiontoken)
+            });
+
+            if (roleError || !role) throw new Error('Failed to load mission role');
 
             const sub = new Subscription(
-                mission,
-                role,
+                mission as unknown as Mission,
+                role as unknown as MissionRole,
                 {
                     subscribed: false,
                     ...opts
@@ -285,22 +295,26 @@ export default class Subscription {
         });
 
         if (body.description !== undefined || body.keywords !== undefined || body.groups !== undefined) {
-            const url = stdurl(`/api/marti/missions/${this.guid}`);
             const patch: { description?: string; keywords?: string[]; groups?: string[] } = {};
             if (body.description !== undefined) patch.description = body.description;
             if (body.keywords !== undefined) patch.keywords = body.keywords;
             if (body.groups !== undefined) patch.groups = body.groups;
 
-            this.meta = await std(url, {
-                method: 'PATCH',
+            const { data } = await server.PATCH('/api/marti/missions/{:name}', {
+                params: {
+                    path: { ':name': this.guid }
+                },
                 headers: Subscription.headers(this.missiontoken),
-                token: this.token,
                 body: patch
-            }) as Mission;
-
-            await db.subscription.update(this.guid, {
-                meta: JSON.parse(JSON.stringify(this.meta)),
             });
+
+            if (data) {
+                Object.assign(this.meta, data as unknown as Mission);
+
+                await db.subscription.update(this.guid, {
+                    meta: JSON.parse(JSON.stringify(this.meta)),
+                });
+            }
         }
 
         this._sync.postMessage({
@@ -314,14 +328,14 @@ export default class Subscription {
     }
 
     async delete(): Promise<void> {
-        const url = stdurl(`/api/marti/missions/${this.guid}`);
-        const list = await std(url, {
-            method: 'DELETE',
-            headers: Subscription.headers(this.missiontoken),
-            token: this.token
-        }) as { data: Array<unknown> };
+        const { data, response } = await server.DELETE('/api/marti/missions/{:name}', {
+            params: {
+                path: { ':name': this.guid }
+            },
+            headers: Subscription.headers(this.missiontoken)
+        });
 
-        if (list.data.length !== 1) throw new Error('Mission Error');
+        if (!data && response.status !== 404) throw new Error('Mission Error');
 
         await db.subscription.delete(this.meta.guid);
 
@@ -347,7 +361,7 @@ export default class Subscription {
             .get(this.guid)
 
         if (exists) {
-            this.meta = exists.meta;
+            Object.assign(this.meta, exists.meta);
             this.role = exists.role;
             this.missiontoken = exists.token;
             this.subscribed = exists.subscribed;
@@ -367,17 +381,23 @@ export default class Subscription {
         await Promise.all([
             this.log.refresh(),
             this.feature.refresh(),
+            this.layer.refresh(),
             this.change.refresh(),
         ]);
     };
 
     async fetch(): Promise<Mission> {
-        const url = stdurl('/api/marti/missions/' + encodeURIComponent(this.guid));
+        const { data, error } = await server.GET('/api/marti/missions/{:name}', {
+            params: {
+                path: { ':name': this.guid },
+                query: { changes: false, logs: false }
+            },
+            headers: Subscription.headers(this.missiontoken)
+        });
 
-        const meta = await std(url, {
-            headers: Subscription.headers(this.missiontoken),
-            token: this.token
-        }) as Mission;
+        if (error || !data) throw new Error('Failed to fetch mission');
+
+        const meta = data as unknown as Mission;
 
         await this.contents.refresh(meta.contents);
 
@@ -454,12 +474,19 @@ export default class Subscription {
         if (opts.passwordProtected === undefined) opts.passwordProtected = true;
         if (opts.defaultRole === undefined) opts.defaultRole = true;
 
-        const url = stdurl('/api/marti/mission');
-        url.searchParams.set('passwordProtected', String(opts.passwordProtected));
-        url.searchParams.set('defaultRole', String(opts.defaultRole));
-        url.searchParams.set('sort', 'createTime');
-        url.searchParams.set('order', 'desc');
-        return await std(url) as MissionList;
+        const { data } = await server.GET('/api/marti/mission', {
+            params: {
+                query: {
+                    passwordProtected: opts.passwordProtected,
+                    defaultRole: opts.defaultRole,
+                    sort: 'createTime',
+                    order: 'desc'
+                }
+            }
+        });
+
+        if (!data) throw new Error('Failed to list missions');
+        return data;
     }
 
     static headers(token?: string): Record<string, string> {
@@ -469,120 +496,67 @@ export default class Subscription {
     }
 
     async invite(invitee: string, role = 'MISSION_SUBSCRIBER'): Promise<void> {
-        const url = stdurl(`/api/marti/missions/${this.guid}/invite`);
-        await std(url, {
-            method: 'POST',
+        const { error } = await server.POST('/api/marti/missions/{:guid}/invite', {
+            params: {
+                path: { ':guid': this.guid }
+            },
+            headers: Subscription.headers(this.missiontoken),
             body: {
                 type: 'callsign',
                 invitee: invitee,
-                role: role
-            },
-            token: this.token,
-            headers: Subscription.headers(this.missiontoken)
+                role: role as 'MISSION_OWNER' | 'MISSION_SUBSCRIBER' | 'MISSION_READONLY_SUBSCRIBER'
+            }
         });
+
+        if (error) throw new Error('Failed to invite user to mission');
     }
 
     async invites(): Promise<MissionInvite[]> {
-        const url = stdurl(`/api/marti/missions/${this.guid}/invite`);
-
-        const res = await std(url, {
-            method: 'GET',
-            token: this.token,
+        const { data, error } = await server.GET('/api/marti/missions/{:guid}/invite', {
+            params: {
+                path: { ':guid': this.guid }
+            },
             headers: Subscription.headers(this.missiontoken)
-        }) as { data: MissionInvite[] };
+        });
 
-        return res.data;
+        if (error || !data) throw new Error('Failed to fetch mission invites');
+
+        return (data as unknown as { data: MissionInvite[] }).data;
     }
 
     async deleteInvite(invite: { type: string, invitee: string }): Promise<void> {
-        const url = stdurl(`/api/marti/missions/${this.guid}/invite`);
-        url.searchParams.set('type', invite.type);
-        url.searchParams.set('invitee', invite.invitee);
-
-        await std(url, {
-            method: 'DELETE',
-            token: this.token,
+        await server.DELETE('/api/marti/missions/{:guid}/invite', {
+            params: {
+                path: { ':guid': this.guid },
+                query: {
+                    type: invite.type as 'callsign' | 'group' | 'team' | 'clientUid' | 'userName',
+                    invitee: invite.invitee
+                }
+            },
             headers: Subscription.headers(this.missiontoken)
         });
     }
 
     async removeUser(uid: string): Promise<void> {
-        const url = stdurl(`/api/marti/missions/${encodeURIComponent(this.guid)}/user`);
-        url.searchParams.set('uid', uid);
-        await std(url, {
-            method: 'DELETE',
-            token: this.token,
+        await server.DELETE('/api/marti/missions/{:guid}/user', {
+            params: {
+                path: { ':guid': this.guid },
+                query: { uid }
+            },
             headers: Subscription.headers(this.missiontoken)
         });
     }
 
     async subscriptions(): Promise<MissionSubscriptions> {
-        const url = stdurl(`/api/marti/missions/${encodeURIComponent(this.guid)}/subscriptions/roles`);
+        if (!navigator.onLine) return [];
 
-        const res = await std(url, {
-            method: 'GET',
-            token: this.token,
+        const { data } = await server.GET('/api/marti/missions/{:name}/subscriptions/roles', {
+            params: {
+                path: { ':name': this.guid }
+            },
             headers: Subscription.headers(this.missiontoken)
-        }) as {
-            data: MissionSubscriptions
-        };
-
-        return res.data
-    }
-
-    async layerList(): Promise<MissionLayerList> {
-        const url = stdurl(`/api/marti/missions/${encodeURIComponent(this.guid)}/layer`);
-
-        const list = await std(url, {
-            method: 'GET',
-            token: this.token,
-            headers: Subscription.headers(this.missiontoken)
-        }) as MissionLayerList;
-
-        list.data.sort((a, b) => {
-            // Consistent sort by name
-            return a.name.localeCompare(b.name);
         });
 
-        return list;
-    }
-
-    async layerUpdate(
-        guid: string,
-        layerid: string,
-        layer: MissionLayer_Update
-    ): Promise<MissionLayer> {
-        const url = stdurl(`/api/marti/missions/${this.guid}/layer/${layerid}`);
-
-        return await std(url, {
-            method: 'PATCH',
-            body: layer,
-            token: this.token,
-            headers: Subscription.headers(this.missiontoken)
-        }) as MissionLayer;
-    }
-
-    async layerCreate(
-        layer: MissionLayer_Create
-    ): Promise<MissionLayer> {
-        const url = stdurl(`/api/marti/missions/${this.guid}/layer`);
-
-        return await std(url, {
-            method: 'POST',
-            body: layer,
-            token: this.token,
-            headers: Subscription.headers(this.missiontoken)
-        }) as MissionLayer;
-    }
-
-    async layerDelete(
-        layeruid: string
-    ): Promise<void> {
-        const url = stdurl(`/api/marti/missions/${this.guid}/layer/${layeruid}`);
-        await std(url, {
-            method: 'DELETE',
-            token: this.token,
-            headers: Subscription.headers(this.missiontoken)
-        })
+        return (data as unknown as { data: MissionSubscriptions }).data;
     }
 }

@@ -1,9 +1,9 @@
-import { db } from '../database.ts';
+import { db, ChatStatus } from '../database.ts';
 import Filter from './filter.ts';
 import COT from './cot.ts';
 import Subscription from './subscription.ts';
 import type Atlas from '../workers/atlas.ts';
-import { std, stdurl } from '../std.ts';
+import { server } from '../std.ts';
 import { bbox } from '@turf/bbox';
 import type { BBox, FeatureCollection as GeoJSONFeatureCollection } from 'geojson'
 import type { Feature, FeatureCollection } from '../types.ts';
@@ -40,13 +40,14 @@ export default class SubscriptionFeature {
     async refresh(): Promise<void> {
         const channel = new BroadcastChannel('cloudtak');
         try {
-            const url = stdurl('/api/marti/missions/' + encodeURIComponent(this.parent.guid) + '/cot');
-
-            const list = await std(url, {
-                method: 'GET',
-                token: this.token,
+            const { data, error } = await server.GET('/api/marti/missions/{:guid}/cot', {
+                params: { path: { ':guid': this.parent.guid } },
                 headers: this.headers()
-            }) as FeatureCollection;
+            });
+
+            if (error || !data) throw new Error('Failed to fetch mission features');
+
+            const list = data as unknown as FeatureCollection;
 
             for (const feat of list.features) {
                 await COT.style(feat);
@@ -90,17 +91,25 @@ export default class SubscriptionFeature {
                         id: string;
                         senderCallsign: string;
                         messageId?: string;
+                        chatgrp?: { _attributes?: { uid0?: string } };
                     } | undefined;
                     if (!chat) continue;
+
+                    // Key on the messageId so a message sent locally (stored under its
+                    // messageId) is replaced by the server copy rather than duplicated
+                    const id = chat.messageId || feature.id;
+
                     await db.subscription_chat.put({
-                        id: feature.id,
+                        id,
                         mission: this.parent.guid,
                         chatroom: chat.chatroom,
                         sender: chat.senderCallsign || String(feature.properties.callsign || ''),
-                        sender_uid: chat.id,
+                        sender_uid: chat.chatgrp?._attributes?.uid0 || chat.id,
                         message: String(feature.properties.remarks || ''),
                         created: String(feature.properties.start || feature.properties.time || new Date().toISOString()),
-                        unread: unreadChats.has(feature.id),
+                        unread: unreadChats.has(id),
+                        // The message came back from the Mission so it has reached the server
+                        status: ChatStatus.Sent,
                     });
                 }
             });
@@ -162,7 +171,15 @@ export default class SubscriptionFeature {
                     }
                 }
 
-                if (!blocked) filtered.push(feat);
+                if (!blocked) {
+                    filtered.push({
+                        ...feat,
+                        properties: {
+                            ...feat.properties,
+                            path: feat.path || '/',
+                        }
+                    });
+                }
             }
 
             return {
@@ -218,18 +235,21 @@ export default class SubscriptionFeature {
                 id: string;
                 senderCallsign: string;
                 messageId?: string;
+                chatgrp?: { _attributes?: { uid0?: string } };
             } | undefined;
 
             if (chat) {
                 await db.subscription_chat.put({
-                    id: cot.id,
+                    id: chat.messageId || cot.id,
                     mission: this.parent.guid,
                     chatroom: chat.chatroom,
                     sender: chat.senderCallsign || String(cot.properties.callsign || ''),
-                    sender_uid: chat.id,
+                    sender_uid: chat.chatgrp?._attributes?.uid0 || chat.id,
                     message: String(cot.properties.remarks || ''),
                     created: String(cot.properties.start || cot.properties.time || new Date().toISOString()),
                     unread: !!opts.skipNetwork,
+                    // The message arrived via the Mission so it has reached the server
+                    status: ChatStatus.Sent,
                 });
             }
         } else {
@@ -290,11 +310,9 @@ export default class SubscriptionFeature {
         })
 
         if (!opts.skipNetwork) {
-            const url = stdurl(`/api/marti/missions/${this.parent.guid}/cot/${uid}`);
-            await std(url, {
-                method: 'DELETE',
+            await server.DELETE('/api/marti/missions/{:guid}/cot/{:uid}', {
+                params: { path: { ':guid': this.parent.guid, ':uid': uid } },
                 headers: this.headers(),
-                token:  atlas.token
             })
         }
     }

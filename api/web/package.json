@@ -1,7 +1,7 @@
 {
     "name": "@tak-ps/cloudtak",
     "type": "module",
-    "version": "13.5.0",
+    "version": "13.45.1",
     "types": "dist/types/plugin.d.ts",
     "files": [
         "dist/types"
@@ -22,7 +22,8 @@
         "doc": "typedoc --options typedoc.json",
         "build": "vite build",
         "lint": "eslint --config eslint.config.js ./src/ ./public/ ./plugins/",
-        "test": "vitest run"
+        "test": "vitest run",
+        "coverage": "vitest run --coverage"
     },
     "repository": {
         "type": "git",
@@ -31,20 +32,27 @@
     "dependencies": {
         "@capacitor-community/keep-awake": "^8.0.1",
         "@capacitor-firebase/messaging": "^8.2.0",
+        "@capacitor/app": "^8.1.0",
         "@capacitor/browser": "^8.0.1",
         "@capacitor/camera": "^8.2.0",
         "@capacitor/clipboard": "^8.0.1",
         "@capacitor/core": "^8.3.1",
         "@capacitor/geolocation": "^8.1.0",
+        "@capacitor/haptics": "^8.0.2",
+        "@capacitor/keyboard": "^8.0.3",
+        "@capacitor/network": "^8.0.1",
         "@capacitor/preferences": "^8.0.1",
         "@capacitor/status-bar": "^8.0.2",
+        "@capgo/background-geolocation": "^8.0.39",
+        "@capgo/capacitor-compass": "^8.1.17",
+        "@capgo/capacitor-updater": "^8.50.1",
         "@mapbox/tile-cover": "^3.0.2",
         "@simplewebauthn/browser": "^13.3.0",
         "@tabler/core": "^1.4.0",
         "@tabler/icons-vue": "^3.0.0",
         "@tak-ps/node-cot": "^14.20.0",
         "@tak-ps/node-p12": "^1.0.3",
-        "@tak-ps/vue-tabler": "^4.20.0",
+        "@tak-ps/vue-tabler": "^4.26.1",
         "@turf/area": "^7.2.0",
         "@turf/bbox": "^7.1.0",
         "@turf/boolean-point-in-polygon": "^7.3.1",
@@ -76,7 +84,7 @@
         "hls.js": "^1.6.5",
         "imask": "^6.0.0",
         "jsonata": "^2.0.4",
-        "maplibre-gl": "5.24.0",
+        "maplibre-gl": "v6.0.0-21",
         "milsymbol": "^3.0.2",
         "openapi-fetch": "^0.17.0",
         "phone": "^3.1.59",
@@ -91,6 +99,7 @@
         "uuid": "^14.0.0",
         "vue": "^3.2.31",
         "vue-component-type-helpers": "^3.0.7",
+        "vue-eslint-parser": "^10.4.1",
         "vue-mention": "^2.0.0-alpha.3",
         "vue-router": "^5.0.0",
         "yaml": "^2.8.2"
@@ -104,6 +113,7 @@
         "@types/swagger-ui": "^5.21.1",
         "@vitejs/plugin-vue": "^6.0.0",
         "@vitest/ui": "^4.1.0",
+        "@vitest/coverage-v8": "^4.1.0",
         "@vue/test-utils": "^2.4.6",
         "@vueuse/rxjs": "^14.1.0",
         "eslint": "^10.0.0",

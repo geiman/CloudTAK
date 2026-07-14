@@ -87,25 +87,25 @@
                                     >
                                         <li
                                             class='py-1 px-1 cursor-pointer cloudtak-hover'
-                                            @click='incoming.cron = "rate(1 minute)"'
+                                            @click.stop='incoming.cron = "rate(1 minute)"'
                                         >
                                             rate(1 minute)
                                         </li>
                                         <li
                                             class='py-1 px-1 cursor-pointer cloudtak-hover'
-                                            @click='incoming.cron = "rate(5 minutes)"'
+                                            @click.stop='incoming.cron = "rate(5 minutes)"'
                                         >
                                             rate(5 minutes)
                                         </li>
                                         <li
                                             class='py-1 px-1 cursor-pointer cloudtak-hover'
-                                            @click='incoming.cron = "cron(15 10 * * ? *)"'
+                                            @click.stop='incoming.cron = "cron(15 10 * * ? *)"'
                                         >
                                             cron(15 10 * * ? *)
                                         </li>
                                         <li
                                             class='py-1 px-1 cursor-pointer cloudtak-hover'
-                                            @click='incoming.cron = "cron(0/5 8-17 ? * MON-FRI *)"'
+                                            @click.stop='incoming.cron = "cron(0/5 8-17 ? * MON-FRI *)"'
                                         >
                                             cron(0/5 8-17 ? * MON-FRI *)
                                         </li>
@@ -267,7 +267,7 @@ async function invoke() {
         await server.POST('/api/connection/{:connectionid}/layer/{:layerid}/task/invoke', {
             params: {
                 path: {
-                    ':connectionid': Number(String(route.params.connectionid)),
+                    ':connectionid': Number(route.params.connectionid),
                     ':layerid': Number(String(route.params.layerid))
                 }
             }
@@ -303,7 +303,7 @@ async function saveIncoming() {
         const res = await server.PATCH(`/api/connection/{:connectionid}/layer/{:layerid}/incoming`, {
             params: {
                 path: {
-                    ':connectionid': Number(String(route.params.connectionid)),
+                    ':connectionid': Number(route.params.connectionid),
                     ':layerid': Number(String(route.params.layerid))
                 }
             },

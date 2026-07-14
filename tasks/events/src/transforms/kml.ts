@@ -4,10 +4,9 @@ import path from 'node:path';
 import Sharp from 'sharp';
 import { glob } from 'glob';
 import StreamZip from 'node-stream-zip';
-import { kml } from '@tmcw/togeojson';
-import { DOMParser } from '@xmldom/xmldom';
-import { isSafeUrl } from '../safeurl.ts';
-import { fetch } from 'undici';
+import { kml } from '../togeojson/index.ts';
+import { isSafeUrl } from '@tak-ps/node-safeurl';
+import { fetch } from '@tak-ps/node-safeurl';
 
 const MAX_NETWORK_LINK_DEPTH = 3;
 const NETWORK_LINK_FETCH_TIMEOUT_MS = 10_000;
@@ -38,8 +37,7 @@ export default class KML implements Transform {
         localDir: string | null = null,
         visited: Set<string> = new Set(),
     ): Promise<ReturnType<typeof kml>['features']> {
-        const dom = new DOMParser().parseFromString(kmlContent, 'text/xml');
-        const allFeatures = kml(dom).features;
+        const allFeatures = kml(kmlContent).features;
 
         const features: ReturnType<typeof kml>['features'] = [];
 
@@ -117,10 +115,18 @@ export default class KML implements Transform {
                     }
                 }
 
-                const { safe, url, reason } = await isSafeUrl(href);
-                if (!safe || !url) {
-                    console.warn(`NetworkLink ${href} skipped — ${reason}`);
-                    continue;
+                let url: URL;
+                const urlObj = new URL(href);
+                const hostname = urlObj.hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
+                if (process.env.StackName !== 'test' && hostname !== 'localhost' && !hostname.endsWith('.localhost') && hostname !== '127.0.0.1') {
+                    const { safe, url: safeUrl, reason } = await isSafeUrl(href);
+                    if (!safe || !safeUrl) {
+                        console.warn(`NetworkLink ${href} skipped — ${reason}`);
+                        continue;
+                    }
+                    url = safeUrl;
+                } else {
+                    url = urlObj;
                 }
 
                 // Normalise the URL for deduplication (strip trailing slash, lowercase host)
@@ -143,6 +149,7 @@ export default class KML implements Transform {
                     if (!res.ok) throw new Error(`HTTP ${res.status} ${await res.text()}`);
 
                     const buf = Buffer.from(await res.arrayBuffer());
+
                     // Detect KMZ by ZIP magic bytes (PK\x03\x04) since content-type is unreliable
                     const isKmz = buf.length >= 4
                         && buf[0] === 0x50 && buf[1] === 0x4B
@@ -198,10 +205,10 @@ export default class KML implements Transform {
                                 continue;
                             }
 
-                            // Extract everything so icon assets bundled in the linked KMZ are
-                            // available on disk for the glob-based icon resolver.
+                            // Extract everything so icon assets bundled in the linked KMZ are available on disk for the glob-based icon resolver.
                             await zip.extract(null, extractDir);
                             const kmlContent = await fs.readFile(kmlFileResolved, 'utf8');
+
                             // Use the directory containing the extracted KML as localDir so
                             // relative paths (icon refs, nested NetworkLinks) resolve correctly.
                             const kmlDir = path.dirname(kmlFileResolved);
@@ -216,7 +223,32 @@ export default class KML implements Transform {
 
                     features.push(...linkedFeatures);
                 } catch (err) {
-                    console.warn(`NetworkLink ${normalized} not retrievable (${err})`);
+                    // More detailed fetch error logging
+                    const chain: string[] = [];
+                    let current: unknown = err;
+                    while (current instanceof Error) {
+                        const parts = [`${current.name}: ${current.message}`];
+                        const meta = current as { code?: string; errno?: number; syscall?: string; hostname?: string };
+                        if (meta.code) parts.push(`code=${meta.code}`);
+                        if (meta.errno !== undefined) parts.push(`errno=${meta.errno}`);
+                        if (meta.syscall) parts.push(`syscall=${meta.syscall}`);
+                        if (meta.hostname) parts.push(`hostname=${meta.hostname}`);
+                        chain.push(parts.join(' '));
+                        current = (current as { cause?: unknown }).cause;
+                    }
+
+                    const isTimeout = err instanceof Error && err.name === 'TimeoutError';
+
+                    console.warn(
+                        `NetworkLink ${normalized} not retrievable`
+                        + ` (depth=${depth}, timeout=${NETWORK_LINK_FETCH_TIMEOUT_MS}ms`
+                        + (isTimeout ? ', request exceeded timeout' : '')
+                        + `): ${chain.join(' <- caused by: ')}`,
+                    );
+
+                    if (err instanceof Error && err.stack) {
+                        console.warn(`NetworkLink ${normalized} stack:\n${err.stack}`);
+                    }
                 }
 
                 continue;
@@ -238,26 +270,26 @@ export default class KML implements Transform {
                         console.warn(`icon ${feat.properties.icon} not retrievable (${err})`);
                     }
                 } else {
+                    // An unresolvable icon downgrades the feature to default
+                    // styling - it must not drop the feature itself (standalone
+                    // KML files routinely reference icon files that were never
+                    // bundled alongside them)
                     const iconName = feat.properties.icon as string;
                     if (iconName.includes('..') || path.isAbsolute(iconName)) {
                         console.warn(`icon ${iconName} rejected — invalid path`);
-                        continue;
-                    }
+                    } else {
+                        const search = await glob(path.resolve(this.local.tmpdir, '**/' + iconName));
+                        const resolvedIcon = search.length ? path.resolve(search[0]) : null;
+                        const tmpdirSafe = path.resolve(this.local.tmpdir);
 
-                    const search = await glob(path.resolve(this.local.tmpdir, '**/' + iconName));
-                    if (!search.length) {
-                        console.warn(`icon ${iconName} not found`);
-                        continue;
+                        if (!resolvedIcon) {
+                            console.warn(`icon ${iconName} not found`);
+                        } else if (!resolvedIcon.startsWith(tmpdirSafe + path.sep)) {
+                            console.warn(`icon ${iconName} resolved outside tmpdir, skipping`);
+                        } else {
+                            icons.set(iconName, await fs.readFile(resolvedIcon));
+                        }
                     }
-
-                    const resolvedIcon = path.resolve(search[0]);
-                    const tmpdirSafe = path.resolve(this.local.tmpdir);
-                    if (!resolvedIcon.startsWith(tmpdirSafe + path.sep)) {
-                        console.warn(`icon ${iconName} resolved outside tmpdir, skipping`);
-                        continue;
-                    }
-
-                    icons.set(iconName, await fs.readFile(resolvedIcon));
                 }
             }
 

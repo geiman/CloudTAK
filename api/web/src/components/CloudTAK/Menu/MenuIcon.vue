@@ -50,7 +50,7 @@
                     </div>
 
                     <div class='col-12'>
-                        <UploadLogo
+                        <TablerUploadLogo
                             v-model='icon.data'
                             label='Icon Data'
                             @file-name='updateName'
@@ -154,11 +154,11 @@ import {
     TablerLoading,
     TablerIconButton,
     TablerRefreshButton,
-    TablerInput
+    TablerInput,
+    TablerUploadLogo
 } from '@tak-ps/vue-tabler';
 import { IconPencil } from '@tabler/icons-vue';
 import MenuTemplate from '../util/MenuTemplate.vue';
-import UploadLogo from '../../util/UploadLogo.vue';
 import ProfileConfig from '../../../base/profile.ts';
 import type { Iconset } from '../../../types.ts';
 import type { DBIcon } from '../../../database.ts';
@@ -268,7 +268,7 @@ async function submit(): Promise<void> {
         icon.value = normalizeRemoteIcon(created);
     }
 
-    await mapStore.icons.addIconset(String(route.params.iconset), { force: true });
+    await mapStore.worker.sync.syncIconset(String(route.params.iconset));
     disabled.value = true;
 
     const routeIcon = stripExt(icon.value.name);
@@ -330,7 +330,7 @@ async function deleteIcon(): Promise<void> {
 
     if (res.error) throw new Error(res.error.message);
 
-    await mapStore.icons.addIconset(String(route.params.iconset), { force: true });
+    await mapStore.worker.sync.syncIconset(String(route.params.iconset));
     router.push(`/menu/iconset/${route.params.iconset}`);
 }
 
@@ -339,7 +339,7 @@ async function syncIconset(): Promise<void> {
     syncError.value = undefined;
 
     try {
-        await mapStore.icons.addIconset(String(route.params.iconset), { force: true });
+        await mapStore.worker.sync.syncIconset(String(route.params.iconset));
     } catch (err) {
         syncError.value = err instanceof Error ? err : new Error(String(err));
     }

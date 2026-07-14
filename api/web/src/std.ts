@@ -7,6 +7,7 @@ import type { paths } from '@cloudtak/api-types'
 import type { APIError } from './types.js'
 import type { Router } from 'vue-router'
 import { isNativePlatform, openSecondaryView } from './base/capacitor.ts';
+import { reportError } from './lib/reporting/index.ts';
 import { db } from './database.ts';
 
 export const serverUrl = await getRuntimeServerUrl();
@@ -29,7 +30,31 @@ export async function getServer() {
         },
     };
 
-    server.use(authMiddleware);
+    const errorReportMiddleware: Middleware = {
+        async onResponse({ request, response }) {
+            const status = response.status;
+
+            const shouldReport =
+                status >= 500 ||
+                (status >= 400 && ![401, 403].includes(status));
+
+            if (!shouldReport) return;
+
+            // Avoid infinite loop - never report failures on the error endpoint itself.
+            if (request.url.includes('/api/error')) return;
+
+            let body: string;
+            try {
+                body = (await response.clone().text()) || '<empty>';
+            } catch {
+                body = '<unreadable>';
+            }
+
+            reportError(`HTTP ${status}: ${request.method} ${request.url}`, body);
+        },
+    };
+
+    server.use(authMiddleware, errorReportMiddleware);
 
     return server;
 }
@@ -96,6 +121,8 @@ export async function std(
         headers?: Record<string, string>;
         body?: unknown;
         method?: string;
+        signal?: AbortSignal;
+        timeout?: number;
     } = {}
 ): Promise<unknown> {
     url = stdurl(url)
@@ -114,7 +141,27 @@ export async function std(
         opts.headers['Authorization'] = 'Bearer ' + authToken;
     }
 
-    const res = await fetch(url, opts as RequestInit);
+    // Guard every request with a timeout so a stalled connection (common on
+    // native cold-starts where the network stack is not yet warm) rejects
+    // instead of hanging forever and trapping the UI on the loading splash.
+    const timeoutMs = opts.timeout ?? DEFAULT_REQUEST_TIMEOUT_MS;
+    const timeoutController = new AbortController();
+    const timeoutId = setTimeout(() => timeoutController.abort(), timeoutMs);
+    const signal = opts.signal
+        ? anySignal([opts.signal, timeoutController.signal])
+        : timeoutController.signal;
+
+    let res: Response;
+    try {
+        res = await fetch(url, { ...(opts as RequestInit), signal });
+    } catch (err) {
+        if (timeoutController.signal.aborted) {
+            throw new Error(`Request timed out after ${timeoutMs}ms: ${String(url)}`, { cause: err });
+        }
+        throw err;
+    } finally {
+        clearTimeout(timeoutId);
+    }
 
     if ((res.status < 200 || res.status >= 400) && ![401].includes(res.status)) {
         let bdy: Record<string, unknown> | APIError;
@@ -130,9 +177,17 @@ export async function std(
         err.body = bdy;
         throw err;
     } else if (res.status === 401) {
-        if (!isWebWorker()) {
+        // Verify the token is actually invalid before removing it.
+        // An upstream service may return an unrelated 401 that does not
+        // mean the stored token has expired or been revoked.
+        const loginHeaders: Record<string, string> = {};
+        if (authToken) loginHeaders['Authorization'] = `Bearer ${authToken}`;
+        const loginRes = await fetch(stdurl('/login'), { headers: loginHeaders });
+
+        if (loginRes.status === 401 && !isWebWorker()) {
             await Preferences.remove({ key: 'token' });
         }
+
         throw new Error('401');
     }
 
@@ -146,6 +201,31 @@ export async function std(
     } else {
         return res;
     }
+}
+
+/**
+ * Default timeout applied to every API request issued through `std()`.
+ */
+const DEFAULT_REQUEST_TIMEOUT_MS = 20000;
+
+/**
+ * Combine multiple AbortSignals into a single signal that aborts when any of
+ * the inputs abort. Avoids relying on `AbortSignal.any`, which is unavailable
+ * in older WebKit/WKWebView runtimes.
+ */
+function anySignal(signals: AbortSignal[]): AbortSignal {
+    const controller = new AbortController();
+
+    for (const signal of signals) {
+        if (signal.aborted) {
+            controller.abort();
+            break;
+        }
+
+        signal.addEventListener('abort', () => controller.abort(), { once: true });
+    }
+
+    return controller.signal;
 }
 
 export function downloadBlob(blob: Blob, response: Response, fallbackName: string): void {

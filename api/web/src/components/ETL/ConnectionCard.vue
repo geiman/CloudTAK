@@ -2,20 +2,23 @@
     <div class='card-header'>
         <ConnectionStatus :connection='connection' />
 
-        <div class='mx-2 d-flex flex-column'>
+        <div
+            class='mx-2 d-flex flex-column'
+            style='min-width: 0; overflow: hidden;'
+        >
             <div
-                class='card-title m-0'
+                class='card-title m-0 text-truncate'
                 :class='{ "cursor-pointer": clickable }'
                 @click='clickable ? router.push(`/connection/${connection.id}`) : null'
                 v-text='connection.name'
             />
         </div>
 
-        <div class='ms-auto d-flex align-items-center btn-list'>
+        <div class='ms-auto d-flex align-items-center flex-shrink-0 flex-nowrap btn-list'>
             <AgencyBadge :connection='connection' />
 
             <TablerIconButton
-                v-if='!connection.readonly'
+                v-if='!connection.readonly && connection.id !== 0'
                 title='Cycle Connection'
                 @click='cycle'
             >
@@ -31,6 +34,7 @@
             />
 
             <TablerIconButton
+                v-if='connection.id !== 0'
                 title='Edit'
                 @click='router.push(`/connection/${connection.id}/edit`)'
             >
@@ -66,13 +70,22 @@
                 >
                     <div v-text='connection.certificate.validTo' />
                     <TablerBadge
-                        v-if='certificateStatus'
+                        v-if='certificateStatus === "expired"'
                         class='ms-auto'
-                        :background-color='certificateStatus === "expired" ? "rgba(220, 38, 38, 0.15)" : "rgba(249, 115, 22, 0.15)"'
-                        :border-color='certificateStatus === "expired" ? "rgba(220, 38, 38, 0.35)" : "rgba(249, 115, 22, 0.35)"'
-                        :text-color='certificateStatus === "expired" ? "#b91c1c" : "#c2410c"'
+                        background-color='rgba(220, 38, 38, 0.15)'
+                        border-color='rgba(220, 38, 38, 0.35)'
+                        text-color='#b91c1c'
                     >
-                        {{ certificateStatus === 'expired' ? 'Expired Certificate' : 'Near Expiry' }}
+                        Expired Certificate
+                    </TablerBadge>
+                    <TablerBadge
+                        v-else-if='certificateStatus'
+                        class='ms-auto'
+                        background-color='rgba(249, 115, 22, 0.15)'
+                        border-color='rgba(249, 115, 22, 0.35)'
+                        text-color='#c2410c'
+                    >
+                        Near Expiry
                     </TablerBadge>
                 </div>
             </div>
@@ -105,14 +118,18 @@
                         </button>
                     </template>
                     <template #dropdown>
-                        <div class='card'>
-                            <div class='card-body row g-2'>
+                        <div
+                            class='py-1'
+                            style='max-width: 300px;'
+                        >
+                            <div class='row g-2 px-3 pt-2 pb-2'>
                                 <div class='col-12'>
                                     <TablerInput
                                         v-model='certificate.truststorePassword'
                                         label='Choose Certificate Password'
                                         type='password'
                                         autocomplete='new-password'
+                                        @click.stop
                                     />
                                 </div>
                                 <div class='col-12'>
@@ -143,14 +160,18 @@
                         </button>
                     </template>
                     <template #dropdown>
-                        <div class='card'>
-                            <div class='card-body row g-2'>
+                        <div
+                            class='py-1'
+                            style='max-width: 300px;'
+                        >
+                            <div class='row g-2 px-3 pt-2 pb-2'>
                                 <div class='col-12'>
                                     <TablerInput
                                         v-model='certificate.clientPassword'
                                         label='Choose Certificate Password'
                                         type='password'
                                         autocomplete='new-password'
+                                        @click.stop
                                     />
                                 </div>
                                 <div class='col-12'>
@@ -275,17 +296,24 @@ async function cycle() {
 async function refresh() {
     loading.value = true;
     try {
-        const res = await server.GET('/api/connection/{:connectionid}', {
-            params: {
-                path: {
-                    ':connectionid': props.connection.id
+        let data: ETLConnection;
+        if (props.connection.id === 0) {
+            const res = await server.GET('/api/connection/0');
+            if (res.error) throw new Error(res.error.message);
+            data = res.data as ETLConnection;
+        } else {
+            const res = await server.GET('/api/connection/{:connectionid}', {
+                params: {
+                    path: {
+                        ':connectionid': props.connection.id
+                    }
                 }
-            }
-        });
+            });
+            if (res.error) throw new Error(res.error.message);
+            data = res.data;
+        }
 
-        if (res.error) throw new Error(res.error.message);
-
-        emit('update:connection', res.data);
+        emit('update:connection', data);
     } catch (err) {
         console.error(err);
     }

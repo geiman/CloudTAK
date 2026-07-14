@@ -1,6 +1,6 @@
 import { v4 as randomUUID } from 'uuid';
 import { std } from '../std.ts';
-import { db } from '../database.ts';
+import { db, withDbRetry } from '../database.ts';
 import { liveQuery } from 'dexie';
 import { bbox } from '@turf/bbox'
 import { length } from '@turf/length'
@@ -246,15 +246,19 @@ export default class COT {
             }
 
             if (this.origin.mode === OriginMode.CONNECTION) {
-                await db.feature.put({
+                await withDbRetry(() => db.feature.put({
                     id: this.id,
                     path: this._path,
                     properties: this._properties,
                     geometry: this._geometry
-                });
+                }));
             }
 
-            if (!this.is_self && (!opts || (opts && opts.skipSave !== false))) {
+            // skipSave: true is passed when applying server state locally
+            // (archive loads, sync events) - saving here would PUT the feature
+            // back to the API, which re-broadcasts a sync event to the user's
+            // other clients and creates a circular sync loop between them
+            if (!this.is_self && (!opts || opts.skipSave !== true)) {
                 await this.save();
             }
 
@@ -291,6 +295,10 @@ export default class COT {
         return COT.selfUid === this.id;
     }
 
+    get is_route(): boolean {
+        return this._geometry.type === 'LineString' && this._properties.type === 'b-m-r';
+    }
+
     get is_archivable(): boolean {
         return !this.is_skittle;
     }
@@ -301,6 +309,23 @@ export default class COT {
      */
     get is_editable(): boolean {
         return this.properties.archived || this.is_self || false;
+    }
+
+    /**
+     * Convert this LineString feature into a TAK Route (`b-m-r`).
+     * Throws if the geometry is not a LineString or the feature is already a route.
+     */
+    async toRoute(): Promise<void> {
+        if (this._geometry.type !== 'LineString') {
+            throw new Error('toRoute() is only supported for LineString features');
+        }
+        if (this.is_route) return;
+
+        this._properties.type = 'b-m-r';
+        this._properties.how = 'm-g';
+        this._properties.archived = true;
+
+        await this.update({});
     }
 
     async subscription(): Promise<Subscription> {
@@ -397,6 +422,7 @@ export default class COT {
             properties: {
                 id: input.id,        //Vector Tiles only support integer IDs so store in props
                 callsign: input.properties.callsign,
+                path: input.path || '/',
             },
             geometry: input.geometry
         };
@@ -586,11 +612,6 @@ export default class COT {
                 if (properties.icon.endsWith('.png')) {
                     properties.icon = properties.icon.replace(/.png$/, '');
                 }
-
-                // Resolution happens via MapLibre's `styleimagemissing` handler
-                // (see IconManager.onStyleImageMissing). Iconset icons are
-                // loaded from Dexie on demand and unknown ids fall back to a
-                // generic point bitmap, so no preflight check is required.
             } else if (properties.milsym && !isNaN(Number(properties.milsym.id))) {
                 properties.icon = `2525D:${properties.milsym.id}`;
             } else {

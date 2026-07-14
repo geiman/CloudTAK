@@ -43,6 +43,9 @@ export type GroupChannel = Omit<Group, 'direction'> & {
 export type User = paths["/api/user/{:username}"]["get"]["responses"]["200"]["content"]["application/json"];
 export type UserList = paths["/api/user"]["get"]["responses"]["200"]["content"]["application/json"];
 
+export type ErrorReport = paths["/api/error/{:errorid}"]["get"]["responses"]["200"]["content"]["application/json"];
+export type ErrorReportList = paths["/api/error"]["get"]["responses"]["200"]["content"]["application/json"];
+
 export type Contact = paths["/api/marti/api/contacts/all"]["get"]["responses"]["200"]["content"]["application/json"][0];
 export type ContactList = paths["/api/marti/api/contacts/all"]["get"]["responses"]["200"]["content"]["application/json"];
 
@@ -106,23 +109,14 @@ export type PaletteFeature = {
     created: string;
     updated: string;
     name: string;
-    palette: string;
+    template: string;
     type: string;
     style: Record<string, unknown>;
 }
 
-export type Palette = {
-    uuid: string;
-    created: string;
-    updated: string;
-    name: string;
-    template: string;
-    features: Array<PaletteFeature>;
-}
-
-export type PaletteList = {
+export type PaletteFeatureList = {
     total: number;
-    items: Array<Palette>;
+    items: Array<PaletteFeature>;
 }
 
 export type Chat = {
@@ -147,6 +141,7 @@ export type APIProfileChat = {
     updated: string;
     message_id: string;
     message: string;
+    status?: string | null;
 }
 
 export type MissionTemplate = paths["/api/template/mission/{:mission}"]["get"]["responses"]["200"]["content"]["application/json"]
@@ -205,7 +200,16 @@ export type ProfileOverlay_Update = paths["/api/profile/overlay/{:overlay}"]["pa
 export type ProfileTokenList = paths["/api/profile/token"]["get"]["responses"]["200"]["content"]["application/json"]
 export type ProfileToken = ProfileTokenList["items"][0]
 
+export type ProfilePagingList = paths["/api/profile/paging"]["get"]["responses"]["200"]["content"]["application/json"]
+export type ProfilePaging = ProfilePagingList["items"][0]
+export type ProfilePaging_Create = paths["/api/profile/paging"]["post"]["requestBody"]["content"]["application/json"]
+
 export type SearchReverse = paths["/api/search/reverse/{:longitude}/{:latitude}"]["get"]["responses"]["200"]["content"]["application/json"]
+export type SearchReverseSun = paths["/api/search/reverse/{:longitude}/{:latitude}/sun"]["get"]["responses"]["200"]["content"]["application/json"]
+export type SearchReverseMagnetic = paths["/api/search/reverse/{:longitude}/{:latitude}/magnetic"]["get"]["responses"]["200"]["content"]["application/json"]
+export type SearchReverseWeather = paths["/api/search/reverse/{:longitude}/{:latitude}/weather"]["get"]["responses"]["200"]["content"]["application/json"]
+export type SearchReverseReverse = paths["/api/search/reverse/{:longitude}/{:latitude}/reverse"]["get"]["responses"]["200"]["content"]["application/json"]
+export type SearchReverseElevation = paths["/api/search/reverse/{:longitude}/{:latitude}/elevation"]["get"]["responses"]["200"]["content"]["application/json"]
 
 // Below are CloudTAK ETL Specific Data Types
 

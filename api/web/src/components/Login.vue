@@ -81,7 +81,30 @@
                                 </template>
                                 <template v-else>
                                     <div class='mb-3'>
+                                        <template v-if='storedUsername'>
+                                            <label class='form-label'>
+                                                {{ brandStore.login?.username || "Username or Email" }}
+                                            </label>
+                                            <div class='d-flex align-items-center justify-content-between border rounded px-3 py-2'>
+                                                <div class='d-flex align-items-center text-truncate'>
+                                                    <IconUser
+                                                        :size='20'
+                                                        stroke='1.5'
+                                                        class='me-2 text-muted flex-shrink-0'
+                                                    />
+                                                    <span class='text-truncate'>{{ storedUsername }}</span>
+                                                </div>
+                                                <button
+                                                    type='button'
+                                                    class='btn btn-sm btn-link text-decoration-none flex-shrink-0 ms-2'
+                                                    @click='notMe'
+                                                >
+                                                    Not Me
+                                                </button>
+                                            </div>
+                                        </template>
                                         <TablerInput
+                                            v-else
                                             v-model='body.username'
                                             icon='user'
                                             :label='brandStore.login?.username || "Username or Email"'
@@ -152,7 +175,7 @@
                                         Sign in with {{ brandStore.oidc.name || 'SSO' }}
                                     </a>
                                 </template>
-                                <template v-if='brandStore.passkey.enabled && !loading'>
+                                <template v-if='brandStore.passkey.enabled && !loading && !isNativePlatform()'>
                                     <div
                                         v-if='!brandStore.oidc.enabled || !brandStore.oidc.enforced'
                                         class='my-3 d-flex align-items-center'
@@ -254,6 +277,17 @@
                         </div>
                     </div>
                     <div class='card-body p-0'>
+                        <div
+                            v-if='isNativePlatform()'
+                            class='px-3 pt-2 pb-2 border-bottom'
+                        >
+                            <button
+                                class='btn btn-sm btn-outline-secondary w-100'
+                                @click='switchServers'
+                            >
+                                Switch Servers
+                            </button>
+                        </div>
                         <div class='px-3 pt-2 pb-1 border-bottom'>
                             <span class='text-muted small'>Running </span>
                             <code class='small'>v{{ version }}</code>
@@ -322,20 +356,20 @@
 </template>
 
 <script setup lang='ts'>
-import type { Login_Create, Login_CreateRes, ConfigLogin } from '../types.ts'
+import type { Login_Create, ConfigLogin } from '../types.ts'
 import { ref, computed, onMounted, reactive, watch } from 'vue';
 import { version } from '../../package.json';
-import { IconSettings, IconTrash, IconLock, IconFingerprint } from '@tabler/icons-vue';
+import { IconSettings, IconTrash, IconLock, IconFingerprint, IconUser } from '@tabler/icons-vue';
 import { Preferences } from '@capacitor/preferences';
 import { startAuthentication } from '@simplewebauthn/browser';
 import type { PublicKeyCredentialRequestOptionsJSON, AuthenticationResponseJSON } from '@simplewebauthn/browser';
 import Config from '../base/config.ts';
 import type { FullConfig } from '../base/config.ts';
-import KV from '../base/kv.ts';
 import { isNativePlatform, supportsServiceWorker } from '../base/capacitor.ts';
 import { getCurrentEntryBuildId } from '../base/service-worker.ts';
 import { useRouter, useRoute } from 'vue-router'
-import { std } from '../std.ts';
+import { server } from '../std.ts';
+import { useAppStore } from '../stores/app.ts';
 import {
     TablerBadge,
     TablerLoading,
@@ -347,6 +381,8 @@ const emit = defineEmits([ 'login' ]);
 
 const route = useRoute();
 const router = useRouter();
+
+const appStore = useAppStore();
 
 const brandStore = reactive<{
     loaded: boolean;
@@ -447,11 +483,18 @@ const unregister = async (r: ServiceWorkerRegistration) => {
     await fetchWorkers();
 }
 
+async function switchServers(): Promise<void> {
+    await appStore.destroySession();
+    await Preferences.remove({ key: 'serverUrl' });
+    window.location.href = '/setup.html';
+}
+
 watch(showSettings, (val) => {
     if (val) fetchWorkers();
 });
 
 const loading = ref(false);
+const storedUsername = ref<string | null>(null);
 const body = ref<Login_Create>({
     username: '',
     password: ''
@@ -512,27 +555,61 @@ onMounted(async () => {
         startConditionalPasskey();
     }
 
-    const deleteDB = indexedDB.deleteDatabase('CloudTAK');
-
-    deleteDB.onerror = (event) => {
-        console.error('Failed to delete existing database', event);
-    };
+    // Detect an existing (un-cleared) session left behind by a previous login.
+    // The database is intentionally NOT deleted here - it is only cleared on an
+    // explicit sign-out or when a different user logs in. This avoids a costly
+    // resync when a token simply expires.
+    try {
+        const existing = await appStore.getUsername();
+        if (existing) {
+            storedUsername.value = existing;
+            body.value.username = existing;
+        }
+    } catch (err) {
+        console.error('Failed to read existing session', err);
+    }
 });
+
+// Clear the stored session and wipe the local database. Triggered by the
+// "Not Me" button when the user wants to log in as a different account.
+async function notMe(): Promise<void> {
+    try {
+        await appStore.destroySession();
+    } catch (err) {
+        console.error('Failed to clear existing session', err);
+    }
+
+    storedUsername.value = null;
+    body.value.username = '';
+    body.value.password = '';
+}
+
+// Persist a successful login. If the authenticated user differs from the one
+// whose data is already cached locally, wipe the database first so the new
+// user does not inherit the previous user's data.
+async function applySession(login: { token: string; email: string; session: string }): Promise<void> {
+    if (storedUsername.value && storedUsername.value !== login.email) {
+        await appStore.destroySession();
+    }
+
+    await appStore.persistSession({ token: login.token, username: login.email, session: login.session });
+    storedUsername.value = login.email;
+}
 
 async function createLogin() {
     loading.value = true;
 
     try {
-        const login = await std('/api/login', {
-            method: 'POST',
+        const res = await server.POST('/api/login', {
             body: {
                 username: body.value.username,
                 password: body.value.password
              }
-        }) as Login_CreateRes
+        });
+        if (res.error) throw new Error(res.error.message);
+        const login = res.data;
 
-        await Preferences.set({ key: 'token', value: login.token });
-        await persistNativeSession(login.token);
+        await applySession({ token: login.token, email: login.email, session: login.session });
 
         navigateAfterLogin();
     } catch (err) {
@@ -548,13 +625,13 @@ async function startConditionalPasskey() {
             || !(await PublicKeyCredential.isConditionalMediationAvailable())
         ) return;
 
-        const optionsRes = await std('/api/login/passkey/authenticate/options', {
-            method: 'POST',
+        const optionsRes = await server.POST('/api/login/passkey/authenticate/options', {
             body: {}
         });
+        if (optionsRes.error) throw new Error(optionsRes.error.message);
 
         const credential = await startAuthentication({
-            optionsJSON: optionsRes as unknown as PublicKeyCredentialRequestOptionsJSON,
+            optionsJSON: optionsRes.data as unknown as PublicKeyCredentialRequestOptionsJSON,
             useBrowserAutofill: true,
         });
 
@@ -568,12 +645,12 @@ async function authenticatePasskey() {
     loading.value = true;
 
     try {
-        const optionsRes = await std('/api/login/passkey/authenticate/options', {
-            method: 'POST',
+        const optionsRes = await server.POST('/api/login/passkey/authenticate/options', {
             body: {}
         });
+        if (optionsRes.error) throw new Error(optionsRes.error.message);
 
-        const credential = await startAuthentication({ optionsJSON: optionsRes as unknown as PublicKeyCredentialRequestOptionsJSON });
+        const credential = await startAuthentication({ optionsJSON: optionsRes.data as unknown as PublicKeyCredentialRequestOptionsJSON });
 
         await completePasskeyLogin(credential);
     } catch (err) {
@@ -586,13 +663,27 @@ async function completePasskeyLogin(credential: AuthenticationResponseJSON) {
     loading.value = true;
 
     try {
-        const login = await std('/api/login/passkey/authenticate', {
-            method: 'POST',
-            body: { credential }
-        }) as Login_CreateRes & { certRenewalRequired?: boolean };
+        const res = await server.POST('/api/login/passkey/authenticate', {
+            body: {
+                credential: {
+                    id: credential.id,
+                    rawId: credential.rawId,
+                    response: {
+                        clientDataJSON: credential.response.clientDataJSON,
+                        authenticatorData: credential.response.authenticatorData,
+                        signature: credential.response.signature,
+                        userHandle: credential.response.userHandle,
+                    },
+                    authenticatorAttachment: credential.authenticatorAttachment,
+                    clientExtensionResults: credential.clientExtensionResults as Record<string, unknown>,
+                    type: credential.type,
+                }
+            }
+        });
+        if (res.error) throw new Error(res.error.message);
+        const login = res.data;
 
-        await Preferences.set({ key: 'token', value: login.token });
-        await persistNativeSession(login.token);
+        await applySession({ token: login.token, email: login.email, session: login.session });
 
         if (login.certRenewalRequired) {
             certRenewal.required = true;
@@ -607,12 +698,6 @@ async function completePasskeyLogin(credential: AuthenticationResponseJSON) {
         loading.value = false;
         throw err;
     }
-}
-
-async function persistNativeSession(token: string): Promise<void> {
-    if (!isNativePlatform()) return;
-
-    await KV.generate('token', token);
 }
 
 function navigateAfterLogin() {
@@ -649,16 +734,16 @@ async function renewCertificate() {
     loading.value = true;
 
     try {
-        const login = await std('/api/login', {
-            method: 'POST',
+        const res = await server.POST('/api/login', {
             body: {
                 username: certRenewal.email,
                 password: certRenewal.password,
             }
-        }) as Login_CreateRes;
+        });
+        if (res.error) throw new Error(res.error.message);
+        const login = res.data;
 
-        await Preferences.set({ key: 'token', value: login.token });
-        await persistNativeSession(login.token);
+        await applySession({ token: login.token, email: login.email, session: login.session });
         certRenewal.required = false;
         certRenewal.password = '';
 

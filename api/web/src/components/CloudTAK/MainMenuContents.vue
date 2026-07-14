@@ -1,205 +1,226 @@
 <template>
-    <template
-        v-if='!["home", "home-menu"].includes(String(route.name))'
+    <div
+        v-if='compact'
+        class='main-menu-layout d-flex flex-column h-100 overflow-hidden'
     >
-        <template v-if='modal'>
-            <div class='modal-header'>
-                <div class='modal-title'>
-                    Main Menu
-                </div>
+        <div
+            class='main-menu-scroll flex-grow-1 w-100 overflow-auto noscroll pb-2'
+        >
+            <MenuItemCard
+                v-for='item in visibleCompactMenuItems'
+                :key='`compact-${item.key}`'
+                :icon='item.icon'
+                :label='item.label'
+                :tooltip='item.tooltip'
+                :badge='item.badge'
+                :layout='"list"'
+                :compact='true'
+                @select='handleSelect(item)'
+            />
+        </div>
 
-                <button
-                    type='button'
-                    class='btn-close'
-                    aria-label='Close'
-                    @click='emit("close")'
-                />
-            </div>
-
-            <router-view />
-        </template>
-        <template v-else>
-            <router-view />
-        </template>
-    </template>
-    <template v-else>
-        <div class='main-menu-layout d-flex flex-column h-100 overflow-hidden'>
-            <div
-                v-if='!compact'
-                class='flex-shrink-0 w-100 border-bottom border-light'
-                :class='{
-                    "cloudtak-bg rounded-0": !compact,
-                    "rounded-0": !modal,
-                    "rounded-top": modal
-                }'
-            >
-                <div class='modal-header px-0 mx-2 align-center'>
-                    <div class='modal-title'>
-                        Main Menu
-                    </div>
-
-                    <div class='ms-auto btn-list d-flex align-items-center menu-layout-toggle'>
-                        <TablerIconButton
-                            v-if='preferredLayout !== "list"'
-                            title='List View'
-                            @click='mapStore.menu.setLayout("list")'
-                        >
-                            <IconLayoutList
-                                :size='32'
-                                stroke='1'
-                            />
-                        </TablerIconButton>
-                        <TablerIconButton
-                            v-if='canEditOrder'
-                            :title='isDraggable ? "Save Order" : "Reorder Items"'
-                            :variant='isDraggable ? "primary" : "secondary"'
-                            @click='handleReorderToggle'
-                        >
-                            <IconPencil
-                                v-if='!isDraggable'
-                                :size='32'
-                                stroke='1'
-                            />
-                            <IconPencilCheck
-                                v-else
-                                :size='32'
-                                stroke='1'
-                            />
-                        </TablerIconButton>
-                        <TablerIconButton
-                            v-if='preferredLayout !== "tiles"'
-                            title='Tile View'
-                            @click='mapStore.menu.setLayout("tiles")'
-                        >
-                            <IconLayoutGrid
-                                :size='32'
-                                stroke='1'
-                            />
-                        </TablerIconButton>
-
-                        <TablerIconButton
-                            v-if='props.modal'
-                            title='Close Menu'
-                            @click='emit("close")'
-                        >
-                            <IconX
-                                :size='32'
-                                stroke='1'
-                            />
-                        </TablerIconButton>
-                    </div>
-                </div>
-            </div>
-            <div
-                v-if='!compact'
-                class='main-menu-scroll flex-grow-1 w-100 overflow-auto noscroll pb-2'
-            >
-                <div
-                    class='px-3 pt-3 pb-2'
+        <div class='main-menu-footer flex-shrink-0'>
+            <div class='d-flex justify-content-center mb-2'>
+                <TablerDropdown
+                    position='left'
                 >
-                    <TablerInput
-                        v-model='menuFilter'
-                        placeholder='Search...'
-                        :autofocus='!mapStore.isMobileDetected'
-                        icon='search'
-                        class='mb-0'
-                    />
-                </div>
-                <div
-                    v-if='visibleFilteredMenuItems.length'
-                    ref='sortableRef'
-                    class='pb-3'
-                    :class='{
-                        "menu-tiles px-3 py-3": menuLayout === "tiles",
-                        "d-flex flex-column gap-2 mx-3": menuLayout === "list"
-                    }'
-                >
-                    <MenuItemCard
-                        v-for='item in visibleFilteredMenuItems'
-                        :key='`tile-${item.key}`'
-                        :data-key='item.key'
-                        :class='{
-                            "cursor-move": isDraggable,
-                            "text-muted": item.visibility === "hidden"
-                        }'
-                        :description-class='item.visibility === "hidden" ? "text-muted" : ""'
-                        :icon='item.icon'
-                        :label='item.label'
-                        :description='item.description'
-                        :tooltip='item.tooltip'
-                        :badge='item.badge'
-                        :layout='menuLayout'
-                        :compact='false'
-                        @select='handleSelect(item)'
-                    >
-                        <template #prefix>
-                            <div
-                                v-if='isDraggable'
-                                class='d-flex align-items-center'
-                            >
-                                <IconGripVertical
-                                    stroke='1'
-                                    :size='20'
-                                    class='text-muted cursor-move drag-handle me-2'
+                    <template #default>
+                        <TablerIconButton
+                            title='Application Switcher'
+                            class='cloudtak-hover'
+                            :hover='false'
+                        >
+                            <IconGridDots
+                                :size='32'
+                                stroke='1'
+                            />
+                        </TablerIconButton>
+                    </template>
+                    <template #dropdown>
+                        <div
+                            class='py-1'
+                            style='min-width: 200px;'
+                        >
+                            <div class='px-3 pt-2 pb-1 fw-bold'>
+                                Applications
+                            </div>
+                            <div class='px-2 pb-2'>
+                                <div
+                                    v-for='application in appSwitcherApplications'
+                                    :key='application.url'
+                                    class='col-12 py-1 px-2 cloudtak-hover cursor-pointer user-select-none'
+                                    @click.stop='external(application.url)'
+                                >
+                                    <img
+                                        v-if='application.icon'
+                                        :src='application.icon'
+                                        :alt='`${application.name} logo`'
+                                        class='app-switcher-logo'
+                                    >
+                                    <IconWorld
+                                        v-else
+                                        :size='25'
+                                        stroke='1'
+                                    />
+                                    <span class='ps-2'>{{ application.name }}</span>
+                                </div>
+                                <div
+                                    v-if='appSwitcherApplications.length'
+                                    class='dropdown-divider my-1'
                                 />
                                 <div
-                                    class='cursor-pointer'
-                                    @click.stop='cycleVisibility(item)'
+                                    class='col-12 py-1 px-2 cloudtak-hover cursor-pointer user-select-none'
+                                    @click.stop='external("/video")'
                                 >
-                                    <IconEye
-                                        v-if='!item.visibility || item.visibility === "full"'
-                                        :size='20'
+                                    <IconDeviceTv
+                                        :size='25'
                                         stroke='1'
                                     />
-                                    <IconEyeDotted
-                                        v-else-if='item.visibility === "partial"'
-                                        :size='20'
-                                        stroke='1'
-                                    />
-                                    <IconEyeOff
-                                        v-else
-                                        :size='20'
-                                        stroke='1'
-                                    />
+                                    <span class='ps-2'>Video Wall</span>
                                 </div>
                             </div>
-                        </template>
-                    </MenuItemCard>
-                </div>
-                <TablerNone
-                    v-else
-                    label='No Menu Items'
-                    :create='false'
-                    class='px-3'
+                        </div>
+                    </template>
+                </TablerDropdown>
+            </div>
+            <div class='d-flex justify-content-center mb-1'>
+                <ServerStatus
+                    :version='true'
+                    :size='50'
                 />
             </div>
-            <div
-                v-else
-                class='main-menu-scroll flex-grow-1 w-100 overflow-auto noscroll pb-2'
-            >
-                <MenuItemCard
-                    v-for='item in visibleCompactMenuItems'
-                    :key='`compact-${item.key}`'
-                    :icon='item.icon'
-                    :label='item.label'
-                    :tooltip='item.tooltip'
-                    :badge='item.badge'
-                    :layout='"list"'
-                    :compact='true'
-                    @select='handleSelect(item)'
-                />
-            </div>
+        </div>
+    </div>
 
-            <div
-                class='main-menu-footer flex-shrink-0'
+    <MenuTemplate
+        v-else
+        name='Main Menu'
+        :back='false'
+    >
+        <template #buttons>
+            <TablerIconButton
+                v-if='preferredLayout !== "list"'
+                title='List View'
+                @click='mapStore.menu.setLayout("list")'
+            >
+                <IconLayoutList
+                    :size='32'
+                    stroke='1'
+                />
+            </TablerIconButton>
+            <TablerIconButton
+                v-if='canEditOrder'
+                :title='isDraggable ? "Save Order" : "Reorder Items"'
+                :variant='isDraggable ? "primary" : "secondary"'
+                @click='handleReorderToggle'
+            >
+                <IconPencil
+                    v-if='!isDraggable'
+                    :size='32'
+                    stroke='1'
+                />
+                <IconPencilCheck
+                    v-else
+                    :size='32'
+                    stroke='1'
+                />
+            </TablerIconButton>
+            <TablerIconButton
+                v-if='preferredLayout !== "tiles"'
+                title='Tile View'
+                @click='mapStore.menu.setLayout("tiles")'
+            >
+                <IconLayoutGrid
+                    :size='32'
+                    stroke='1'
+                />
+            </TablerIconButton>
+        </template>
+
+        <div
+            class='px-3 pt-3 pb-2'
+        >
+            <TablerInput
+                v-model='menuFilter'
+                placeholder='Search...'
+                :autofocus='!appStore.isMobileDetected'
+                icon='search'
+                class='mb-0'
+            />
+        </div>
+        <div
+            v-if='visibleFilteredMenuItems.length'
+            ref='sortableRef'
+            class='pb-3'
+            :class='{
+                "menu-tiles px-3 py-3": menuLayout === "tiles",
+                "d-flex flex-column gap-2 mx-3": menuLayout === "list"
+            }'
+        >
+            <MenuItemCard
+                v-for='item in visibleFilteredMenuItems'
+                :key='`tile-${item.key}`'
+                :data-key='item.key'
                 :class='{
-                    "cloudtak-bg border-top border-white": !compact && String(route.name) === "home-menu",
-                    "rounded-0": !modal,
-                    "rounded-bottom": modal
+                    "cursor-move": isDraggable,
+                    "text-muted": item.visibility === "hidden"
                 }'
+                :description-class='item.visibility === "hidden" ? "text-muted" : ""'
+                :icon='item.icon'
+                :label='item.label'
+                :description='item.description'
+                :tooltip='item.tooltip'
+                :badge='item.badge'
+                :layout='menuLayout'
+                :compact='false'
+                @select='handleSelect(item)'
+            >
+                <template #prefix>
+                    <div
+                        v-if='isDraggable'
+                        class='d-flex align-items-center'
+                    >
+                        <IconGripVertical
+                            stroke='1'
+                            :size='20'
+                            class='text-muted cursor-move drag-handle me-2'
+                        />
+                        <div
+                            class='cursor-pointer'
+                            @click.stop='cycleVisibility(item)'
+                        >
+                            <IconEye
+                                v-if='!item.visibility || item.visibility === "full"'
+                                :size='20'
+                                stroke='1'
+                            />
+                            <IconEyeDotted
+                                v-else-if='item.visibility === "partial"'
+                                :size='20'
+                                stroke='1'
+                            />
+                            <IconEyeOff
+                                v-else
+                                :size='20'
+                                stroke='1'
+                            />
+                        </div>
+                    </div>
+                </template>
+            </MenuItemCard>
+        </div>
+        <TablerNone
+            v-else
+            label='No Menu Items'
+            :create='false'
+            class='px-3'
+        />
+
+        <template #footer>
+            <div
+                class='main-menu-footer flex-shrink-0 cloudtak-bg border-top border-white'
             >
                 <div
-                    v-if='String(route.name) === "home-menu" && !compact'
                     class='row g-0 align-items-center'
                 >
                     <div
@@ -213,11 +234,18 @@
                                 stroke='1'
                                 class='mx-2'
                             />
-                            <span
-                                class='text-truncate'
-                                style='font-size: 18px;'
-                                v-text='username'
-                            />
+                            <div class='overflow-hidden'>
+                                <div
+                                    class='text-truncate'
+                                    style='font-size: 18px;'
+                                    v-text='username'
+                                />
+                                <div
+                                    class='text-muted'
+                                    style='font-size: 11px; line-height: 1.2;'
+                                    v-text='`v${version}`'
+                                />
+                            </div>
                         </div>
                     </div>
 
@@ -237,114 +265,14 @@
                         />
                     </div>
                 </div>
-                <div
-                    v-else-if='["home", "home-menu"].includes(String(route.name))'
-                >
-                    <div class='d-flex justify-content-center mb-2'>
-                        <TablerDropdown
-                            position='right'
-                        >
-                            <template #default>
-                                <TablerIconButton
-                                    title='Application Switcher'
-                                    class='cloudtak-hover'
-                                    :hover='false'
-                                >
-                                    <IconGridDots
-                                        :size='32'
-                                        stroke='1'
-                                    />
-                                </TablerIconButton>
-                            </template>
-                            <template #dropdown>
-                                <div class='d-flex flex-column gap-1'>
-                                    <template v-if='appSwitcherApplications.length'>
-                                        <div
-                                            v-for='application in appSwitcherApplications'
-                                            :key='application.url'
-                                            class='px-2 py-2 d-flex align-items-center cloudtak-hover rounded cursor-pointer'
-                                            @click='external(application.url)'
-                                        >
-                                            <img
-                                                v-if='application.icon'
-                                                :src='application.icon'
-                                                :alt='`${application.name} logo`'
-                                                class='app-switcher-logo'
-                                            >
-                                            <IconWorld
-                                                v-else
-                                                size='32'
-                                                stroke='1'
-                                            />
-                                            <div class='mx-2'>
-                                                {{ application.name }}
-                                            </div>
-                                        </div>
-
-                                        <div class='dropdown-divider my-1' />
-                                    </template>
-
-                                    <div
-                                        class='px-2 py-2 d-flex align-items-center cloudtak-hover rounded cursor-pointer'
-                                        @click='external("/video")'
-                                    >
-                                        <IconDeviceTv
-                                            size='32'
-                                            stroke='1'
-                                        />
-                                        <div class='mx-2'>
-                                            Video Wall
-                                        </div>
-                                    </div>
-                                </div>
-                            </template>
-                        </TablerDropdown>
-                    </div>
-                    <div class='d-flex justify-content-center mb-2'>
-                        <div class='position-relative'>
-                            <img
-                                v-tooltip='"Return Home"'
-                                class='cursor-pointer'
-                                height='50'
-                                width='50'
-                                :src='logo'
-                                @click='returnHome'
-                                @keyup.enter='returnHome'
-                            >
-                        </div>
-                        <div
-                            class='position-absolute'
-                            style='
-                        bottom: 20px;
-                        right: 10px;
-                    '
-                        >
-                            <div
-                                class='status'
-                                :class='{
-                                    "status-green": mapStore.isOpen,
-                                    "status-red": !mapStore.isOpen
-                                }'
-                            />
-                        </div>
-                    </div>
-                    <div class='d-flex justify-content-center mb-1'>
-                        <div
-                            class='subheader text-white'
-                            v-text='version'
-                        />
-                    </div>
-                </div>
             </div>
-        </div>
-    </template>
+        </template>
+    </MenuTemplate>
 </template>
 
 <script setup lang='ts'>
 import { ref, onMounted, onUnmounted, computed, watch, onBeforeUnmount } from 'vue';
-import { Preferences } from '@capacitor/preferences';
 import {
-    IconX,
     IconUser,
     IconLogout,
     IconGridDots,
@@ -366,18 +294,22 @@ import {
     TablerInput,
     TablerNone,
 } from '@tak-ps/vue-tabler';
-import { openSecondaryView, supportsServiceWorker } from '../../base/capacitor.ts';
+import { openSecondaryView } from '../../base/capacitor.ts';
+import { version } from '../../../package.json';
 import { useMapStore } from '../../stores/map.ts';
+import { useAppStore } from '../../stores/app.ts';
 import type { MenuItemConfig } from '../../stores/modules/menu.ts';
 import Config from '../../base/config.ts';
-import { useRouter, useRoute } from 'vue-router';
+import { useRouter } from 'vue-router';
 import MenuItemCard from './Menu/MenuItemCard.vue';
+import MenuTemplate from './util/MenuTemplate.vue';
+import ServerStatus from './ServerStatus.vue';
 import ProfileConfig from '../../base/profile.ts';
 
-const route = useRoute();
 const router = useRouter();
 
 const mapStore = useMapStore();
+const appStore = useAppStore();
 
 type AppSwitcherApplication = {
     name: string;
@@ -385,7 +317,6 @@ type AppSwitcherApplication = {
     url: string;
 };
 
-const logo = ref('/CloudTAKLogo.svg');
 const appSwitcherApplications = ref<AppSwitcherApplication[]>([]);
 
 let alive = false;
@@ -393,29 +324,17 @@ onMounted(() => { alive = true; });
 onUnmounted(() => { alive = false; });
 
 onMounted(async () => {
-    const loginConfig = await Config.list(['login::logo']);
     const applicationsConfig = await Config.list(['external::applications' as never]);
 
     if (!alive) return;
 
-    const loginLogo = loginConfig['login::logo'];
-    if (typeof loginLogo === 'string' && loginLogo) {
-        logo.value = loginLogo;
-    }
-
     appSwitcherApplications.value = normalizeApplications(applicationsConfig['external::applications' as never]);
 });
 
-const emit = defineEmits<{
-    (e: 'close'): void;
-}>();
-
-const version = ref('');
 const username = ref<string>('Username');
 
 const props = defineProps({
-    compact: Boolean,
-    modal: Boolean
+    compact: Boolean
 });
 
 const menuLayout = computed(() => props.compact ? 'list' : mapStore.menu.preferredLayout.value);
@@ -495,21 +414,6 @@ async function saveOrder() {
 }
 
 onMounted(async () => {
-    if (supportsServiceWorker()) {
-        const pkg = await navigator.serviceWorker.getRegistration();
-        if (pkg && pkg.active) {
-            const url = new URL(pkg.active.scriptURL);
-            if (alive && url.searchParams.get('v')) {
-                version.value = String(url.searchParams.get('v'));
-            }
-        }
-    }
-
-    if (alive && !version.value) {
-        version.value = (await mapStore.worker.profile.loadServer()).version;
-    }
-
-    if (!alive) return;
     const usernameConfig = await ProfileConfig.get('username');
     if (alive && usernameConfig) {
         username.value = usernameConfig.value;
@@ -540,14 +444,8 @@ function handleSelect(item: MenuItemConfig) {
     }
 }
 
-function returnHome() {
-    router.push("/");
-    mapStore.returnHome();
-}
-
 async function logout() {
-    await Preferences.remove({ key: 'token' });
-    router.push("/login");
+    await appStore.logout();
 }
 
 function normalizeApplications(applications: unknown): AppSwitcherApplication[] {
@@ -566,22 +464,6 @@ function normalizeApplications(applications: unknown): AppSwitcherApplication[] 
 </script>
 
 <style scoped>
-.status {
-    height: 10px;
-    width: 10px;
-    margin: 0px;
-    padding: 0px;
-    border-radius: 50%;
-}
-
-.status-green {
-    background-color: #2fb344;
-}
-
-.status-red {
-    background-color: #d63939;
-}
-
 .noscroll {
     -ms-overflow-style: none;  /* Internet Explorer 10+ */
     scrollbar-width: none;  /* Firefox, Safari 18.2+, Chromium 121+ */

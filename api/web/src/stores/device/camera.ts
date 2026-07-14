@@ -1,47 +1,20 @@
 import { Camera } from '@capacitor/camera';
 import { isNativePlatform } from '../../base/capacitor.ts';
-import { queryPermissionStatus } from './shared.ts';
+import { PermissionQuery, normalizePermissionState } from './shared.ts';
 import type { DevicePermissionContext } from './types.ts';
-
-function normalizeNativeCameraPermission(state: string | null | undefined): PermissionState | 'prompt' | 'unknown' {
-    switch (state) {
-        case 'granted':
-        case 'denied':
-            return state;
-        case 'prompt':
-        case 'prompt-with-rationale':
-            return 'prompt';
-        default:
-            return 'unknown';
-    }
-}
-
-export async function checkNativeCameraPermission(): Promise<PermissionState | 'prompt' | 'unknown'> {
-    try {
-        const status = await Camera.checkPermissions();
-        return normalizeNativeCameraPermission(status.camera);
-    } catch (err) {
-        console.warn('Failed to query native camera permission status', err);
-        return 'unknown';
-    }
-}
-
-export async function requestNativeCameraPermission(): Promise<PermissionState | 'prompt' | 'unknown'> {
-    try {
-        const status = await Camera.requestPermissions({ permissions: ['camera'] });
-        return normalizeNativeCameraPermission(status.camera);
-    } catch (err) {
-        console.warn('Failed to request native camera permission', err);
-        return 'unknown';
-    }
-}
 
 export class CameraPermission {
     constructor(private readonly context: DevicePermissionContext) {}
 
     async refreshStatus(): Promise<void> {
         if (isNativePlatform()) {
-            this.context.setPermissionStatus('camera', await checkNativeCameraPermission());
+            try {
+                const status = await Camera.checkPermissions();
+                this.context.setPermissionStatus('camera', normalizePermissionState(status.camera));
+            } catch (err) {
+                console.warn('Failed to query native camera permission status', err);
+                this.context.setPermissionStatus('camera', 'unknown');
+            }
             return;
         }
 
@@ -50,23 +23,21 @@ export class CameraPermission {
             return;
         }
 
-        const status = await queryPermissionStatus('camera', 'Failed to query camera permission status');
-        if (status) {
-            this.context.setPermissionStatus('camera', status.state);
-            return;
-        }
-
-        this.context.setPermissionStatus('camera', 'unknown');
+        const status = await PermissionQuery.queryPermissionStatus('camera', 'Failed to query camera permission status');
+        this.context.setPermissionStatus('camera', status ? status.state : 'unknown');
     }
 
     async request(): Promise<void> {
         if (isNativePlatform()) {
             try {
-                this.context.setPermissionStatus('camera', await requestNativeCameraPermission());
+                const status = await Camera.requestPermissions({ permissions: ['camera'] });
+                this.context.setPermissionStatus('camera', normalizePermissionState(status.camera));
+            } catch (err) {
+                console.warn('Failed to request native camera permission', err);
+                this.context.setPermissionStatus('camera', 'unknown');
             } finally {
                 await this.refreshStatus();
             }
-
             return;
         }
 
@@ -89,7 +60,7 @@ export class CameraPermission {
                 }
             }
 
-            const status = await queryPermissionStatus('camera', 'Failed to query camera permission status');
+            const status = await PermissionQuery.queryPermissionStatus('camera', 'Failed to query camera permission status');
             if (status) {
                 this.context.setPermissionStatus('camera', status.state);
             } else if (!granted) {

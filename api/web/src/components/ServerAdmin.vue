@@ -78,6 +78,27 @@
                                                     class='mx-3'
                                                 >CloudTAK Settings</span>
                                             </span>
+                                            <span
+                                                tabindex='0'
+                                                role='menuitem'
+                                                class='list-group-item list-group-item-action d-flex align-items-center user-select-none'
+                                                :class='{
+                                                    "active": String(route.name).startsWith("admin-health"),
+                                                    "cursor-pointer": !String(route.name).startsWith("admin-health")
+                                                }'
+                                                @keyup.enter='router.push(`/admin/health`)'
+                                                @click='router.push(`/admin/health`)'
+                                            >
+                                                <IconHeartbeat
+                                                    v-tooltip='nest ? "Health" : false'
+                                                    :size='32'
+                                                    stroke='1'
+                                                />
+                                                <span
+                                                    v-if='!nest'
+                                                    class='mx-3'
+                                                >Health</span>
+                                            </span>
                                         </div>
                                         <h4
                                             v-if='!nest'
@@ -388,7 +409,7 @@
 import { onMounted, ref, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { Profile } from '../types.ts';
-import { std } from '../std.ts';
+import { server } from '../std.ts';
 import PageFooter from './PageFooter.vue';
 import {
     TablerAlert,
@@ -403,6 +424,7 @@ import {
     IconMapPin,
     IconSettings,
     IconServer,
+    IconHeartbeat,
     IconDatabase,
     IconDatabaseExport,
     IconBrandDocker,
@@ -424,7 +446,8 @@ const nest = computed(() => {
 });
 
 onMounted(async () => {
-    const profile = await std('/api/profile') as Profile;
-    isAdmin.value = profile.system_admin;
+    const res = await server.GET('/api/profile');
+    if (res.error) throw new Error(res.error.message);
+    isAdmin.value = (res.data as Profile).system_admin;
 });
 </script>

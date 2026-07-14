@@ -27,8 +27,7 @@
                 "cloudtak-hover": hover
             }'
             :hover='hover'
-            @click.exact='flyToClick'
-            @click.ctrl='selectClick'
+            @click='(e: MouseEvent) => { if (e.ctrlKey) selectClick(); else flyToClick(); }'
         >
             <div
                 v-if='props.gripHandle'
@@ -58,13 +57,34 @@
             >
                 <div class='d-flex align-items-center gap-2'>
                     <span
-                        class='fw-semibold text-break'
-                        v-text='feature.properties.callsign || feature.properties.name || "Unnamed"'
+                        v-if='(feature.properties.callsign || "").trim().length > 0'
+                        class='fw-semibold text-truncate'
+                        v-text='feature.properties.callsign'
                     />
+                    <span
+                        v-else
+                        class='fw-semibold text-truncate fst-italic text-muted'
+                    >No Callsign</span>
                 </div>
             </div>
 
-            <div class='align-self-center me-2 btn-list cloudtak-hover-hidden'>
+            <div class='align-self-center me-2 btn-list flex-shrink-0'>
+                <TablerIconButton
+                    v-if='visibilityToggle'
+                    :title='isHidden ? "Show Feature" : "Hide Feature"'
+                    @click.stop.prevent='toggleVisibility'
+                >
+                    <IconEyeOff
+                        v-if='isHidden'
+                        :size='20'
+                        stroke='1'
+                    />
+                    <IconEye
+                        v-else
+                        :size='20'
+                        stroke='1'
+                    />
+                </TablerIconButton>
                 <TablerIconButton
                     v-if='infoButton'
                     title='View Info'
@@ -99,8 +119,9 @@
 
 <script setup lang='ts'>
 import { useRouter } from 'vue-router';
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import COT from '../../../base/cot.ts';
+import { FeatureVisibility } from '../../../stores/modules/feature-visibility.ts';
 import FeatureIcon from './FeatureIcon.vue';
 import Contact from './Contact.vue';
 import StandardItem from './StandardItem.vue';
@@ -112,6 +133,8 @@ import {
     IconListDetails,
     IconGripVertical,
     IconTrash,
+    IconEye,
+    IconEyeOff,
 } from '@tabler/icons-vue';
 import { useMapStore } from '../../../stores/map.ts';
 const mapStore = useMapStore();
@@ -141,6 +164,10 @@ const props = defineProps({
         type: Boolean,
         default: false
     },
+    visibilityToggle: {
+        type: Boolean,
+        default: false
+    },
     hover: {
         type: Boolean,
         default: true
@@ -157,6 +184,12 @@ const emit = defineEmits(['delete']);
 const isDeleted = ref(false);
 const isDeleting = ref(false);
 const isZoomable = ref(false);
+
+const isHidden = computed(() => FeatureVisibility.isFeatureHidden(props.feature.id));
+
+function toggleVisibility() {
+    FeatureVisibility.toggleFeature(props.feature.id);
+}
 
 onMounted(async () => {
     const cot = await mapStore.worker.db.get(props.feature.id, {

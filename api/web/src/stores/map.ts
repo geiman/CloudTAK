@@ -9,35 +9,41 @@
 
 import { v4 as randomUUID } from 'uuid';
 import { Preferences } from '@capacitor/preferences';
+import { CapacitorHttp } from '@capacitor/core';
 import { defineStore } from 'pinia'
 import { markRaw } from 'vue';
 import DrawTool, { DrawToolMode } from './modules/draw.ts';
 import IconManager from './modules/icons.ts';
 import MenuManager from './modules/menu.ts';
 import BottomBarManager from './modules/bottombar.ts';
-import { useDeviceStore } from './device/index.ts';
+import { useDeviceStore } from './device.ts';
+import { useAppStore } from './app.ts';
 import * as Comlink from 'comlink';
 import AtlasWorker from '../workers/atlas.ts?worker&url';
 import COT from '../base/cot.ts';
-import type { DatabaseType } from '../database.ts';
-import { db } from '../database.ts';
+import GeolocateControl from '../lib/geolocate/main.ts';
+import RoutingControl from '../lib/routing/main.ts';
+import type { NavigationState, NavigationDirection } from '../lib/routing/main.ts';
+import { syncPushToken } from '../base/push.ts';
 import { WorkerMessageType, LocationState } from '../base/events.ts';
 import type { WorkerMessage } from '../base/events.ts';
 import Overlay from '../base/overlay-class.ts';
 import OverlayManager from '../base/overlay.ts';
+import { FeatureVisibility } from './modules/feature-visibility.ts';
 import Subscription from '../base/subscription.ts';
-import { std, stdurl } from '../std.js';
+import { stdurl, server, getRuntimeToken, serverUrl } from '../std.js';
 import * as mapgl from 'maplibre-gl'
-import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-csp-worker.js?url'
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import type Atlas from '../workers/atlas.ts';
 import { CloudTAKTransferHandler } from '../base/handler.ts';
 import ProfileConfig from '../base/profile.ts';
 import Config from '../base/config.ts';
-import { clearLocationWatch, supportsLocationRequests, watchLocation } from './device/geolocation.ts';
+import { isNativePlatform, addBackgroundStateListener } from '../base/capacitor.ts';
+import { ensureDatabase } from '../database.ts';
 
-import type { ProfileOverlay, Basemap, APIList, Feature } from '../types.ts';
-import type { LngLat, LngLatLike, Point, MapMouseEvent, MapTouchEvent, MapGeoJSONFeature, GeoJSONSource } from 'maplibre-gl';
-import type { CallbackID } from '@capacitor/geolocation';
+import type { ProfileOverlay, Basemap, Feature } from '../types.ts';
+import type { LngLat, LngLatLike, Point, MapMouseEvent, MapTouchEvent, MapGeoJSONFeature, GeoJSONSource, LayerSpecification, PropertyValueSpecification } from 'maplibre-gl';
+import type { Position } from '@capacitor/geolocation';
 
 function waitForAtlasWorkerReady(worker: Worker): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -76,12 +82,11 @@ export const useMapStore = defineStore('cloudtak', {
         _menu?: unknown;
         _bottomBar?: unknown;
 
-        _boundOnOnline?: () => void;
-        _boundOnOffline?: () => void;
-        _boundOnDeviceOrientation?: (event: DeviceOrientationEvent) => void;
+        _removeOrientationListener?: () => Promise<void>;
         _boundOnVisibilityChange?: () => Promise<void>;
+        _removeBackgroundStateListener?: () => void;
+        _removePushTokenListener?: () => void;
 
-        db: DatabaseType;
         channel: BroadcastChannel;
 
         toImport: Feature[]
@@ -95,13 +100,20 @@ export const useMapStore = defineStore('cloudtak', {
         location: LocationState;
         locationAccuracy: number | undefined;
         gpsCoordinates: { lat: number; lng: number } | null;
+        gpsSpeed: number | null;
+        navigation: {
+            active: boolean;
+            cotId: string | null;
+            callsign: string | null;
+            direction: NavigationDirection;
+            state: NavigationState | null;
+        };
         distanceUnit: string;
         coordFormat: string;
         defaultPointType: string;
         manualLocationMode: boolean;
-        isMobileDetected: boolean;
-        gpsWatchId: CallbackID | null;
-        tokenExpiry: number | null;
+        isBackgrounded: boolean;
+
         lastUpdateCOTErrorSignature: string | null;
 
         toastOffset: {
@@ -111,17 +123,22 @@ export const useMapStore = defineStore('cloudtak', {
 
         timer: ReturnType<typeof setInterval> | null;
 
-        _rawWorker: Worker;
-        _workerReady: Promise<void>;
-        worker: Comlink.Remote<Atlas>;
+        _rawWorker?: Worker;
+        _workerReady?: Promise<void>;
+        _worker?: Comlink.Remote<Atlas>;
         mission: Subscription | undefined;
         terrainEnabled: boolean;
         container?: HTMLElement;
         hasSnapping: boolean;
         hasNoChannels: boolean;
-        isLoaded: boolean;
+        channelChange: boolean;
+        // Is the map ready to be shown to users
+        isMapLoaded: boolean;
+        // Is all data/overlays loaded
+        isMapLoadedFully: boolean;
+        // Human-readable description of the current map loading step
+        loadingStage: string;
         isOpen: boolean;
-        isOnline: boolean;
         userOrientationMode: boolean;
         pitch: number;
         bearing: number;
@@ -142,19 +159,10 @@ export const useMapStore = defineStore('cloudtak', {
             lngLat?: LngLat;
         }
     } => {
-        const rawWorker = new Worker(AtlasWorker, { type: 'module' });
-        const workerReady = waitForAtlasWorkerReady(rawWorker);
-        const worker = Comlink.wrap<Atlas>(rawWorker);
-
-        new CloudTAKTransferHandler(
-            Comlink.transferHandlers,
-            true
-        );
-
         return {
-            _rawWorker: rawWorker,
-            _workerReady: workerReady,
-            worker,
+            _rawWorker: undefined,
+            _workerReady: undefined,
+            _worker: undefined,
             _bottomBar: markRaw(new BottomBarManager()),
             timer: null,
             callsign: 'Unknown',
@@ -162,25 +170,33 @@ export const useMapStore = defineStore('cloudtak', {
             location: LocationState.Loading,
             locationAccuracy: undefined,
             gpsCoordinates: null,
+            gpsSpeed: null,
+            navigation: {
+                active: false,
+                cotId: null,
+                callsign: null,
+                direction: 'forward',
+                state: null
+            },
             hasSnapping: false,
-            db,
-            channel: new BroadcastChannel("cloudtak"),
+            channel: markRaw(new BroadcastChannel("cloudtak")),
             zoom: 'conditional',
             distanceUnit: 'meter',
             coordFormat: 'dd',
             defaultPointType: 'u-d-p',
             toastOffset: { x: 70, y: 60 },
             manualLocationMode: false,
-            gpsWatchId: null,
-            tokenExpiry: null,
+
             lastUpdateCOTErrorSignature: null,
-            isMobileDetected: false,
+            isBackgrounded: false,
             locked: [],
             terrainEnabled: false,
             hasNoChannels: false,
+            channelChange: false,
             isOpen: false,
-            isLoaded: false,
-            isOnline: navigator.onLine,
+            isMapLoaded: false,
+            isMapLoadedFully: false,
+            loadingStage: '',
             userOrientationMode: false,
             pitch: 0,
             bearing: 0,
@@ -220,18 +236,171 @@ export const useMapStore = defineStore('cloudtak', {
         bottomBar: function(): BottomBarManager {
             if (!this._bottomBar) throw new Error('BottomBar Manager has not yet initialized');
             return this._bottomBar as BottomBarManager;
+        },
+        worker: function(): Comlink.Remote<Atlas> {
+            if (!this._worker) throw new Error('Atlas worker has not yet started');
+            return this._worker as Comlink.Remote<Atlas>;
         }
     },
     actions: {
+        startLocationWatch: async function() {
+            const deviceStore = useDeviceStore();
+            await deviceStore.geolocation.startWatch((position: Position) => {
+                if (this.manualLocationMode) return;
+
+                this.locationAccuracy = position.coords.accuracy;
+                this.gpsCoordinates = {
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude
+                };
+                this.gpsSpeed = typeof position.coords.speed === 'number' && !Number.isNaN(position.coords.speed)
+                    ? position.coords.speed
+                    : null;
+                this.syncRoutingControl();
+
+                try {
+                    this.channel.postMessage({
+                        type: WorkerMessageType.Profile_Location_Coordinates,
+                        body: {
+                            accuracy: position.coords.accuracy,
+                            altitude: position.coords.altitude,
+                            altitudeAccuracy: position.coords.altitudeAccuracy,
+                            speed: position.coords.speed,
+                            heading: position.coords.heading,
+                            timestamp: position.timestamp,
+                            coordinates: [ position.coords.longitude, position.coords.latitude ]
+                        }
+                    });
+                } catch (err) {
+                    // channel may be closed during teardown
+                    console.error(err);
+                }
+
+                if (isNativePlatform() && this.isBackgrounded) {
+                    void this.submitLocationHttp(position);
+                }
+            });
+        },
+        syncGeolocateControl: function() {
+            if (!this._map) return;
+
+            const control = (this._map as mapgl.Map & { _geolocateControl?: GeolocateControl })._geolocateControl;
+            if (!control) return;
+
+            if (this.location === LocationState.Disabled || !this.gpsCoordinates) {
+                control.setLocation(null);
+            } else {
+                const accuracy = this.location === LocationState.Preset ? 0 : this.locationAccuracy;
+                control.setLocation(this.gpsCoordinates, accuracy);
+            }
+        },
+        routingControl: function(): RoutingControl | undefined {
+            if (!this._map) return undefined;
+            return (this._map as mapgl.Map & { _routingControl?: RoutingControl })._routingControl;
+        },
+        syncRoutingControl: function() {
+            if (!this.navigation.active) return;
+
+            const control = this.routingControl();
+            if (!control) return;
+
+            if (this.location === LocationState.Disabled || !this.gpsCoordinates) {
+                control.setLocation(null);
+            } else {
+                control.setLocation(this.gpsCoordinates);
+            }
+        },
+        startNavigation: async function(cotId: string) {
+            const control = this.routingControl();
+            if (!control) return;
+
+            const cot = await this.worker.db.get(cotId);
+            if (!cot) throw new Error('Unable to load Route for navigation');
+
+            if (!cot.is_route) {
+                throw new Error('Navigation is only supported for Route (b-m-r LineString) features');
+            }
+
+            const feature = cot.as_feature();
+
+            control.setRoute({
+                type: 'Feature',
+                properties: {},
+                geometry: feature.geometry as import('geojson').LineString
+            });
+
+            this.navigation.active = true;
+            this.navigation.cotId = cotId;
+            this.navigation.callsign = feature.properties.callsign || 'Route';
+            this.navigation.direction = control.getDirection();
+
+            this.syncRoutingControl();
+        },
+        stopNavigation: function() {
+            const control = this.routingControl();
+            if (control) control.setRoute(null);
+
+            this.navigation.active = false;
+            this.navigation.cotId = null;
+            this.navigation.callsign = null;
+            this.navigation.direction = 'forward';
+            this.navigation.state = null;
+        },
+        reverseNavigation: function() {
+            const control = this.routingControl();
+            if (!control || !this.navigation.active) return;
+
+            control.reverse();
+            this.navigation.direction = control.getDirection();
+        },
+        openSelfFeature: async function() {
+            try {
+                if (!this._map || !this.gpsCoordinates) return;
+
+                const uid = await this.worker.profile.uid();
+                if (!uid) return;
+
+                const cot = await this.worker.db.get(uid);
+                if (!cot) return;
+
+                // Mirror a normal CoT marker click so the puck opens the same
+                // radial menu (mode 'cot') rather than the CoTView sidebar.
+                const lngLat = new mapgl.LngLat(this.gpsCoordinates.lng, this.gpsCoordinates.lat);
+                await this.radialClick(cot.as_feature(), {
+                    lngLat,
+                    point: this.map.project(lngLat),
+                    mode: 'cot'
+                });
+            } catch (err) {
+                console.error('Failed to open self location radial menu', err);
+            }
+        },
+        startWorker: function() {
+            if (this._rawWorker) return;
+
+            const rawWorker = new Worker(AtlasWorker, { type: 'module' });
+
+            new CloudTAKTransferHandler(
+                Comlink.transferHandlers,
+                true
+            );
+
+            this._rawWorker = markRaw(rawWorker);
+            this._workerReady = waitForAtlasWorkerReady(rawWorker);
+            this._worker = markRaw(Comlink.wrap<Atlas>(rawWorker));
+        },
         destroy: async function() {
             // Capture current worker instances to avoid races with $reset()/state() creating new ones.
-            const currentWorker = this.worker;
+            const currentWorker = this._worker;
             const currentRawWorker = this._rawWorker;
             const deviceStore = useDeviceStore();
 
             if (this.timer) {
                 window.clearInterval(this.timer);
             }
+
+            // Stop geolocation watch first so no callbacks fire during async teardown below
+            await deviceStore.geolocation.stopWatch();
 
             if (currentWorker && currentRawWorker) {
                 try {
@@ -247,18 +416,28 @@ export const useMapStore = defineStore('cloudtak', {
                 }
             }
 
-            await this.stopGPSWatch();
-
-            this.channel.close();
+            try {
+                this.channel.close();
+            } catch (err) {
+                // channel may already be closed
+                console.error(err);
+            }
 
             await deviceStore.wakeLock.releaseSentinel();
 
-            if (this._boundOnOnline) window.removeEventListener('online', this._boundOnOnline);
-            if (this._boundOnOffline) window.removeEventListener('offline', this._boundOnOffline);
-            if (this._boundOnDeviceOrientation) {
-                deviceStore.orientation.removeListener(this._boundOnDeviceOrientation);
+            if (this._removeOrientationListener) {
+                await this._removeOrientationListener();
+                this._removeOrientationListener = undefined;
             }
             if (this._boundOnVisibilityChange) document.removeEventListener('visibilitychange', this._boundOnVisibilityChange);
+            if (this._removeBackgroundStateListener) {
+                this._removeBackgroundStateListener();
+                this._removeBackgroundStateListener = undefined;
+            }
+            if (this._removePushTokenListener) {
+                this._removePushTokenListener();
+                this._removePushTokenListener = undefined;
+            }
 
             if (this._map) {
                 try {
@@ -272,7 +451,7 @@ export const useMapStore = defineStore('cloudtak', {
             this.$reset();
         },
         makeActiveMission: async function(mission?: Subscription): Promise<void> {
-            this.mission = mission;
+            this.mission = mission ? markRaw(mission) : undefined;
             await this.worker.db.makeActiveMission(mission ? mission.meta.guid : undefined);
 
             if (mission) {
@@ -302,8 +481,11 @@ export const useMapStore = defineStore('cloudtak', {
             if (!terrainId) return;
             if (this.map.getSource('-2')) return;
 
-            const burl = stdurl(`/api/basemap/${terrainId}`);
-            const terrain = await std(burl) as Basemap;
+            const terrainRes = await server.GET('/api/basemap/{:basemapid}', {
+                params: { path: { ':basemapid': terrainId } }
+            });
+            if (terrainRes.error) throw new Error(terrainRes.error.message);
+            const terrain = terrainRes.data as Basemap;
 
             if (terrain.type !== 'raster-dem') {
                 throw new Error(`Terrain basemap ${terrainId} is not a raster-dem type`);
@@ -329,6 +511,7 @@ export const useMapStore = defineStore('cloudtak', {
             });
 
             this.terrainEnabled = true;
+            this.map.setGlobalStateProperty('3d', true);
 
             if (this.map.getPitch() === 0) {
                 this.map.easeTo({ pitch: 45 });
@@ -340,6 +523,7 @@ export const useMapStore = defineStore('cloudtak', {
             this.map.removeSource('-2');
 
             this.terrainEnabled = false;
+            this.map.setGlobalStateProperty('3d', false);
 
             this.map.easeTo({ pitch: 0 });
         },
@@ -504,40 +688,67 @@ export const useMapStore = defineStore('cloudtak', {
             }
 
             const { value: token } = await Preferences.get({ key: 'token' });
-            const sub = await Subscription.load(guid, {
-                token: token || '',
-                reload: opts?.reload || false,
-                subscribed: true,
-                missiontoken: overlay.token || undefined
-            });
+
+            let sub = (await Subscription.from(guid, token || '', { subscribed: true })) || null;
+
+            if (sub) {
+                // Get map data on the map ASAP, even if it is stale
+                // @ts-expect-error Source.setData is not defined
+                oStore.setData(await sub.feature.collection(false));
+
+                if (overlay.active) {
+                    await this.makeActiveMission(sub);
+                }
+
+                if (opts?.reload) {
+                    await sub.refresh();
+                }
+            } else {
+                try {
+                    sub = await Subscription.load(guid, {
+                        token: token || '',
+                        reload: opts?.reload || false,
+                        subscribed: true,
+                        missiontoken: overlay.token || undefined
+                    });
+                } catch (err) {
+                    console.warn(`Mission:${guid} network refresh failed, using local data:`, err);
+                    return null;
+                }
+            }
 
             // @ts-expect-error Source.setData is not defined
             oStore.setData(await sub.feature.collection(false));
 
-            await sub.update({ dirty: false });
+            if (sub.dirty) {
+                await sub.update({ dirty: false });
+            }
 
             return sub;
         },
         init: async function(container: HTMLElement) {
+            // Start the worker here rather than in state() so that std.ts
+            // inside the worker resolves serverUrl from KV only after
+            // initializeApp() has written it — eliminating the race that
+            // caused the worker to fall back to capacitor://localhost.
+            this.loadingStage = 'Starting worker…';
+            this.startWorker();
+
             const deviceStore = useDeviceStore();
 
             this.container = container;
 
-            this.isOnline = navigator.onLine;
-            this._boundOnOnline = (): void => { this.isOnline = true; };
-            this._boundOnOffline = (): void => { this.isOnline = false; };
-            this._boundOnDeviceOrientation = (event: DeviceOrientationEvent): void => {
-                if (!this.userOrientationMode) return;
-
-                const heading = deviceStore.orientation.getHeading(event);
-
-                if (heading !== null && this.map) {
-                    this.map.setBearing(heading);
-                }
-            };
             this._boundOnVisibilityChange = async (): Promise<void> => {
                 if (document.hidden) return;
                 if (!(await this.worker.initialized)) return;
+
+                // Proactively reopen the main-thread IndexedDB connection.
+                // WebKit may have force-closed it while the app was backgrounded.
+                try {
+                    await ensureDatabase();
+                } catch (err) {
+                    console.error('Failed to reopen IndexedDB on resume:', err);
+                }
 
                 const isOpen = await this.worker.conn.isOpen;
                 if (!isOpen) {
@@ -548,14 +759,32 @@ export const useMapStore = defineStore('cloudtak', {
                 await this.updateCOT();
             };
 
-            window.addEventListener('online', this._boundOnOnline);
-            window.addEventListener('offline', this._boundOnOffline);
-            deviceStore.orientation.addListener(this._boundOnDeviceOrientation);
+            this._removeOrientationListener = await deviceStore.orientation.addListener((heading) => {
+                // Drive the self-location puck's heading cone regardless of
+                // whether the map itself is being rotated to match.
+                const control = this._map
+                    ? (this._map as mapgl.Map & { _geolocateControl?: GeolocateControl })._geolocateControl
+                    : undefined;
+                if (control) control.setHeading(heading);
+
+                if (this.userOrientationMode && heading !== null && this._map) {
+                    this.map.setBearing(heading);
+                }
+            });
             document.addEventListener('visibilitychange', this._boundOnVisibilityChange);
+
+            // Track foreground/background transitions using a native-reliable
+            // signal so background location reporting (submitLocationHttp) is
+            // gated correctly on iOS, where document.hidden is unreliable.
+            this.isBackgrounded = false;
+            this._removeBackgroundStateListener = await addBackgroundStateListener((isBackgrounded) => {
+                this.isBackgrounded = isBackgrounded;
+            });
 
             const { value: token } = await Preferences.get({ key: 'token' });
 
-            await this._workerReady;
+            this.loadingStage = 'Initializing worker…';
+            await this._workerReady!;
             await this.worker.init(token || '');
 
             this.channel.onmessage = async (event: MessageEvent<WorkerMessage>) => {
@@ -582,17 +811,24 @@ export const useMapStore = defineStore('cloudtak', {
                     if (this.location !== LocationState.Live) {
                         this.locationAccuracy = undefined;
                     }
+                    this.syncGeolocateControl();
+                    this.syncRoutingControl();
                 } else if (msg.type === WorkerMessageType.Profile_Location_Coordinates) {
                     this.locationAccuracy = msg.body.accuracy;
+                    this.gpsSpeed = typeof msg.body.speed === 'number' && !Number.isNaN(msg.body.speed)
+                        ? msg.body.speed
+                        : null;
                     if (msg.body.coordinates) {
                         this.gpsCoordinates = {
                             lng: msg.body.coordinates[0],
                             lat: msg.body.coordinates[1]
                         };
                     }
-                    if (!this.manualLocationMode) {
+                    if (!this.manualLocationMode && this.location !== LocationState.Preset) {
                         this.location = LocationState.Live;
                     }
+                    this.syncGeolocateControl();
+                    this.syncRoutingControl();
                 } else if (msg.type === WorkerMessageType.Profile_Callsign) {
                     this.callsign = msg.body.callsign;
                 } else if (msg.type === WorkerMessageType.Profile_Display_Zoom) {
@@ -607,30 +843,71 @@ export const useMapStore = defineStore('cloudtak', {
                     this.isOpen = true;
                 } else if (msg.type === WorkerMessageType.Connection_Close) {
                     this.isOpen = false;
+                } else if (msg.type === WorkerMessageType.Connection_AuthFailure) {
+                    this.isOpen = false;
+                    await useAppStore().sessionExpired();
                 } else if (msg.type === WorkerMessageType.Channels_None) {
                     this.hasNoChannels = true;
                 } else if (msg.type === WorkerMessageType.Channels_List) {
                     this.hasNoChannels = false;
+                } else if (msg.type === WorkerMessageType.Channel_Change) {
+                    this.channelChange = true;
                 } else if (msg.type === WorkerMessageType.Mission_Change_Feature) {
                     await this.loadMission(msg.body.guid);
+                } else if (msg.type === WorkerMessageType.Sync_Update) {
+                    const event = msg.body as { type: string; action: string; id?: string | number };
+
+                    // Another connected client mutated overlays - the Atlas
+                    // worker has already refreshed the local database, so
+                    // reconcile the loaded map overlays against it
+                    if (['overlay', 'mission', 'basemap'].includes(event.type)) {
+                        await this.reconcileOverlays();
+                    }
+                } else if (msg.type === WorkerMessageType.Iconset_Change) {
+                    // The Atlas worker synced iconsets into Dexie. Iconsets
+                    // whose content actually changed (`purge`) drop their
+                    // MapLibre images so they re-resolve on demand;
+                    // first-time cached iconsets (`added`) only retry
+                    // fallback placeholders since their icons match what the
+                    // network fallback already served.
+                    const body = msg.body as { purge: string[], added: string[] };
+                    if (this._icons) {
+                        this.icons.purgeIconsets(body.purge);
+                        this.icons.purgeFallbacks(body.added);
+                    }
                 }
             }
 
             let startedGPSWatchFromPermissionSubscription = false;
+
+            this.loadingStage = 'Requesting permissions…';
             await deviceStore.initializePermissionSubscriptions(() => {
                 startedGPSWatchFromPermissionSubscription = true;
-                void this.startGPSWatch();
+                void this.startLocationWatch();
             });
+
+            // Keep this device's push notification registration in sync. The
+            // device store already obtained the current token during
+            // initialization (when permission is granted) and emits future
+            // rotations via `onMessagingToken`. Store the unsubscribe handle so
+            // destroy() can remove it and avoid accumulating listeners across
+            // mount/unmount cycles.
+            if (this._removePushTokenListener) this._removePushTokenListener();
+            this._removePushTokenListener = deviceStore.onMessagingToken((token) => {
+                void syncPushToken(token);
+            });
+            void syncPushToken(deviceStore.getMessagingToken());
 
             if (
                 deviceStore.permissions.location !== 'unsupported'
                 && !startedGPSWatchFromPermissionSubscription
             ) {
-                await this.startGPSWatch();
+                await this.startLocationWatch();
             }
 
             const sprites = IconManager.defaultSprite();
 
+            this.loadingStage = 'Loading map configuration…';
             let initCenter = '-100,40';
             let initZoom = 4;
             let initPitch = 0;
@@ -679,6 +956,10 @@ export const useMapStore = defineStore('cloudtak', {
                     version: 8,
                     glyphs,
                     sprite: sprites,
+                    state: {
+                        theme: { default: useAppStore().resolvedTheme },
+                        '3d': { default: false }
+                    },
                     sources: {
                         '-1': {
                             type: 'geojson',
@@ -696,6 +977,7 @@ export const useMapStore = defineStore('cloudtak', {
 
             if (!init.style || typeof init.style === 'string') throw new Error('init.style must be an object');
 
+            this.loadingStage = 'Creating map…';
             mapgl.setWorkerUrl(maplibreWorkerUrl);
             const map = new mapgl.Map(init);
 
@@ -707,6 +989,35 @@ export const useMapStore = defineStore('cloudtak', {
             map.addControl(scaleControl, 'bottom-right');
             (map as mapgl.Map & { _scaleControl?: mapgl.ScaleControl })._scaleControl = scaleControl;
 
+            // Add the self-location puck control. Position/accuracy/heading are
+            // fed from the existing location pipeline (see syncGeolocateControl
+            // and the device orientation handler). The puck is non-interactive;
+            // recentring on the user's location is handled by the BottomBar
+            // callsign control.
+            const geolocateControl = new GeolocateControl({
+                onClick: () => {
+                    void this.openSelfFeature();
+                }
+            });
+            map.addControl(geolocateControl, 'top-right');
+            (map as mapgl.Map & { _geolocateControl?: GeolocateControl })._geolocateControl = geolocateControl;
+
+            // Add the route-navigation control. Renders guidance (connector +
+            // remaining-segment highlight) along an active TAK Route. Position is
+            // fed from the same location pipeline via syncRoutingControl().
+            const routingControl = new RoutingControl({
+                onUpdate: (state) => {
+                    this.navigation.state = state;
+                }
+            });
+            map.addControl(routingControl);
+            (map as mapgl.Map & { _routingControl?: RoutingControl })._routingControl = routingControl;
+
+            map.once('load', async () => {
+                this.isMapLoaded = true;
+                map.setGlobalStateProperty('theme', useAppStore().resolvedTheme);
+            });
+
             map.once('idle', async () => {
                 const displayProjection = await ProfileConfig.get('display_projection');
 
@@ -714,12 +1025,11 @@ export const useMapStore = defineStore('cloudtak', {
                     map.setProjection({ type: "globe" });
                 }
 
-                void this.icons.hydrate()
-                    .catch((error: unknown) => {
-                        console.error('Failed to hydrate iconsets after map idle', error);
-                    });
-
+                this.loadingStage = 'Loading overlays…';
                 await this.initOverlays();
+
+                this.isMapLoadedFully = true;
+                this.loadingStage = '';
 
                 this.timer = setInterval(async () => {
                     if (!this.map) return;
@@ -730,13 +1040,15 @@ export const useMapStore = defineStore('cloudtak', {
             // eslint-disable-next-line @typescript-eslint/ban-ts-comment
             // @ts-ignore Don't remove me unless npm run doc passes
             this._map = markRaw(map);
-            this._draw = new DrawTool(this);
+            this._draw = markRaw(new DrawTool(this));
             this._icons = markRaw(new IconManager(map));
             this._menu = markRaw(new MenuManager(this));
+            this.loadingStage = 'Building menus…';
             await (this._menu as MenuManager).init();
             this._bottomBar = this._bottomBar || markRaw(new BottomBarManager());
 
             // If we missed the initial location update make sure it gets synced
+            this.loadingStage = 'Loading your profile…';
             const loc = await this.worker.profile.location;
             this.location = loc.source;
             this.locationAccuracy = loc.accuracy;
@@ -746,6 +1058,7 @@ export const useMapStore = defineStore('cloudtak', {
                     lat: loc.coordinates[1]
                 };
             }
+            this.syncGeolocateControl();
 
             await this.worker.profile.load();
 
@@ -753,6 +1066,12 @@ export const useMapStore = defineStore('cloudtak', {
             this.zoom = (await ProfileConfig.get('display_zoom'))?.value || 'conditional';
             this.coordFormat = (await ProfileConfig.get('display_coordinate'))?.value || 'dd';
             this.defaultPointType = (await ProfileConfig.get('tak_type'))?.value || 'u-d-p';
+
+            // Colour the self-location puck with the user's TAK team colour to
+            // match the previously rendered self CoT marker.
+            const takGroup = (await ProfileConfig.get('tak_group'))?.value;
+            const puckControl = (this._map as mapgl.Map & { _geolocateControl?: GeolocateControl })._geolocateControl;
+            if (puckControl) puckControl.setTeam(typeof takGroup === 'string' ? takGroup : undefined);
 
             const icon_rotation = (await ProfileConfig.get('display_icon_rotation'))?.value;
 
@@ -768,59 +1087,38 @@ export const useMapStore = defineStore('cloudtak', {
 
             this.isOpen = await this.worker.conn.isOpen;
 
+            this.loadingStage = '';
         },
-        stopGPSWatch: async function(): Promise<void> {
-            if (this.gpsWatchId === null) {
-                return;
-            }
 
-            const watchId = this.gpsWatchId;
-            this.gpsWatchId = null;
-
+        submitLocationHttp: async function(position: Position): Promise<void> {
             try {
-                await clearLocationWatch(watchId);
-            } catch (err) {
-                console.warn('Failed to clear location watch', err);
-            }
-        },
-        startGPSWatch: async function(): Promise<void> {
-            if (!supportsLocationRequests()) return;
+                const body = {
+                    longitude: position.coords.longitude,
+                    latitude: position.coords.latitude,
+                    ...(position.coords.altitude !== null ? { altitude: position.coords.altitude } : {}),
+                    accuracy: position.coords.accuracy,
+                    ...(position.coords.altitudeAccuracy !== null ? { altitudeAccuracy: position.coords.altitudeAccuracy } : {}),
+                    ...(position.coords.speed !== null ? { speed: position.coords.speed } : {}),
+                    ...(position.coords.heading !== null ? { bearing: position.coords.heading } : {}),
+                    time: position.timestamp,
+                };
 
-            await this.stopGPSWatch();
-
-            try {
-                this.gpsWatchId = await watchLocation({
-                    maximumAge: 0,
-                    timeout: 1500,
-                    enableHighAccuracy: true
-                }, (position, err) => {
-                    if (err) {
-                        const geolocationError = err as { code?: number };
-
-                        if (geolocationError.code !== 0) {
-                            console.error('Location Error', err);
-                        }
-
-                        return;
-                    }
-
-                    if (!position || this.manualLocationMode) {
-                        return;
-                    }
-
-                    this.locationAccuracy = position.coords.accuracy;
-
-                    this.channel.postMessage({
-                        type: WorkerMessageType.Profile_Location_Coordinates,
-                        body: {
-                            accuracy: position.coords.accuracy,
-                            altitude: position.coords.altitude,
-                            coordinates: [ position.coords.longitude, position.coords.latitude ]
-                        }
+                // Use CapacitorHttp for native background requests to avoid WebView throttling
+                if (isNativePlatform()) {
+                    const token = await getRuntimeToken();
+                    await CapacitorHttp.put({
+                        url: `${serverUrl}/api/profile/location`,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                        },
+                        data: body
                     });
-                });
+                } else {
+                    await server.PUT('/api/profile/location', { body });
+                }
             } catch (err) {
-                console.error('Failed to start location watch', err);
+                console.warn('Failed to submit background location via HTTP', err);
             }
         },
         initOverlays: async function() {
@@ -834,15 +1132,6 @@ export const useMapStore = defineStore('cloudtak', {
 
             map.on('pitch', () => {
                 this.pitch = map.getPitch()
-            })
-
-            map.on('styleimagemissing', (e) => {
-                void this.icons.onStyleImageMissing(e).catch((error: unknown) => {
-                    console.error('styleimagemissing handler failed', {
-                        imageId: e.id,
-                        error
-                    });
-                });
             })
 
             map.on('moveend', async () => {
@@ -1057,57 +1346,7 @@ export const useMapStore = defineStore('cloudtak', {
             OverlayManager.clearLoaded();
             const profileOverlays = await OverlayManager.list({ localFirst: true });
 
-            const hasBasemap = profileOverlays.some((o: ProfileOverlay) => {
-                return o.mode === 'basemap'
-            });
-
-            // Courtesy add an initial basemap
-            if (!hasBasemap) {
-                let defaultBasemap: Basemap | null = null;
-
-                const basemapCfg = await Config.list(['map::basemap'], { defaults: { 'map::basemap': null } });
-                const basemapId = basemapCfg['map::basemap'] ? Number(basemapCfg['map::basemap']) : null;
-
-                if (basemapId) {
-                    try {
-                        const burl = stdurl(`/api/basemap/${basemapId}`);
-                        defaultBasemap = await std(burl) as Basemap;
-                    } catch (err) {
-                        console.warn('Failed to load configured basemap:', err);
-                    }
-                }
-
-                if (!defaultBasemap) {
-                    const burl = stdurl('/api/basemap');
-                    burl.searchParams.set('type', 'raster');
-                    const basemaps = await std(burl) as APIList<Basemap>;
-
-                    if (basemaps.items.length > 0) {
-                        defaultBasemap = basemaps.items[0];
-                    }
-                }
-
-                if (defaultBasemap) {
-                    // Default basemap creation hits /api/profile/overlay
-                    // (POST + PATCH) and the upstream /tiles endpoint. Any
-                    // of those can transiently fail; treat as non-fatal so
-                    // the rest of map initialization still proceeds.
-                    try {
-                        const basemap = await Overlay.create({
-                            name: defaultBasemap.name,
-                            pos: -1,
-                            type: 'raster',
-                            url: String(stdurl(`/api/basemap/${defaultBasemap.id}/tiles`)),
-                            mode: 'basemap',
-                            mode_id: String(defaultBasemap.id)
-                        });
-
-                        OverlayManager.appendLoaded(basemap);
-                    } catch (err) {
-                        console.error('Failed to create default basemap overlay:', err);
-                    }
-                }
-            }
+            await FeatureVisibility.load();
 
             // Parallelize Overlay Creation. Use allSettled so a single
             // overlay whose /tiles endpoint fails (404, network blip,
@@ -1147,6 +1386,8 @@ export const useMapStore = defineStore('cloudtak', {
                 type: 'geojson',
             }));
 
+            await FeatureVisibility.apply();
+
             // Data Syncs are specially loaded as they are dynamic
             // Mission loading is fire-and-forget so logs/changes/features
             // do not block the rest of map initialization. Each overlay is
@@ -1161,10 +1402,6 @@ export const useMapStore = defineStore('cloudtak', {
 
                 this.loadMission(overlay.mode_id!, {
                     reload: true
-                }).then(async (sub) => {
-                    if (sub && overlay.active) {
-                        await this.makeActiveMission(sub);
-                    }
                 }).catch((err) => {
                     console.error('Failed to load Mission', err);
                     overlay._error = err instanceof Error ? err : new Error(String(err));
@@ -1173,8 +1410,93 @@ export const useMapStore = defineStore('cloudtak', {
                 });
             }
 
-            this.isLoaded = true;
+            this.isMapLoaded = true;
 
+            // Map is initialized & loaded - kick off a full data type
+            // synchronization with the TAK Server in the Atlas worker
+            this.worker.sync.start()
+                .catch((err: unknown) => {
+                    console.error('Failed to perform full sync after map load', err);
+                });
+
+            await this.updateAttribution();
+        },
+
+        /**
+         * Reconcile the loaded map overlays against the local overlay
+         * database after a sync triggered by another of the user's connected
+         * clients. Adds newly created overlays, removes deleted ones and
+         * applies visibility/opacity changes. Changes are applied to the map
+         * directly (not via Overlay.update/save) so the reconcile does not
+         * PATCH the API and echo the event back to the originating client.
+         */
+        reconcileOverlays: async function(): Promise<void> {
+            if (!this.isMapLoaded) return;
+
+            const desired = await OverlayManager.list({ localFirst: true });
+            const desiredIds = new Set(desired.map((item) => item.id));
+
+            // Remove overlays deleted by the other client - the API record is
+            // already gone so only tear down the local map layers
+            for (const overlay of [...OverlayManager.loaded]) {
+                if (overlay._internal) continue;
+                if (desiredIds.has(overlay.id)) continue;
+
+                const pos = OverlayManager.loaded.indexOf(overlay);
+                if (pos !== -1) OverlayManager.loaded.splice(pos, 1);
+
+                if (overlay._timer) {
+                    clearInterval(overlay._timer);
+                    overlay._timer = null;
+                }
+
+                overlay._destroyed = true;
+                overlay.remove();
+            }
+
+            for (const item of desired) {
+                const loaded = OverlayManager.loadedFrom(item.id);
+
+                if (loaded) {
+                    if (item.opacity !== loaded.opacity) {
+                        loaded.opacity = item.opacity;
+                        for (const l of loaded.styles) {
+                            if (loaded.type === 'raster') {
+                                this.map.setPaintProperty(l.id, 'raster-opacity', Number(loaded.opacity));
+                            }
+                        }
+                    }
+
+                    if (item.visible !== loaded.visible) {
+                        loaded.visible = item.visible;
+                        for (const l of loaded.styles) {
+                            if (l.type === 'background') continue;
+                            this.map.setLayoutProperty(l.id, 'visibility', loaded.visible ? 'visible' : 'none');
+                        }
+                    }
+                } else {
+                    try {
+                        const overlay = await Overlay.create(item as ProfileOverlay, { skipSave: true });
+                        OverlayManager.appendLoaded(overlay);
+
+                        if (overlay.mode === 'mission' && overlay.mode_id) {
+                            overlay.loading = true;
+                            this.loadMission(overlay.mode_id, { reload: true })
+                                .catch((err) => {
+                                    console.error('Failed to load Mission after sync', err);
+                                    overlay._error = err instanceof Error ? err : new Error(String(err));
+                                })
+                                .finally(() => {
+                                    overlay.loading = false;
+                                });
+                        }
+                    } catch (err) {
+                        console.error(`Failed to load synced overlay ${item.id} (${item.name}):`, err);
+                    }
+                }
+            }
+
+            this.updateBackground();
             await this.updateAttribution();
         },
         updateIconRotation: function(enabled: boolean): void {
@@ -1193,7 +1515,7 @@ export const useMapStore = defineStore('cloudtak', {
                             // When rotation enabled, only show course arrows for grouped features
                             this.map.setFilter(courseLayerId, [
                                 'all',
-                                ['==', '$type', 'Point'],
+                                ['==', ['geometry-type'], 'Point'],
                                 ['has', 'course'],
                                 ['has', 'group']
                             ]);
@@ -1201,7 +1523,7 @@ export const useMapStore = defineStore('cloudtak', {
                             // When rotation disabled, show course arrows for all features with course
                             this.map.setFilter(courseLayerId, [
                                 'all',
-                                ['==', '$type', 'Point'],
+                                ['==', ['geometry-type'], 'Point'],
                                 ['has', 'course']
                             ]);
                         }
@@ -1233,11 +1555,38 @@ export const useMapStore = defineStore('cloudtak', {
                 mapWithControl._scaleControl = scaleControl;
             }
         },
+        updateBackground: function(): void {
+            if (!this._map) return;
+
+            // A visible basemap style may carry its own background layer -
+            // its paint color takes over the shared CloudTAK background
+            // layer. Basemaps are checked bottom-up; the base-most one wins.
+            // Overlays never control the base color, and when no visible
+            // basemap provides a background the themed default is restored.
+            let color: PropertyValueSpecification<string> = 'hsl(47, 26%, 88%)';
+
+            for (const overlay of OverlayManager.visibleBasemaps()) {
+                const bg = overlay.styles.find(
+                    (l): l is Extract<LayerSpecification, { type: 'background' }> => l.type === 'background'
+                );
+
+                const bgColor = bg?.paint?.['background-color'];
+                if (bgColor !== undefined) {
+                    color = bgColor;
+                    break;
+                }
+            }
+
+            this.map.setPaintProperty('background', 'background-color', color);
+        },
         updateAttribution: async function(): Promise<void> {
             const attributionPromises = OverlayManager.visibleBasemaps().map(async (overlay) => {
                     try {
-                        const basemap = await std(`/api/basemap/${overlay.mode_id}`) as { attribution?: string };
-                        return basemap.attribution;
+                        const basemapRes = await server.GET('/api/basemap/{:basemapid}', {
+                            params: { path: { ':basemapid': Number(overlay.mode_id) } }
+                        });
+                        if (basemapRes.error) return null;
+                        return (basemapRes.data as Basemap).attribution;
                     } catch (err) {
                         console.warn('Failed to load basemap attribution:', err);
                         return null;

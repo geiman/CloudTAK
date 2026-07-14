@@ -1,8 +1,8 @@
 <template>
     <div
         class='page h-100'
-        :class='resolvedTheme === "dark" ? "cloudtak-gradient" : "cloudtak-gradient-light"'
-        :data-bs-theme='resolvedTheme'
+        :class='appStore.resolvedTheme === "dark" ? "cloudtak-gradient" : "cloudtak-gradient-light"'
+        :data-bs-theme='appStore.resolvedTheme'
         data-bs-theme-base='neutral'
         data-bs-theme-primary='blue'
     >
@@ -31,6 +31,31 @@
                 @click='updateAvailable = false'
             />
         </div>
+        <!-- Session expiry warning banner -->
+        <div
+            v-if='sessionWarningShown'
+            class='d-flex align-items-center justify-content-center flex-wrap gap-2 px-3 py-2'
+            style='background: rgba(20,20,20,0.88); backdrop-filter: blur(6px);'
+        >
+            <IconClock
+                size='16'
+                class='text-warning flex-shrink-0'
+            />
+            <span class='text-white small'>
+                Your session expires in <span v-text='sessionRemainingLabel' /> &mdash; sign in again to stay connected
+            </span>
+            <button
+                class='btn btn-sm btn-warning py-0'
+                @click='appStore.sessionExpired'
+            >
+                Sign In Again
+            </button>
+            <button
+                class='btn-close btn-close-white'
+                style='font-size: 0.65rem;'
+                @click='sessionWarningDismissed = true'
+            />
+        </div>
         <header
             v-if='navShown'
             class='navbar navbar-expand-md d-print-none'
@@ -39,7 +64,7 @@
                 <div class='col-auto'>
                     <img
                         alt='Agency Logo'
-                        :src='loginLogo || "/CloudTAKLogo.svg"'
+                        :src='appStore.loginLogo || "/CloudTAKLogo.svg"'
                         class='cursor-pointer'
                         draggable='false'
                         height='50'
@@ -50,7 +75,7 @@
                 <div class='col mx-2'>
                     <div
                         class='page-pretitle'
-                        v-text='loginName || ""'
+                        v-text='appStore.loginName || ""'
                     />
                     <h2 class='page-title'>
                         CloudTAK
@@ -58,7 +83,7 @@
                 </div>
 
                 <div
-                    v-if='user'
+                    v-if='appStore.user'
                     class='ms-auto'
                 >
                     <div class='btn-list'>
@@ -120,7 +145,7 @@
                                 </div>
                                 <div
                                     class='d-flex dropdown-item cursor-pointer cloudtak-hover'
-                                    @click='logout'
+                                    @click='appStore.logout'
                                 >
                                     <IconLogout
                                         size='32'
@@ -137,39 +162,41 @@
         </header>
 
         <Loading
-            v-if='!mounted || (loading && !route.path.includes("configure") && !route.path.includes("login"))'
+            v-if='!mounted || (appStore.loading && !route.path.includes("configure") && !route.path.includes("login"))'
+            :stage='appStore.loadingStage'
         />
         <router-view
             v-else
             @err='error = $event'
-            @login='refreshLogin'
+            @login='appStore.refreshLogin'
         />
         <TablerError
             v-if='error'
             :err='error'
             @close='error = undefined'
         />
-        <MissionInviteModal
-            v-if='inviteMission'
-            :mission='inviteMission'
-            @close='inviteMission = undefined'
-        />
         <ChannelChangeModal
-            v-if='channelChange'
-            @close='channelChange = false'
+            v-if='mapStore.channelChange'
+            @close='mapStore.channelChange = false'
+        />
+        <NotificationToast
+            v-for='n in toastNotifications'
+            :id='n.id'
+            :key='n.id'
+            @close='TAKNotification.update(n.id, { toast: false })'
         />
     </div>
 </template>
 
 <script setup lang='ts'>
 import { ref, computed, onErrorCaptured, onMounted, onUnmounted } from 'vue'
-import { liveQuery, type Subscription } from 'dexie';
-import { useRouter, useRoute } from 'vue-router';
-import Config from './base/config.ts';
-import ServerManager from './base/server.ts';
+import { liveQuery } from 'dexie';
+import { isTransientDbError } from './database.ts';
+import { useRoute, useRouter } from 'vue-router';
 import '@tabler/core/dist/js/tabler.min.js';
 import '@tabler/core/dist/css/tabler.min.css';
 import {
+    IconClock,
     IconCode,
     IconLogout,
     IconUser,
@@ -177,109 +204,92 @@ import {
     IconSettings,
     IconRefresh,
 } from '@tabler/icons-vue';
-import { Preferences } from '@capacitor/preferences';
-import { StatusBar } from '@capacitor/status-bar';
-import KV from './base/kv.ts';
 import Loading from './components/Loading.vue';
 import {
     TablerBadge,
     TablerError
 } from '@tak-ps/vue-tabler';
-import MissionInviteModal from './components/CloudTAK/Menu/Mission/MissionInviteModal.vue';
 import ChannelChangeModal from './components/CloudTAK/Menu/ChannelChangeModal.vue';
-import { WorkerMessageType } from './base/events.ts';
-import type { WorkerMessage } from './base/events.ts';
-import { isNativePlatform, supportsServiceWorker } from './base/capacitor.ts';
-import { db } from './database.ts';
-import { getPageServiceWorkerBuildId, markUpdateRequestedByThisTab } from './base/service-worker.ts';
+import NotificationToast from './components/CloudTAK/util/NotificationToast.vue';
+import TAKNotification_ from './base/notification.ts';
+const TAKNotification = TAKNotification_;
+import { supportsServiceWorker } from './base/capacitor.ts';
+import { useObservable } from '@vueuse/rxjs';
+import { from } from 'rxjs';
+import { applyServiceWorkerUpdate } from './base/service-worker.ts';
 
+import { useAppStore } from './stores/app.ts';
 import { useMapStore } from './stores/map.ts';
+import { useDeviceStore } from './stores/device.ts';
 
-const router = useRouter();
 const route = useRoute();
+const router = useRouter();
 
+const appStore = useAppStore();
 const mapStore = useMapStore();
+const deviceStore = useDeviceStore();
 
-const loginLogo = ref<string>();
-const loginName = ref<string>();
+let removeNotificationAction: (() => void) | undefined;
 
+const toastNotifications = useObservable(
+    from(liveQuery(async () => {
+        return (await TAKNotification.list()).filter((n) => n.toast && !n.read);
+    }))
+);
 const updateAvailable = ref(false);
 const pendingRegistration = ref<ServiceWorkerRegistration | null>(null);
 
 const applyUpdate = () => {
-    const waiting = pendingRegistration.value?.waiting;
-    if (waiting) {
-        // Tell service-worker.ts that THIS tab initiated the update, so its
-        // controllerchange handler auto-reloads us. Other tabs will see the
-        // same controllerchange, not find this flag, and surface their own
-        // prompt instead of silently reloading.
-        markUpdateRequestedByThisTab();
-        waiting.postMessage('SKIP_WAITING');
-    } else {
-        window.location.reload();
-    }
+    applyServiceWorkerUpdate(pendingRegistration.value);
 };
 
 const onSwUpdateAvailable = (e: Event) => {
-    const detail = (e as CustomEvent).detail;
-    pendingRegistration.value = detail.registration;
+    pendingRegistration.value = (e as CustomEvent).detail.registration;
     updateAvailable.value = true;
 };
 
-type DisplayStyleMode = 'System Default' | 'Light' | 'Dark';
-type ResolvedThemeMode = 'light' | 'dark';
-
-const loading = ref(true);
-const resolvedTheme = ref<ResolvedThemeMode>('dark');
-const displayStyle = ref<DisplayStyleMode>('System Default');
-const inviteMission = ref<{
-    name: string;
-    guid: string;
-    token: string;
-    authorUid: string;
-    tool: string;
-    type: string;
-} | undefined>();
-const channelChange = ref(false);
 const mounted = ref(false);
-const user = ref(false);
 const error = ref<Error | undefined>();
 
-let displayStyleSub: Subscription | undefined;
-const systemThemeQuery = typeof window !== 'undefined'
-    ? window.matchMedia('(prefers-color-scheme: dark)')
-    : undefined;
+const SESSION_WARNING_MS = 30 * 60 * 1000;
+const SESSION_CHECK_INTERVAL_MS = 30 * 1000;
 
-function resolveTheme(style: string | undefined): ResolvedThemeMode {
-    if (style === 'Light') return 'light';
-    if (style === 'Dark') return 'dark';
-    return systemThemeQuery?.matches ? 'dark' : 'light';
-}
+const sessionRemainingMs = ref<number | null>(null);
+const sessionWarningDismissed = ref(false);
 
-function applyTheme(style: string | undefined = displayStyle.value): void {
-    const theme = resolveTheme(style);
-    resolvedTheme.value = theme;
+let sessionExpiryTimer: ReturnType<typeof setInterval> | undefined;
+let sessionExpiredHandled = false;
 
-    document.documentElement.setAttribute('data-bs-theme', theme);
-    document.documentElement.setAttribute('data-bs-theme-base', 'neutral');
-    document.documentElement.setAttribute('data-bs-theme-primary', 'blue');
-}
+const sessionWarningShown = computed<boolean>(() => {
+    return !sessionWarningDismissed.value
+        && sessionRemainingMs.value !== null
+        && sessionRemainingMs.value > 0
+        && sessionRemainingMs.value <= SESSION_WARNING_MS
+        && route.name !== 'login';
+});
 
-function onSystemThemeChange(): void {
-    if (displayStyle.value === 'System Default') {
-        applyTheme(displayStyle.value);
-    }
-}
+const sessionRemainingLabel = computed<string>(() => {
+    if (sessionRemainingMs.value === null) return '';
+    const minutes = Math.ceil(sessionRemainingMs.value / 60000);
+    return minutes <= 1 ? 'less than a minute' : `${minutes} minutes`;
+});
 
-async function configureStatusBar(): Promise<void> {
-    if (!isNativePlatform()) {
+function checkSessionExpiry() {
+    if (!appStore.user || !appStore.tokenExpiry) {
+        sessionRemainingMs.value = null;
+        sessionExpiredHandled = false;
         return;
     }
 
-    try {
-        await StatusBar.setOverlaysWebView({ overlay: false });
-    } catch (err) {
-        console.warn('Failed to configure native status bar overlay', err);
+    const remaining = appStore.tokenExpiry - Date.now();
+    sessionRemainingMs.value = remaining;
+
+    if (remaining > SESSION_WARNING_MS) {
+        // A fresh token was issued - re-arm the dismissed warning
+        sessionWarningDismissed.value = false;
+    } else if (remaining <= 0 && !sessionExpiredHandled) {
+        sessionExpiredHandled = true;
+        void appStore.sessionExpired();
     }
 }
 
@@ -295,221 +305,79 @@ const navShown = computed<boolean>(() => {
 });
 
 onErrorCaptured((err) => {
-    if (!(err instanceof Error)) {
-        error.value = new Error(String(err));
-    }
+    const e = err instanceof Error ? err : new Error(String(err));
 
-    const e = err as Error;
+    if (isTransientDbError(e)) {
+        return false;
+    }
 
     if (e.message === '401') {
         // Popup Modal if reauthenticating vs initial login
 
         if (route.name !== 'login') {
-            routeLogin();
+            void appStore.routeLogin();
         }
     } else if (String(e) === 'Error: Authentication Required') {
-        routeLogin();
+        void appStore.routeLogin();
     } else {
         error.value = e;
     }
 });
 
 onMounted(async () => {
+    // Always clear the loading splash, even if initialization throws (e.g. a
+    // request times out on a native cold-start). Otherwise the app can get
+    // permanently stuck on the loading component before the login page.
+
     // Register before any awaits so early promise rejections are captured
     window.addEventListener('unhandledrejection', (e) => {
-        error.value = e.reason instanceof Error ? e.reason : new Error(String(e.reason));
+        const err = e.reason instanceof Error ? e.reason : new Error(String(e.reason));
+        if (isTransientDbError(err)) {
+            return;
+        }
+        error.value = err;
     });
 
     if (supportsServiceWorker()) {
         window.addEventListener('sw:update-available', onSwUpdateAvailable);
     }
 
-    if (!isNativePlatform()) {
-        await KV.generate('serverUrl', window.location.origin);
-        await Preferences.set({ key: 'serverUrl', value: window.location.origin });
-    } else {
-        const { value } = await Preferences.get({ key: 'serverUrl' });
-        const serverUrl = value?.trim();
-
-        if (!serverUrl) {
-            window.location.href = '/setup.html';
-            return;
-        } else {
-            await KV.generate('serverUrl', serverUrl);
+    // Deep link when the user taps a push notification (path from its payload)
+    removeNotificationAction = deviceStore.onNotificationAction((data) => {
+        if (data && typeof data.url === 'string' && data.url.startsWith('/')) {
+            router.push(data.url).catch((err: unknown) => {
+                console.error('Failed to open push notification link', err);
+            });
         }
-    }
-
-    await configureStatusBar();
-
-    applyTheme();
-
-    displayStyleSub = liveQuery(() => db.profile.get('display_style')).subscribe((entry) => {
-        const style = entry?.value;
-        displayStyle.value = style === 'Light' || style === 'Dark' ? style : 'System Default';
-        applyTheme(displayStyle.value);
     });
 
-    systemThemeQuery?.addEventListener('change', onSystemThemeChange);
-
-    let status;
-
-    const username = await db.profile.get('username');
-
-    if (username) {
-        status = 'configured';
-    } else {
-        try {
-            const server = await ServerManager.get();
-            status = server.status;
-        } catch (err) {
-            console.warn('Server Error (Likely the server is in a configured state)', err);
-            status = 'configured';
-        }
+    try {
+        await appStore.bootstrap();
+    } catch (err) {
+        error.value = err instanceof Error ? err : new Error(String(err));
+    } finally {
+        appStore.loading = false;
+        mounted.value = true;
     }
 
-    const config = await Config.list([
-        'login::name',
-        'login::logo',
-        'login::brand::enabled',
-        'login::brand::logo',
-        'login::background::enabled',
-        'login::background::color',
-        'login::signup',
-        'login::forgot',
-        'login::username'
-    ]);
-
-    loginLogo.value = config['login::logo'];
-
-    loginName.value = config['login::name'];
-
-    const channel = new BroadcastChannel('cloudtak');
-    channel.onmessage = (event: MessageEvent<WorkerMessage>) => {
-        const msg = event.data;
-        if (msg && msg.type === WorkerMessageType.Mission_Invite) {
-            inviteMission.value = msg.body;
-        } else if (msg && msg.type === WorkerMessageType.Channel_Change) {
-            channelChange.value = true;
-        }
-    };
-
-    if (status === 'unconfigured') {
-        await Preferences.remove({ key: 'token' });
-        router.push("/configure");
-    } else {
-        const { value: token } = await Preferences.get({ key: 'token' });
-
-        if (token) {
-            await refreshLogin();
-        } else if (route.name !== 'login') {
-            routeLogin();
-        }
-    }
-
-    if (supportsServiceWorker()) {
-        navigator.serviceWorker.getRegistrations().then(async (registrations) => {
-            const currentBuildId = getPageServiceWorkerBuildId();
-
-            for (const registration of registrations) {
-                registration.update().catch((err) => {
-                    console.debug('Failed to update ServiceWorker (likely unregistered):', err);
-                });
-            }
-
-            try {
-                for (const reg of registrations) {
-                    // Prefer a waiting worker (new version ready to activate)
-                    if (reg.waiting) {
-                        pendingRegistration.value = reg;
-                        updateAvailable.value = true;
-                        break;
-                    }
-
-                    // Fall back to detecting an active SW whose build differs from
-                    // the currently loaded page (e.g. another tab triggered activation).
-                    //
-                    // IMPORTANT: only compare build fingerprints, not the `?v=`
-                    // package.json version param. The `?v=` value is whatever
-                    // `package.json` happened to be when the *previous* page
-                    // called `register()` for this worker, not what is actually
-                    // deployed. After a SKIP_WAITING + auto-reload, the freshly
-                    // loaded page imports a *newer* `package.json` than the
-                    // value baked into `reg.active.scriptURL`, so a version
-                    // comparison spuriously re-shows the update banner with no
-                    // pending worker present. The build fingerprint is derived
-                    // from deployed asset filenames and is the source of truth.
-                    const worker = reg.active;
-                    if (worker?.scriptURL) {
-                        const u = new URL(worker.scriptURL);
-                        const swBuild = u.searchParams.get('build');
-                        if (currentBuildId && swBuild && swBuild !== currentBuildId) {
-                            updateAvailable.value = true;
-                        }
-                        break;
-                    }
-                }
-            } catch { /* ignore */ }
-        });
-    }
-
-    loading.value = false;
-    mounted.value = true;
+    checkSessionExpiry();
+    sessionExpiryTimer = setInterval(checkSessionExpiry, SESSION_CHECK_INTERVAL_MS);
 });
 
 onUnmounted(() => {
     window.removeEventListener('sw:update-available', onSwUpdateAvailable);
-    systemThemeQuery?.removeEventListener('change', onSystemThemeChange);
-    displayStyleSub?.unsubscribe();
+    if (removeNotificationAction) removeNotificationAction();
+
+    if (sessionExpiryTimer !== undefined) {
+        clearInterval(sessionExpiryTimer);
+        sessionExpiryTimer = undefined;
+    }
+
+    appStore.teardown();
 });
-
-async function logout() {
-    user.value = false;
-    mapStore.tokenExpiry = null;
-    await Preferences.remove({ key: 'token' });
-
-    window.location.href = '/login';
-}
 
 function external(url: string) {
     window.location.href = url;
-}
-
-function routeLogin() {
-    if (router.hasRoute('login')) {
-        router.push(`/login?redirect=${encodeURIComponent(window.location.pathname)}`);
-    } else {
-        window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
-    }
-}
-
-async function refreshLogin() {
-    loading.value = true;
-
-    await checkToken();
-
-    loading.value = false;
-}
-
-async function checkToken() {
-    try {
-        const { value: token } = await Preferences.get({ key: 'token' });
-        if (!token) throw new Error('No token found');
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        const expirationDate = payload.exp * 1000; // Convert to milliseconds
-        mapStore.tokenExpiry = expirationDate;
-        const now = Date.now();
-
-        if (now > expirationDate) {
-            throw new Error('Token expired');
-        }
-    } catch (err) {
-        console.error(err);
-        mapStore.tokenExpiry = null;
-
-        logout();
-    }
-
-    return true;
 }
 </script>
 
@@ -584,6 +452,39 @@ html[data-bs-theme='light'] .cloudtak-accent .text-white-50:not(.badge):not(.btn
 
 .bg-child {
     background-color: $cloudtak-child !important;
+}
+
+/*
+ * Shared surface for panels floating above the map (navigation banner,
+ * map controls, draggable floating panes). Sets --tblr-border-color so
+ * Bootstrap border utilities inside the panel pick up the same subtle
+ * separator color.
+ */
+.cloudtak-panel {
+    border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
+html[data-bs-theme='dark'] .cloudtak-panel {
+    --tblr-border-color: rgba(255, 255, 255, 0.14);
+    background-color: rgba(40, 53, 71, 0.95);
+    color: rgba(255, 255, 255, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+html[data-bs-theme='light'] .cloudtak-panel {
+    --tblr-border-color: rgba(0, 0, 0, 0.12);
+    background-color: rgba(255, 255, 255, 0.95);
+    color: var(--tblr-body-color);
+    border: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+html[data-bs-theme='light'] .cloudtak-panel .text-white:not(.badge):not(.btn):not([class*='bg-']) {
+    color: var(--tblr-body-color) !important;
+}
+
+html[data-bs-theme='light'] .cloudtak-panel .text-white-50:not(.badge):not(.btn):not([class*='bg-']) {
+    color: var(--tblr-secondary-color) !important;
 }
 
 .cloudtak-hover {

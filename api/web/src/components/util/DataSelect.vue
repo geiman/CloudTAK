@@ -49,7 +49,7 @@
                                             v-for='d of data.items'
                                             :key='d.id'
                                             class='cursor-pointer'
-                                            @click='update(d)'
+                                            @click.stop='update(d)'
                                         >
                                             <td>
                                                 <div class='d-flex align-items-center'>
@@ -158,7 +158,7 @@ async function listData() {
             },
             query: {
                 filter: '',
-                limit: 1000,
+                limit: 100,
                 page: 0,
                 order: 'asc',
                 sort: 'name'

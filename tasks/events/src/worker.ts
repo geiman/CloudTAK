@@ -14,7 +14,7 @@ import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { pipeline } from 'node:stream/promises';
 import { CoTParser, DataPackage, Iconset, Basemap } from '@tak-ps/node-cot';
 import { createImportResult } from './api.ts';
-import { fetch } from 'undici';
+import { fetch } from '@tak-ps/node-safeurl';
 
 export default class Worker extends EventEmitter {
     msg: Message;
@@ -133,6 +133,7 @@ export default class Worker extends EventEmitter {
             const url = new URL(`/api/profile/feature`, this.msg.api);
             url.searchParams.append('broadcast', String(true));
             const res = await fetch(url, {
+                safeUrlAllow: [this.msg.api],
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${jwt.sign({ access: 'user', email: this.msg.job.username }, this.msg.secret)}`,
@@ -170,12 +171,18 @@ export default class Worker extends EventEmitter {
                 if (base === 'MANIFEST.xml') continue;
                 if (['.png', '.xml'].includes(extLower)) continue;
 
+                const raw = path.resolve(pkg.path, './raw/', file);
+
+                if (['.zip', '.kmz'].includes(extLower) && !(await isZipFile(raw))) {
+                    throw new Error(`Package content '${base}' is not a valid ZIP archive`);
+                }
+
                 await this.processFile({
                     id: randomUUID(),
                     tmpdir: pkg.path,
                     ext: extLower,
                     name: base,
-                    raw: path.resolve(pkg.path, './raw/', file),
+                    raw,
                 });
             }
         }
@@ -226,6 +233,7 @@ export default class Worker extends EventEmitter {
         await geouploader.done();
 
         const res = await fetch(new URL(`/api/profile/asset`, this.msg.api), {
+            safeUrlAllow: [this.msg.api],
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -285,6 +293,7 @@ export default class Worker extends EventEmitter {
             const iconset = await Iconset.parse(xml);
 
             const check = await fetch(new URL(`/api/iconset/${iconset.uid}`, this.msg.api), {
+                safeUrlAllow: [this.msg.api],
                 method: 'GET',
                 headers: {
                     Authorization: `Bearer ${jwt.sign({ access: 'user', email: this.msg.job.username }, this.msg.secret)}`,
@@ -296,6 +305,7 @@ export default class Worker extends EventEmitter {
             }
 
             const iconset_req = await fetch(new URL(`/api/iconset`, this.msg.api), {
+                safeUrlAllow: [this.msg.api],
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -340,6 +350,7 @@ export default class Worker extends EventEmitter {
                     }
 
                     const icon_req = await fetch(new URL(`/api/iconset/${iconset.uid}/icon`, this.msg.api), {
+                        safeUrlAllow: [this.msg.api],
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -370,6 +381,7 @@ export default class Worker extends EventEmitter {
             const format = this.normalizeBasemapFormat(json.tileType);
 
             const basemap_req = await fetch(new URL(`/api/basemap`, this.msg.api), {
+                safeUrlAllow: [this.msg.api],
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
