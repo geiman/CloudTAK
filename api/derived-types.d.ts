@@ -2196,9 +2196,15 @@ export interface paths {
                             "agol::client_id"?: string;
                             /** @description AGOL OAuth2 Client Secret */
                             "agol::client_secret"?: string;
-                            /** @description Base URL for Media Service */
-                            "media::url"?: string;
-                            "media::proxy::allow"?: string[];
+                        /** @description Legacy base URL for Media Service */
+                        "media::url"?: string;
+                        /** @description Internal base URL for Media Service API calls */
+                        "media::internal_url"?: string;
+                        /** @description Public base URL for Media Service playback and metadata */
+                        "media::public_url"?: string;
+                        "media::proxy::allow"?: string[];
+                        /** @description Dedicated non-admin CloudTAK profile username used for legacy TAK video publishing */
+                        "video::legacy_uploader_username"?: string;
                             /** @description COTURN Server URL */
                             "coturn::url"?: string;
                             /** @description COTURN Server Secret */
@@ -2215,6 +2221,12 @@ export interface paths {
                             "map::basemap"?: null | number;
                             /** @description Default Terrain (raster-dem) Basemap for New Users */
                             "map::terrain"?: null | number;
+                            /** @description Maximum allowed size in MiB for a single imported GroundOverlay image */
+                            "map::groundoverlay::max_size_mb"?: number;
+                            /** @description Maximum allowed total GroundOverlay download budget in MiB per imported asset */
+                            "map::groundoverlay::max_total_size_mb"?: number;
+                            /** @description Maximum number of GroundOverlay images allowed per imported asset */
+                            "map::groundoverlay::max_count"?: number;
                             "display::stale"?: "Immediate" | "10 Minutes" | "30 Minutes" | "1 Hour" | "Never";
                             "display::distance"?: "meter" | "kilometer" | "mile";
                             "display::elevation"?: "meter" | "feet";
@@ -2436,9 +2448,15 @@ export interface paths {
                         "agol::client_id"?: string;
                         /** @description AGOL OAuth2 Client Secret */
                         "agol::client_secret"?: string;
-                        /** @description Base URL for Media Service */
-                        "media::url"?: string;
-                        "media::proxy::allow"?: string[];
+                            /** @description Legacy base URL for Media Service */
+                            "media::url"?: string;
+                            /** @description Internal base URL for Media Service API calls */
+                            "media::internal_url"?: string;
+                            /** @description Public base URL for Media Service playback and metadata */
+                            "media::public_url"?: string;
+                            "media::proxy::allow"?: string[];
+                            /** @description Dedicated non-admin CloudTAK profile username used for legacy TAK video publishing */
+                            "video::legacy_uploader_username"?: string;
                         /** @description COTURN Server URL */
                         "coturn::url"?: string;
                         /** @description COTURN Server Secret */
@@ -2455,6 +2473,12 @@ export interface paths {
                         "map::basemap"?: null | number;
                         /** @description Default Terrain (raster-dem) Basemap for New Users */
                         "map::terrain"?: null | number;
+                        /** @description Maximum allowed size in MiB for a single imported GroundOverlay image */
+                        "map::groundoverlay::max_size_mb"?: number;
+                        /** @description Maximum allowed total GroundOverlay download budget in MiB per imported asset */
+                        "map::groundoverlay::max_total_size_mb"?: number;
+                        /** @description Maximum number of GroundOverlay images allowed per imported asset */
+                        "map::groundoverlay::max_count"?: number;
                         "display::stale"?: "Immediate" | "10 Minutes" | "30 Minutes" | "1 Hour" | "Never";
                         "display::distance"?: "meter" | "kilometer" | "mile";
                         "display::elevation"?: "meter" | "feet";
@@ -2611,9 +2635,15 @@ export interface paths {
                             "agol::client_id"?: string;
                             /** @description AGOL OAuth2 Client Secret */
                             "agol::client_secret"?: string;
-                            /** @description Base URL for Media Service */
+                            /** @description Legacy base URL for Media Service */
                             "media::url"?: string;
+                            /** @description Internal base URL for Media Service API calls */
+                            "media::internal_url"?: string;
+                            /** @description Public base URL for Media Service playback and metadata */
+                            "media::public_url"?: string;
                             "media::proxy::allow"?: string[];
+                            /** @description Dedicated non-admin CloudTAK profile username used for legacy TAK video publishing */
+                            "video::legacy_uploader_username"?: string;
                             /** @description COTURN Server URL */
                             "coturn::url"?: string;
                             /** @description COTURN Server Secret */
@@ -2628,9 +2658,15 @@ export interface paths {
                             "map::zoom"?: number;
                             /** @description Default Basemap for New Users */
                             "map::basemap"?: null | number;
-                            /** @description Default Terrain (raster-dem) Basemap for New Users */
-                            "map::terrain"?: null | number;
-                            "display::stale"?: "Immediate" | "10 Minutes" | "30 Minutes" | "1 Hour" | "Never";
+                        /** @description Default Terrain (raster-dem) Basemap for New Users */
+                        "map::terrain"?: null | number;
+                        /** @description Maximum allowed size in MiB for a single imported GroundOverlay image */
+                        "map::groundoverlay::max_size_mb"?: number;
+                        /** @description Maximum allowed total GroundOverlay download budget in MiB per imported asset */
+                        "map::groundoverlay::max_total_size_mb"?: number;
+                        /** @description Maximum number of GroundOverlay images allowed per imported asset */
+                        "map::groundoverlay::max_count"?: number;
+                        "display::stale"?: "Immediate" | "10 Minutes" | "30 Minutes" | "1 Hour" | "Never";
                             "display::distance"?: "meter" | "kilometer" | "mile";
                             "display::elevation"?: "meter" | "feet";
                             "display::speed"?: "m/s" | "km/h" | "mi/h";
@@ -14796,8 +14832,9 @@ export interface paths {
                                 source_id: string | null;
                                 source_type: "unknown" | "fixed" | "vehicle" | "screenshare" | "personal" | "rotor" | "fixedwing" | "uas-rotor" | "uas-fixedwing";
                                 source_model: string;
-                                publish: boolean;
-                                recording: boolean;
+                            publish: boolean;
+                            publish_protocol: "hls" | "rtsp" | "rtmp" | "srt";
+                            recording: boolean;
                                 share: boolean;
                                 ephemeral: boolean;
                                 channel: null | string;
@@ -14911,6 +14948,7 @@ export interface paths {
                          * @default false
                          */
                         publish: boolean;
+                        publish_protocol: "hls" | "rtsp" | "rtmp" | "srt";
                         /**
                          * @description Allow other users to manage lease if they are also members of the channel
                          * @default false
@@ -14948,8 +14986,9 @@ export interface paths {
                                 source_id: string | null;
                                 source_type: "unknown" | "fixed" | "vehicle" | "screenshare" | "personal" | "rotor" | "fixedwing" | "uas-rotor" | "uas-fixedwing";
                                 source_model: string;
-                                publish: boolean;
-                                recording: boolean;
+                            publish: boolean;
+                            publish_protocol: "hls" | "rtsp" | "rtmp" | "srt";
+                            recording: boolean;
                                 share: boolean;
                                 ephemeral: boolean;
                                 channel: null | string;
@@ -15181,6 +15220,7 @@ export interface paths {
                                 source_type: "unknown" | "fixed" | "vehicle" | "screenshare" | "personal" | "rotor" | "fixedwing" | "uas-rotor" | "uas-fixedwing";
                                 source_model: string;
                                 publish: boolean;
+                                publish_protocol: "hls" | "rtsp" | "rtmp" | "srt";
                                 recording: boolean;
                                 share: boolean;
                                 ephemeral: boolean;
@@ -15410,6 +15450,7 @@ export interface paths {
                         recording?: boolean;
                         /** @description Publish stream URL to TAK Server Video Manager */
                         publish?: boolean;
+                        publish_protocol?: "hls" | "rtsp" | "rtmp" | "srt";
                         proxy?: string;
                     };
                 };
@@ -15434,6 +15475,7 @@ export interface paths {
                                 source_type: "unknown" | "fixed" | "vehicle" | "screenshare" | "personal" | "rotor" | "fixedwing" | "uas-rotor" | "uas-fixedwing";
                                 source_model: string;
                                 publish: boolean;
+                                publish_protocol: "hls" | "rtsp" | "rtmp" | "srt";
                                 recording: boolean;
                                 share: boolean;
                                 ephemeral: boolean;
@@ -44212,6 +44254,7 @@ export interface paths {
                                 source_type: "unknown" | "fixed" | "vehicle" | "screenshare" | "personal" | "rotor" | "fixedwing" | "uas-rotor" | "uas-fixedwing";
                                 source_model: string;
                                 publish: boolean;
+                                publish_protocol: "hls" | "rtsp" | "rtmp" | "srt";
                                 recording: boolean;
                                 share: boolean;
                                 ephemeral: boolean;
@@ -44328,6 +44371,7 @@ export interface paths {
                          * @default false
                          */
                         publish: boolean;
+                        publish_protocol: "hls" | "rtsp" | "rtmp" | "srt";
                         /**
                          * @description Allow other users to manage lease if they are also members of the channel
                          * @default false
@@ -44364,8 +44408,9 @@ export interface paths {
                             source_id: string | null;
                             source_type: "unknown" | "fixed" | "vehicle" | "screenshare" | "personal" | "rotor" | "fixedwing" | "uas-rotor" | "uas-fixedwing";
                             source_model: string;
-                            publish: boolean;
-                            recording: boolean;
+                                publish: boolean;
+                                publish_protocol: "hls" | "rtsp" | "rtmp" | "srt";
+                                recording: boolean;
                             share: boolean;
                             ephemeral: boolean;
                             channel: null | string;
@@ -44484,8 +44529,9 @@ export interface paths {
                             source_id: string | null;
                             source_type: "unknown" | "fixed" | "vehicle" | "screenshare" | "personal" | "rotor" | "fixedwing" | "uas-rotor" | "uas-fixedwing";
                             source_model: string;
-                            publish: boolean;
-                            recording: boolean;
+                                publish: boolean;
+                                publish_protocol: "hls" | "rtsp" | "rtmp" | "srt";
+                                recording: boolean;
                             share: boolean;
                             ephemeral: boolean;
                             channel: null | string;
@@ -44681,6 +44727,7 @@ export interface paths {
                         recording?: boolean;
                         /** @description Publish stream URL to TAK Server Video Manager */
                         publish?: boolean;
+                        publish_protocol?: "hls" | "rtsp" | "rtmp" | "srt";
                         /** @description Allow other users to manage lease if they are also members of the channel */
                         share?: boolean;
                         /** @description System Admins can create non-expiring leases */
@@ -44708,6 +44755,7 @@ export interface paths {
                             source_type: "unknown" | "fixed" | "vehicle" | "screenshare" | "personal" | "rotor" | "fixedwing" | "uas-rotor" | "uas-fixedwing";
                             source_model: string;
                             publish: boolean;
+                            publish_protocol: "hls" | "rtsp" | "rtmp" | "srt";
                             recording: boolean;
                             share: boolean;
                             ephemeral: boolean;

@@ -305,7 +305,7 @@ const emit = defineEmits<{
 
 function assetOverlayExists(asset: ProfileFile): boolean {
     const url = `/api/profile/asset/${encodeURIComponent(asset.id)}.pmtiles/tile`;
-    return props.overlayUrls.has(url);
+    return props.overlayUrls.has(url) || props.overlayUrls.has(`asset:${asset.id}`);
 }
 
 function isSharedAsset(asset: ProfileFile): boolean {
@@ -313,7 +313,9 @@ function isSharedAsset(asset: ProfileFile): boolean {
 }
 
 function assetSupportsOverlay(asset: ProfileFile): boolean {
-    return asset.artifacts.some((artifact) => artifact.ext === '.pmtiles');
+    return asset.artifacts.some((artifact) => (
+        artifact.ext === '.pmtiles' || artifact.ext === '.groundoverlays.json'
+    ));
 }
 
 function pmtilesName(asset: ProfileFile): string {

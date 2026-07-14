@@ -10,7 +10,7 @@ import * as pgtypes from './schema.js';
 import { FullConfig } from './types.js';
 
 const ConfigEnvKeyMap = new Map(
-    Object.keys(FullConfig.properties).map((key) => [key.replace(/::/g, '_'), key])
+    Object.keys(FullConfig.properties).map(key => [key.replace(/::/g, '_'), key]),
 );
 
 export type ServerMode = 'both' | 'api' | 'hub';

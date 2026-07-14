@@ -222,7 +222,7 @@ import type { ProfileFile, ProfileFileList } from '../../../types.ts';
 import PathManager from '../../../base/path-manager.ts';
 import type { PathNode } from '../../../base/path-manager.ts';
 import ProfileConfig from '../../../base/profile.ts';
-import { stdurl, server } from '../../../std.ts';
+import { std, stdurl, server } from '../../../std.ts';
 import {
     TablerIconButton,
     TablerRefreshButton,
@@ -253,14 +253,24 @@ import Upload from '../../util/Upload.vue';
 const overlayUrls = ref<Set<string>>(new Set());
 let overlaySubscription: Subscription | undefined;
 
+type GroundOverlayManifest = {
+    overlays: Array<{
+        name: string;
+        opacity?: number;
+        coordinates: [[number, number], [number, number], [number, number], [number, number]];
+    }>;
+};
+
 onMounted(() => {
     overlaySubscription = OverlayManager.liveList().subscribe({
         next: (items) => {
-            overlayUrls.value = new Set(
-                items
-                    .filter((overlay) => overlay.mode === 'profile' && overlay.url)
-                    .map((overlay) => String(overlay.url))
-            );
+            const identifiers = new Set<string>();
+            for (const overlay of items) {
+                if (overlay.mode !== 'profile') continue;
+                if (overlay.url) identifiers.add(String(overlay.url));
+                if (overlay.mode_id) identifiers.add(`asset:${overlay.mode_id}`);
+            }
+            overlayUrls.value = identifiers;
         }
     });
 });
@@ -535,44 +545,69 @@ async function deletePath(node: PathNode<ProfileFile>) {
 }
 
 async function createOverlay(asset: ProfileFile) {
-    if (!asset.artifacts.map(a => a.ext).includes(".pmtiles")) throw new Error('Cannot add an Overlay for an asset that is not Cloud Optimized');
+    const extensions = new Set(asset.artifacts.map((artifact) => artifact.ext));
+    if (!extensions.has('.pmtiles') && !extensions.has('.groundoverlays.json')) {
+        throw new Error('Cannot add an Overlay for an unsupported asset');
+    }
 
     loading.value = true;
 
     try {
-        const { data, error } = await server.GET('/api/profile/asset/{:asset}.pmtiles/tile', {
-            params: {
-                path: {
-                    ':asset': asset.id
-                }
+        if (extensions.has('.groundoverlays.json')) {
+            const manifest = await std(
+                `/api/profile/asset/${encodeURIComponent(asset.id)}/groundoverlays`
+            ) as GroundOverlayManifest;
+
+            for (const [index, overlay] of manifest.overlays.entries()) {
+                await OverlayManager.createLoaded({
+                    url: stdurl(
+                        `/api/profile/asset/${encodeURIComponent(asset.id)}/groundoverlay/${index}`
+                    ).toString(),
+                    name: overlay.name || asset.name,
+                    mode: 'profile',
+                    mode_id: asset.id,
+                    type: 'image',
+                    opacity: overlay.opacity ?? 1,
+                    coordinates: overlay.coordinates
+                });
             }
-        });
-
-        if (error) throw new Error(error.message);
-        const metadata = data as unknown;
-
-        if (!isProfileAssetTileJSON(metadata) || !metadata.tiles.length) {
-            throw new Error('Malformed PMTiles metadata response');
         }
 
-        if (new URL(metadata.tiles[0]).pathname.endsWith('.mvt')) {
-            await OverlayManager.createLoaded({
-                url: stdurl(`/api/profile/asset/${encodeURIComponent(asset.id)}.pmtiles/tile`).toString(),
-                name: asset.name,
-                mode: 'profile',
-                mode_id: asset.name,
-                iconset: asset.iconset,
-                type: 'vector',
+        if (extensions.has('.pmtiles')) {
+            const { data, error } = await server.GET('/api/profile/asset/{:asset}.pmtiles/tile', {
+                params: {
+                    path: {
+                        ':asset': asset.id
+                    }
+                }
             });
-        } else {
-            await OverlayManager.createLoaded({
-                url: stdurl(`/api/profile/asset/${encodeURIComponent(asset.id)}.pmtiles/tile`).toString(),
-                name: asset.name,
-                mode: 'profile',
-                mode_id: asset.name,
-                iconset: asset.iconset,
-                type: 'raster',
-            });
+
+            if (error) throw new Error(error.message);
+            const metadata = data as unknown;
+
+            if (!isProfileAssetTileJSON(metadata) || !metadata.tiles.length) {
+                throw new Error('Malformed PMTiles metadata response');
+            }
+
+            if (new URL(metadata.tiles[0]).pathname.endsWith('.mvt')) {
+                await OverlayManager.createLoaded({
+                    url: stdurl(`/api/profile/asset/${encodeURIComponent(asset.id)}.pmtiles/tile`).toString(),
+                    name: asset.name,
+                    mode: 'profile',
+                    mode_id: asset.id,
+                    iconset: asset.iconset,
+                    type: 'vector',
+                });
+            } else {
+                await OverlayManager.createLoaded({
+                    url: stdurl(`/api/profile/asset/${encodeURIComponent(asset.id)}.pmtiles/tile`).toString(),
+                    name: asset.name,
+                    mode: 'profile',
+                    mode_id: asset.id,
+                    iconset: asset.iconset,
+                    type: 'raster',
+                });
+            }
         }
 
         loading.value = false;

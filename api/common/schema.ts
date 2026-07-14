@@ -173,6 +173,7 @@ export const VideoLease = pgTable('video_lease', {
 
     // Publish to the TAK Server Video Config API
     publish: boolean().notNull().default(false),
+    publish_protocol: text().$type<'hls' | 'rtsp' | 'rtmp' | 'srt'>().notNull().default('hls'),
     recording: boolean().notNull().default(false),
     share: boolean().notNull().default(false),
 
@@ -598,6 +599,7 @@ export const ProfileOverlay = pgTable('profile_overlays', {
     visible: boolean().notNull().default(true),
     token: text(),
     styles: jsonb().$type<Array<unknown>>().notNull().default([]),
+    coordinates: jsonb().$type<Array<[number, number]>>(),
     mode: text().notNull(),
     mode_id: text(), // Used for Data not for Profile
     url: text().notNull(),

@@ -10,9 +10,25 @@ import { FullConfigDefaults } from '../../common/defaults.js';
 
 export { FullConfigDefaults };
 
+function withMediaFallback(
+    values: Partial<Static<typeof FullConfig>>,
+    keys: (keyof Static<typeof FullConfig>)[],
+): Partial<Static<typeof FullConfig>> {
+    const legacy = values['media::url'];
+    const internal = values['media::internal_url'] || legacy || values['media::public_url'];
+    const publicUrl = values['media::public_url'] || legacy || values['media::internal_url'];
+
+    if (keys.includes('media::internal_url') && internal !== undefined) values['media::internal_url'] = internal;
+    if (keys.includes('media::public_url') && publicUrl !== undefined) values['media::public_url'] = publicUrl;
+    if (keys.includes('media::url') && publicUrl !== undefined) values['media::url'] = publicUrl;
+
+    return values;
+}
+
 // Allows Unauthenticated Access to these Config Keys
 export const PublicConfigKeys: (keyof Static<typeof FullConfig>)[] = [
     'media::url',
+    'media::public_url',
     'login::signup',
     'login::forgot',
     'login::name',
@@ -45,6 +61,9 @@ export const UserConfigKeys: (keyof Static<typeof FullConfig>)[] = [
     'map::zoom',
     'map::basemap',
     'map::terrain',
+    'map::groundoverlay::max_size_mb',
+    'map::groundoverlay::max_total_size_mb',
+    'map::groundoverlay::max_count',
     'group::Yellow',
     'group::Cyan',
     'group::Green',
@@ -106,7 +125,7 @@ export default async function router(schema: Schema, config: ConfigStateless) {
                 }
             }
 
-            res.json(await config.models.Setting.typedKeys(keys));
+            res.json(withMediaFallback(await config.models.Setting.typedKeys(keys), keys));
         } catch (err) {
             Err.respond(err, res);
         }

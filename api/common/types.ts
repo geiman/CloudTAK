@@ -295,6 +295,12 @@ export const VideoLeaseResponse = createSelectSchema(schemas.VideoLease, {
     channel: Type.Union([Type.Null(), Type.String()]),
     proxy: Type.Union([Type.Null(), Type.String()]),
     source_type: Type.Enum(VideoLease_SourceType),
+    publish_protocol: Type.Union([
+        Type.Literal('hls'),
+        Type.Literal('rtsp'),
+        Type.Literal('rtmp'),
+        Type.Literal('srt'),
+    ]),
 });
 
 export const ProfileOverlayResponse = createSelectSchema(schemas.ProfileOverlay, {
@@ -304,6 +310,10 @@ export const ProfileOverlayResponse = createSelectSchema(schemas.ProfileOverlay,
     iconset: Type.Union([Type.Null(), Type.String()]),
     opacity: Type.Number(),
     visible: Type.Boolean(),
+    coordinates: Type.Union([
+        Type.Null(),
+        Type.Array(Type.Tuple([Type.Number(), Type.Number()])),
+    ]),
     styles: Type.Array(Type.Unknown()),
 });
 
@@ -529,8 +539,11 @@ export const FullConfig = Type.Object({
     'agol::token': Type.String({ description: 'AGOL Legacy Token' }),
     'agol::client_id': Type.String({ description: 'AGOL OAuth2 Client ID' }),
     'agol::client_secret': Type.String({ description: 'AGOL OAuth2 Client Secret' }),
-    'media::url': Type.String({ description: 'Base URL for Media Service' }),
+    'media::url': Type.String({ description: 'Legacy base URL for Media Service' }),
+    'media::internal_url': Type.String({ description: 'Internal base URL for Media Service API calls' }),
+    'media::public_url': Type.String({ description: 'Public base URL for Media Service playback and metadata' }),
     'media::proxy::allow': Type.Array(Type.String({ description: 'Trusted video proxy source hostname or origin (scheme + host + optional port) that is added to the SSRF allow-list' })),
+    'video::legacy_uploader_username': Type.String({ description: 'Dedicated non-admin CloudTAK profile username used for legacy TAK video publishing' }),
     'coturn::url': Type.String({ description: 'COTURN Server URL' }),
     'coturn::secret': Type.String({ description: 'COTURN Server Secret' }),
     'map::center': Type.String({ description: 'Map Center Coordinates (lng,lat)' }),
@@ -539,6 +552,9 @@ export const FullConfig = Type.Object({
     'map::zoom': Type.Number({ description: 'Default Map Zoom Level', minimum: 0, maximum: 20 }),
     'map::basemap': Type.Union([Type.Null(), Type.Integer()], { description: 'Default Basemap for New Users' }),
     'map::terrain': Type.Union([Type.Null(), Type.Integer()], { description: 'Default Terrain (raster-dem) Basemap for New Users' }),
+    'map::groundoverlay::max_size_mb': Type.Integer({ description: 'Maximum allowed size in MiB for a single imported GroundOverlay image', minimum: 1 }),
+    'map::groundoverlay::max_total_size_mb': Type.Integer({ description: 'Maximum allowed total GroundOverlay download budget in MiB per imported asset', minimum: 1 }),
+    'map::groundoverlay::max_count': Type.Integer({ description: 'Maximum number of GroundOverlay images allowed per imported asset', minimum: 1 }),
     'display::stale': Type.Enum(Profile_Stale),
     'display::distance': Type.Enum(Profile_Distance),
     'display::elevation': Type.Enum(Profile_Elevation),

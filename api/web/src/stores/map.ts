@@ -1461,7 +1461,7 @@ export const useMapStore = defineStore('cloudtak', {
                     if (item.opacity !== loaded.opacity) {
                         loaded.opacity = item.opacity;
                         for (const l of loaded.styles) {
-                            if (loaded.type === 'raster') {
+                            if (loaded.type === 'raster' || loaded.type === 'image') {
                                 this.map.setPaintProperty(l.id, 'raster-opacity', Number(loaded.opacity));
                             }
                         }

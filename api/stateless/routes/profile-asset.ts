@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { Type } from '@sinclair/typebox';
+import { Static, Type } from '@sinclair/typebox';
 import { StandardResponse, ProfileFileResponse } from '../../common/types.js';
 import { sql, eq } from 'drizzle-orm';
 import { fetch } from '@tak-ps/node-safeurl';
@@ -14,6 +14,33 @@ import type ConfigStateless from '../config.js';
 import activeChannels from '../lib/tak-channels.js';
 import * as Default from '../lib/limits.js';
 
+const CONTENT_TYPES: Record<string, string> = {
+    json: 'application/json',
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    webp: 'image/webp',
+    gif: 'image/gif',
+    tif: 'image/tiff',
+    tiff: 'image/tiff',
+};
+
+const GROUNDOVERLAY_EXT = /^\.groundoverlay-\d+\.(png|jpg|jpeg|webp|gif|tif|tiff)$/i;
+const GROUNDOVERLAY_MANIFEST_MAX_BYTES = 5 * 1024 * 1024;
+
+const GroundOverlayManifest = Type.Object({
+    overlays: Type.Array(Type.Object({
+        name: Type.String(),
+        mime: Type.Optional(Type.String()),
+        ext: Type.String(),
+        opacity: Type.Optional(Type.Number()),
+        coordinates: Type.Array(Type.Tuple([Type.Number(), Type.Number()]), {
+            minItems: 4,
+            maxItems: 4,
+        }),
+    })),
+});
+
 export default async function router(schema: Schema, config: ConfigStateless) {
     async function ensureIconsetPermission(iconset: string | null | undefined, email: string) {
         if (iconset === undefined || iconset === null || iconset === '') return;
@@ -23,6 +50,31 @@ export default async function router(schema: Schema, config: ConfigStateless) {
         if (iconsetRes.username !== email) {
             throw new Err(403, null, `You do not have permission to associate iconset '${iconset}'`);
         }
+    }
+
+    async function readGroundOverlayManifest(key: string): Promise<Static<typeof GroundOverlayManifest>> {
+        const head = await S3.head(key);
+        const contentLength = head.ContentLength || 0;
+        if (contentLength > GROUNDOVERLAY_MANIFEST_MAX_BYTES) {
+            throw new Err(413, null, 'Ground overlay manifest exceeds the 5 MiB limit');
+        }
+
+        const stream = await S3.get(key);
+        const chunks: Buffer[] = [];
+        let total = 0;
+
+        for await (const chunk of stream) {
+            const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+            total += buffer.length;
+
+            if (total > GROUNDOVERLAY_MANIFEST_MAX_BYTES) {
+                throw new Err(413, null, 'Ground overlay manifest exceeds the 5 MiB limit');
+            }
+
+            chunks.push(buffer);
+        }
+
+        return JSON.parse(Buffer.concat(chunks).toString('utf8')) as Static<typeof GroundOverlayManifest>;
     }
 
     await schema.get('/profile/asset', {
@@ -297,9 +349,92 @@ export default async function router(schema: Schema, config: ConfigStateless) {
                 throw new Err(403, null, 'You do not have permission to download this asset');
             }
 
+            const ext = req.params.ext.split('.').pop()?.toLowerCase();
+            const contentType = ext ? CONTENT_TYPES[ext] : undefined;
+            if (contentType) res.type(contentType);
+
             const stream = await S3.get(`profile/${user.email}/${req.params.asset}.${req.params.ext}`);
 
             stream.pipe(res);
+        } catch (err) {
+            Err.respond(err, res);
+        }
+    });
+
+    await schema.get('/profile/asset/:asset/groundoverlays', {
+        name: 'Ground Overlay Manifest',
+        group: 'ProfileFile',
+        description: 'Get parsed GroundOverlay metadata extracted from a KML/KMZ asset',
+        query: Type.Object({
+            token: Type.Optional(Type.String()),
+        }),
+        params: Type.Object({
+            asset: Type.String({
+                format: 'uuid',
+            }),
+        }),
+        res: GroundOverlayManifest,
+    }, async (req, res) => {
+        try {
+            const user = await Auth.as_user(config, req, { token: true });
+
+            const file = await config.models.ProfileFile.from(req.params.asset);
+
+            if (file.username !== user.email) {
+                throw new Err(403, null, 'You do not have permission to view this asset');
+            }
+
+            const key = `profile/${user.email}/${req.params.asset}.groundoverlays.json`;
+            if (!await S3.exists(key)) throw new Err(404, null, 'Ground overlay manifest does not exist');
+
+            res.type('application/json');
+            res.json(await readGroundOverlayManifest(key));
+        } catch (err) {
+            Err.respond(err, res);
+        }
+    });
+
+    await schema.get('/profile/asset/:asset/groundoverlay/:index', {
+        name: 'Ground Overlay Image',
+        group: 'ProfileFile',
+        description: 'Get a single GroundOverlay image extracted from a KML/KMZ asset',
+        query: Type.Object({
+            token: Type.Optional(Type.String()),
+        }),
+        params: Type.Object({
+            asset: Type.String({
+                format: 'uuid',
+            }),
+            index: Type.Integer({
+                minimum: 0,
+            }),
+        }),
+    }, async (req, res) => {
+        try {
+            const user = await Auth.as_user(config, req, { token: true });
+
+            const file = await config.models.ProfileFile.from(req.params.asset);
+
+            if (file.username !== user.email) {
+                throw new Err(403, null, 'You do not have permission to view this asset');
+            }
+
+            const key = `profile/${user.email}/${req.params.asset}.groundoverlays.json`;
+            if (!await S3.exists(key)) throw new Err(404, null, 'Ground overlay manifest does not exist');
+            const manifest = await readGroundOverlayManifest(key);
+            const overlay = manifest.overlays[req.params.index];
+            if (!overlay) throw new Err(404, null, 'Ground overlay image does not exist');
+            if (!GROUNDOVERLAY_EXT.test(overlay.ext)) throw new Err(400, null, 'Invalid ground overlay artifact extension');
+
+            const ext = overlay.ext.replace(/^\./, '');
+            const imageKey = `profile/${user.email}/${req.params.asset}${overlay.ext}`;
+            if (!await S3.exists(imageKey)) throw new Err(404, null, 'Ground overlay image does not exist');
+
+            const contentType = overlay.mime || CONTENT_TYPES[ext] || 'application/octet-stream';
+            res.type(contentType);
+
+            const imageStream = await S3.get(imageKey);
+            imageStream.pipe(res);
         } catch (err) {
             Err.respond(err, res);
         }

@@ -1,10 +1,18 @@
 import type { paths } from '@cloudtak/api-types';
 
 export type ConvertResponse = {
-    asset: string;
+    asset?: string;
     icons?: Set<{
         name: string;
         data: string;
+    }>;
+    groundOverlays?: Array<{
+        name: string;
+        path: string;
+        ext: string;
+        mime?: string;
+        coordinates: [[number, number], [number, number], [number, number], [number, number]];
+        opacity?: number;
     }>;
 };
 

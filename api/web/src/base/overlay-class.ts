@@ -16,6 +16,9 @@ import ProfileConfig from './profile.ts';
 import Subscription from './subscription.ts';
 import { FeatureVisibility } from '../stores/modules/feature-visibility.ts';
 
+type OverlayCoordinates = [[number, number], [number, number], [number, number], [number, number]];
+type OverlayRecord = ProfileOverlay & { coordinates?: OverlayCoordinates | null };
+
 /**
  * @class
  */
@@ -47,6 +50,7 @@ export default class Overlay {
     mode: string;
     mode_id: string | null;
     encoding: 'mapbox' | 'terrarium' | null;
+    coordinates: OverlayCoordinates | null;
 
     actions: ProfileOverlay["actions"];
 
@@ -55,7 +59,9 @@ export default class Overlay {
     token: string | null;
 
     static async create(
-        body: ProfileOverlay | ProfileOverlay_Create,
+        body: (ProfileOverlay | ProfileOverlay_Create) & {
+            coordinates?: OverlayCoordinates | null;
+        },
         opts: {
             internal?: boolean;
             skipSave?: boolean;
@@ -150,7 +156,7 @@ export default class Overlay {
     }
 
     constructor(
-        overlay: ProfileOverlay & { encoding?: 'mapbox' | 'terrarium' | null },
+        overlay: OverlayRecord & { encoding?: 'mapbox' | 'terrarium' | null },
         opts: {
             internal?: boolean;
         } = {}
@@ -180,6 +186,7 @@ export default class Overlay {
         this.mode = overlay.mode;
         this.mode_id = overlay.mode_id || null;
         this.encoding = overlay.encoding || null;
+        this.coordinates = overlay.coordinates || null;
         this.url = overlay.url;
         this.styles = overlay.styles as Array<LayerSpecification>;
         this.token = overlay.token;
@@ -205,6 +212,7 @@ export default class Overlay {
     hasBounds(): boolean {
         const mapStore = useMapStore();
         const source = mapStore.map.getSource(String(this.id))
+        if (this.type === 'image') return this.coordinates !== null;
         if (!source) return false;
 
         if (source.type === 'vector') {
@@ -221,6 +229,15 @@ export default class Overlay {
     async zoomTo(): Promise<void> {
         const mapStore = useMapStore();
         const source = mapStore.map.getSource(String(this.id))
+        if (this.type === 'image' && this.coordinates) {
+            const longitudes = this.coordinates.map((coordinate) => coordinate[0]);
+            const latitudes = this.coordinates.map((coordinate) => coordinate[1]);
+            mapStore.map.fitBounds([
+                [Math.min(...longitudes), Math.min(...latitudes)],
+                [Math.max(...longitudes), Math.max(...latitudes)]
+            ]);
+            return;
+        }
         if (!source) return;
 
         if (source.type === 'vector') {
@@ -259,7 +276,7 @@ export default class Overlay {
         for (const l of this.styles) {
             if (l.type === 'background') continue;
 
-            if (this.type === 'raster') {
+            if (this.type === 'raster' || this.type === 'image') {
                 mapStore.map.setPaintProperty(l.id, 'raster-opacity', Number(this.opacity));
             }
             mapStore.map.setLayoutProperty(l.id, 'visibility', this.visible ? 'visible' : 'none');
@@ -340,7 +357,18 @@ export default class Overlay {
 
         this._error = undefined;
 
-        if (this.type === 'raster' && this.url) {
+        if (this.type === 'image' && this.url && this.coordinates) {
+            const url = stdurl(this.url);
+            if (token) url.searchParams.set('token', token);
+
+            if (!mapStore.map.getSource(String(this.id))) {
+                mapStore.map.addSource(String(this.id), {
+                    type: 'image',
+                    url: String(url),
+                    coordinates: this.coordinates
+                });
+            }
+        } else if (this.type === 'raster' && this.url) {
             const url = stdurl(this.url);
             if (token) url.searchParams.set('token', token);
 
@@ -399,7 +427,7 @@ export default class Overlay {
         if (display_text === 'Small') size = 4;
         if (display_text === 'Large') size = 16;
 
-        if (!this.styles.length && this.type === 'raster') {
+        if (!this.styles.length && (this.type === 'raster' || this.type === 'image')) {
             this.styles = [{
                 'id': String(this.id),
                 'type': 'raster',
@@ -493,6 +521,7 @@ export default class Overlay {
             mode?: string;
             mode_id?: string;
             encoding?: 'mapbox' | 'terrarium' | null;
+            coordinates?: OverlayCoordinates | null;
             url?: string;
             token?: string;
             styles?: Array<LayerSpecification>;
@@ -511,7 +540,11 @@ export default class Overlay {
         if (overlay.actions) this.actions = overlay.actions || { feature: [] };
         if (overlay.type) this.type = overlay.type;
 
-        if (this.type === 'raster' && oldType !== 'raster' && !overlay.styles) {
+        if (
+            (this.type === 'raster' || this.type === 'image')
+            && oldType !== this.type
+            && !overlay.styles
+        ) {
             this.styles = [];
         }
 
@@ -520,6 +553,7 @@ export default class Overlay {
         if (overlay.mode) this.mode = overlay.mode;
         if (overlay.mode_id) this.mode_id = overlay.mode_id || null;
         if (overlay.encoding !== undefined) this.encoding = overlay.encoding;
+        if (overlay.coordinates !== undefined) this.coordinates = overlay.coordinates;
         if (overlay.url) this.url = overlay.url;
         if (overlay.token) this.token = overlay.token;
         if (overlay.styles) {
@@ -609,7 +643,7 @@ export default class Overlay {
         if (body.opacity !== undefined && body.opacity !== this.opacity) {
             this.opacity = body.opacity;
             for (const l of this.styles) {
-                if (this.type === 'raster') {
+                if (this.type === 'raster' || this.type === 'image') {
                     mapStore.map.setPaintProperty(l.id, 'raster-opacity', Number(this.opacity));
                 }
             }
@@ -666,6 +700,7 @@ export default class Overlay {
                 url: this.url,
                 visible: this.visible,
                 encoding: this.encoding,
+                coordinates: this.coordinates,
                 styles: dropStyles ? [] : this.styles
             }
         })
@@ -697,6 +732,7 @@ export default class Overlay {
             mode: this.mode,
             mode_id: this.mode_id,
             encoding: this.encoding,
+            coordinates: this.coordinates,
             actions: this.actions,
             url: this.url,
             styles,
