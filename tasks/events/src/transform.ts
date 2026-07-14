@@ -281,6 +281,11 @@ export default class DataTransform {
             // Check for zero features before tiling
             const featureCount = await countFeatures(conversion.asset);
             if (featureCount === 0) {
+                if (conversion.groundOverlays?.length) {
+                    console.log('No vector features found; GroundOverlay artifacts were imported without a tileset');
+                    return;
+                }
+
                 throw new Error(`No features found in ${conversion.asset}. Cannot create tileset.`);
             }
             console.log(`Found ${featureCount} features to tile`);

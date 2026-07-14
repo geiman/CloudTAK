@@ -66,6 +66,21 @@ test(`Worker DataPackage Import: Packaged File`, async (t) => {
 
     const expectedNames = new Set(['Base-FAB.kmz', 'Mapa Base FAB.kmz']);
 
+    mockPool.intercept({
+        path: /profile\/asset\//,
+        method: 'PATCH',
+        body: (str) => {
+            const artifacts = JSON.parse(str).artifacts as Array<{ ext: string }> | undefined;
+            return !!artifacts?.some(({ ext }) => ext.startsWith('.groundoverlay'));
+        },
+    }).reply((req) => {
+        const body = JSON.parse(req.body) as { artifacts: Array<{ ext: string }> };
+        return {
+            statusCode: 200,
+            data: JSON.stringify({ id, artifacts: body.artifacts }),
+        };
+    }).persist();
+
     for (let i = 0; i < 2; i++) {
         mockPool.intercept({
             path: /profile\/asset/,
@@ -113,6 +128,10 @@ test(`Worker DataPackage Import: Packaged File`, async (t) => {
         mockPool.intercept({
             path: /profile\/asset\//,
             method: 'PATCH',
+            body: (str) => {
+                const artifacts = JSON.parse(str).artifacts as Array<{ ext: string }> | undefined;
+                return artifacts?.length === 1 && artifacts[0].ext === '.geojsonld';
+            },
         }).reply((req) => {
             const body = JSON.parse(req.body) as {
                 artifacts: Array<{ ext: string }>;
@@ -136,6 +155,12 @@ test(`Worker DataPackage Import: Packaged File`, async (t) => {
         mockPool.intercept({
             path: /profile\/asset\//,
             method: 'PATCH',
+            body: (str) => {
+                const artifacts = JSON.parse(str).artifacts as Array<{ ext: string }> | undefined;
+                return artifacts?.length === 2
+                    && artifacts[0].ext === '.geojsonld'
+                    && artifacts[1].ext === '.pmtiles';
+            },
         }).reply((req) => {
             const body = JSON.parse(req.body) as {
                 artifacts: Array<{ ext: string }>;
@@ -265,6 +290,18 @@ test(`Worker DataPackage Import: Packaged File`, async (t) => {
         }
         if (command instanceof CompleteMultipartUploadCommand) {
             return { Location: '...' };
+        }
+
+        if (
+            (command instanceof CreateMultipartUploadCommand || command instanceof PutObjectCommand)
+            && typeof command.input.Key === 'string'
+            && (command.input.Key.includes('.groundoverlay-') || command.input.Key.endsWith('.groundoverlays.json'))
+        ) {
+            assert.equal(command.input.Bucket, 'test-bucket');
+            assert.ok(command.input.Key.startsWith('profile/admin@example.com/'));
+            return command instanceof CreateMultipartUploadCommand
+                ? { UploadId: '123' }
+                : { ETag: '"123"' };
         }
 
         const validator = ExternalOperations.pop();

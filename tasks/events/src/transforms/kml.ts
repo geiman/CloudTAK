@@ -447,7 +447,15 @@ export default class KML implements Transform {
                     return undefined;
                 }
 
-                const stats = await fs.stat(resolved);
+                const stats = await fs.stat(resolved).catch((err: NodeJS.ErrnoException) => {
+                    if (err.code === 'ENOENT') {
+                        console.warn(`GroundOverlay ${href} does not exist, skipping`);
+                        return undefined;
+                    }
+
+                    throw err;
+                });
+                if (!stats) return undefined;
                 const declaredExt = this.normalizeGroundOverlayExt(path.extname(resolved).toLowerCase() || '.png');
                 const detected = await this.sniffGroundOverlayFile(resolved);
                 const ext = this.normalizeGroundOverlayExt(this.extensionForGroundOverlayFormat(detected));
@@ -557,7 +565,11 @@ export default class KML implements Transform {
         visited: Set<string> = new Set(),
     ): Promise<KMLDocumentContents> {
         const normalizedKmlContent = kmlContent.replace(/^\uFEFF/, '');
-        const dom = new DOMParser().parseFromString(normalizedKmlContent, 'text/xml');
+        const dom = new DOMParser({
+            // ArcGIS Layer To KML output can reference xsi:schemaLocation
+            // without declaring the otherwise-standard xsi namespace.
+            xmlns: { xsi: 'http://www.w3.org/2001/XMLSchema-instance' },
+        }).parseFromString(normalizedKmlContent, 'text/xml');
         const allFeatures = kml(normalizedKmlContent).features;
         const groundOverlays = await this.extractGroundOverlays(dom, baseUrl, localDir);
 
