@@ -48,16 +48,27 @@ created_volume=false
 source_initially_running=false
 migration_complete=false
 stopped_app_containers=()
+failure_line=
+failure_command=
+
+trap 'failure_line=$LINENO; failure_command=$BASH_COMMAND' ERR
 
 cleanup() {
     local status=$?
-    trap - EXIT INT TERM
-
-    if [[ -n "$temporary_container" ]]; then
-        docker rm --force "$temporary_container" >/dev/null 2>&1 || true
-    fi
+    trap - EXIT INT TERM ERR
 
     if [[ $status -ne 0 ]]; then
+        printf '[postgis-volume] ERROR: Migration failed'
+        if [[ -n "$failure_line" ]]; then
+            printf ' at line %s while running: %s' "$failure_line" "$failure_command"
+        fi
+        printf ' (exit %s)\n' "$status" >&2
+
+        if [[ -n "$temporary_container" ]]; then
+            printf '[postgis-volume] Temporary PostgreSQL logs:\n' >&2
+            docker logs "$temporary_container" >&2 || true
+        fi
+
         if [[ -n "$source_container" ]]; then
             if [[ "$source_initially_running" == true ]]; then
                 docker start "$source_container" >/dev/null 2>&1 || true
@@ -69,10 +80,14 @@ cleanup() {
         for container in "${stopped_app_containers[@]}"; do
             docker start "$container" >/dev/null 2>&1 || true
         done
+    fi
 
-        if [[ "$created_volume" == true && "$migration_complete" != true ]]; then
-            docker volume rm "$VOLUME_NAME" >/dev/null 2>&1 || true
-        fi
+    if [[ -n "$temporary_container" ]]; then
+        docker rm --force "$temporary_container" >/dev/null 2>&1 || true
+    fi
+
+    if [[ $status -ne 0 && "$created_volume" == true && "$migration_complete" != true ]]; then
+        docker volume rm "$VOLUME_NAME" >/dev/null 2>&1 || true
     fi
 
     exit "$status"
@@ -170,8 +185,21 @@ docker run --detach \
     --volume "$VOLUME_NAME:$POSTGRES_DATA_DIR" \
     "$POSTGIS_IMAGE" >/dev/null
 
-ready=false
+initialized=false
 for _ in $(seq 1 60); do
+    if docker logs "$temporary_container" 2>&1 | grep -q 'PostgreSQL init process complete'; then
+        initialized=true
+        break
+    fi
+    sleep 1
+done
+
+if [[ "$initialized" != true ]]; then
+    fail 'Timed out waiting for the migration PostgreSQL initialization to complete'
+fi
+
+ready=false
+for _ in $(seq 1 30); do
     if docker exec "$temporary_container" pg_isready --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" >/dev/null 2>&1; then
         ready=true
         break
@@ -180,7 +208,7 @@ for _ in $(seq 1 60); do
 done
 
 if [[ "$ready" != true ]]; then
-    fail 'Timed out waiting for the migration PostgreSQL container'
+    fail 'Timed out waiting for the final migration PostgreSQL server'
 fi
 
 docker exec --interactive "$temporary_container" pg_restore \
