@@ -1,5 +1,10 @@
 <template>
-    <div style='overflow: auto;'>
+    <div
+        class='h-full w-full cloudtak-page'
+        style='overflow: auto;'
+    >
+        <NavHeader title='Connections' />
+
         <div class='page-wrapper'>
             <div class='page-header d-print-none'>
                 <div class='container-xl'>
@@ -71,6 +76,28 @@
                                 class='card-body'
                                 :markdown='layer.description'
                             />
+                            <div class='card-body border-top d-flex align-items-center flex-wrap'>
+                                <IconLock
+                                    :size='18'
+                                    stroke='1'
+                                    color='#6b7990'
+                                    class='me-2'
+                                />
+                                <span class='text-secondary me-2'>Permissions</span>
+                                <TablerBadge
+                                    v-for='permission in layer.permissions'
+                                    :key='permission'
+                                    class='me-1 font-monospace'
+                                    background-color='rgba(107, 114, 128, 0.15)'
+                                    border-color='rgba(107, 114, 128, 0.3)'
+                                >
+                                    <span v-text='permission' />
+                                </TablerBadge>
+                                <span
+                                    v-if='!layer.permissions.length'
+                                    class='text-secondary fst-italic'
+                                >None</span>
+                            </div>
                             <div class='card-footer d-flex align-items-center'>
                                 <div>
                                     Last updated <span v-text='timeDiff(layer.updated)' />
@@ -125,13 +152,15 @@
                                     desc='Layer is updating'
                                 />
                                 <div class='ms-auto btn-list'>
-                                    <IconX
-                                        v-tooltip='"Cancel Stack Update"'
-                                        class='cursor-pointer'
-                                        :size='32'
-                                        stroke='1'
+                                    <TablerIconButton
+                                        title='Cancel Stack Update'
                                         @click='cancelUpdate'
-                                    />
+                                    >
+                                        <IconX
+                                            :size='32'
+                                            stroke='1'
+                                        />
+                                    </TablerIconButton>
                                 </div>
                             </div>
                             <div class='card-body'>
@@ -167,47 +196,6 @@
                                                 stroke='1'
                                             /><span class='mx-3'>Deployment</span></span>
 
-                                            <span
-                                                tabindex='0'
-                                                role='menuitem'
-                                                class='list-group-item list-group-item-action d-flex align-items-center user-select-none'
-                                                :class='{
-                                                    "active": route.name === "layer-alarm",
-                                                    "cursor-pointer": route.name !== "layer-alarm"
-                                                }'
-                                                @keyup.enter='router.push(`/connection/${route.params.connectionid || 0}/layer/${route.params.layerid}/alarm`)'
-                                                @click='router.push(`/connection/${route.params.connectionid || 0}/layer/${route.params.layerid}/alarm`)'
-                                            ><IconAlarm
-                                                 :size='32'
-                                                 stroke='1'
-                                             />
-                                                <span class='mx-3'>Alarms</span>
-
-                                                <div class='ms-auto'>
-                                                    <TablerBadge
-                                                        v-if='layer.priority === "high"'
-                                                        style='height: 20px'
-                                                        background-color='rgba(239, 68, 68, 0.2)'
-                                                        border-color='rgba(239, 68, 68, 0.5)'
-                                                        text-color='#dc2626'
-                                                    >High Urgency</TablerBadge>
-                                                    <TablerBadge
-                                                        v-else-if='layer.priority === "low"'
-                                                        style='height: 20px'
-                                                        background-color='rgba(245, 158, 11, 0.2)'
-                                                        border-color='rgba(245, 158, 11, 0.5)'
-                                                        text-color='#d97706'
-                                                    >Low Urgency</TablerBadge>
-                                                    <TablerBadge
-                                                        v-else
-                                                        style='height: 20px'
-                                                        background-color='rgba(107, 114, 128, 0.2)'
-                                                        border-color='rgba(107, 114, 128, 0.5)'
-                                                        text-color='#6b7280'
-                                                    >Disabled</TablerBadge>
-                                                </div>
-                                            </span>
-
                                             <TablerPillGroup
                                                 v-model='mode'
                                                 :options='[
@@ -217,18 +205,24 @@
                                                 name='layer-direction'
                                             >
                                                 <template #option='{ option }'>
-                                                    <IconWorldDownload
+                                                    <span
                                                         v-if='option.value === "incoming"'
-                                                        v-tooltip='"Incoming"'
-                                                        :size='32'
-                                                        stroke='1'
-                                                    />
-                                                    <IconWorldUpload
+                                                        title='Incoming'
+                                                    >
+                                                        <IconWorldDownload
+                                                            :size='32'
+                                                            stroke='1'
+                                                        />
+                                                    </span>
+                                                    <span
                                                         v-if='option.value === "outgoing"'
-                                                        v-tooltip='"Outgoing"'
-                                                        :size='32'
-                                                        stroke='1'
-                                                    />
+                                                        title='Outgoing'
+                                                    >
+                                                        <IconWorldUpload
+                                                            :size='32'
+                                                            stroke='1'
+                                                        />
+                                                    </span>
                                                     {{ option.label }}
                                                 </template>
                                             </TablerPillGroup>
@@ -293,6 +287,20 @@
                                                         role='menuitem'
                                                         class='list-group-item list-group-item-action d-flex align-items-center user-select-none'
                                                         :class='{
+                                                            "active": String(route.name).startsWith("layer-incoming-mapping"),
+                                                            "cursor-pointer": !String(route.name).startsWith("layer-incoming-mapping")
+                                                        }'
+                                                        @keyup.enter='router.push(`/connection/${route.params.connectionid || 0}/layer/${route.params.layerid}/incoming/mapping`)'
+                                                        @click='router.push(`/connection/${route.params.connectionid || 0}/layer/${route.params.layerid}/incoming/mapping`)'
+                                                    ><IconArrowsExchange
+                                                        :size='32'
+                                                        stroke='1'
+                                                    /><span class='mx-3'>Field Mapping</span></span>
+                                                    <span
+                                                        tabindex='0'
+                                                        role='menuitem'
+                                                        class='list-group-item list-group-item-action d-flex align-items-center user-select-none'
+                                                        :class='{
                                                             "active": route.name === "layer-incoming-styles",
                                                             "cursor-pointer": route.name !== "layer-incoming-styles"
                                                         }'
@@ -301,9 +309,9 @@
                                                     ><IconPaint
                                                         :size='32'
                                                         stroke='1'
-                                                    /><span class='mx-3'>Styling</span></span>
+                                                    /><span class='mx-3'>Legacy Styling</span></span>
                                                     <div
-                                                        class='list-group-item list-group-item-action d-flex align-items-center justify-content-center'
+                                                        class='list-group-item d-flex align-items-center justify-content-center'
                                                     >
                                                         <TablerDelete
                                                             label='Delete Incoming'
@@ -394,6 +402,7 @@ import type { ETLLayer, ETLLayerTask, ETLLayerTaskCapabilities } from '../../typ
 import { server, downloadUrl } from '../../std.ts';
 import { useRoute, useRouter } from 'vue-router';
 import PageFooter from '../PageFooter.vue';
+import NavHeader from '../util/NavHeader.vue';
 import LayerStatus from './Layer/utils/StatusDot.vue';
 import InitialAuthor from '../util/InitialAuthor.vue';
 import timeDiff from '../../timediff.ts';
@@ -414,11 +423,12 @@ import {
     IconPencil,
     IconDownload,
     IconPlaneDeparture,
-    IconAlarm,
     IconAdjustments,
     IconBeach,
     IconSchema,
+    IconArrowsExchange,
     IconPaint,
+    IconLock,
 } from '@tabler/icons-vue'
 
 const route = useRoute();

@@ -10,6 +10,9 @@
 * clients mutates a data type via the API - the server broadcasts a `sync`
 * message over the WebSocket which AtlasConnection passes to this manager.
 *
+* Mission (Data Sync) change events are not replayed after a disconnect, so
+* on reconnect every subscribed mission pushes pending edits and refreshes.
+*
 * INVARIANT: Everything a sync triggers - the handlers in syncEvent()/
 * runFullSync() and any main-thread reaction to the Sync_* messages they
 * post - must apply server state with local-only operations (GET + IndexedDB
@@ -23,7 +26,8 @@
 import type Atlas from './atlas.ts';
 import { std } from '../std.ts';
 import type { Feature, ProfileOverlay } from '../types.ts';
-import { WorkerMessageType } from '../base/events.ts';
+import { WorkerMessageType } from '../utils/events.ts';
+import type { SyncTriggerReason } from '../utils/events.ts';
 
 // base/overlay.ts (OverlayManager) cannot be imported here - it pulls in the
 // map store & maplibre-gl which touch `document` at import time and break the
@@ -36,6 +40,8 @@ import Chatroom from '../base/chatroom.ts';
 import MissionTemplate from '../base/mission-template.ts';
 import ProfileConfig from '../base/profile.ts';
 import ServerManager from '../base/server.ts';
+import Config from '../base/config.ts';
+import Subscription from '../base/subscription.ts';
 
 export enum SyncDataType {
     Overlay = 'overlay',
@@ -49,6 +55,7 @@ export enum SyncDataType {
     Group = 'group',
     MissionTemplate = 'mission-template',
     Server = 'server',
+    Config = 'config',
 }
 
 export enum SyncEventAction {
@@ -82,6 +89,8 @@ export default class AtlasSync {
     lastErrors: string[];
 
     private current: Promise<void> | null;
+    private missions: Promise<void> | null;
+    private offSync: (() => void) | undefined;
     private queue: SyncEvent[];
     private timer: ReturnType<typeof setTimeout> | undefined;
     private flushing: Promise<void>;
@@ -95,6 +104,8 @@ export default class AtlasSync {
         this.lastErrors = [];
 
         this.current = null;
+        this.missions = null;
+        this.offSync = undefined;
         this.queue = [];
         this.timer = undefined;
         this.flushing = Promise.resolve();
@@ -108,7 +119,34 @@ export default class AtlasSync {
         if (this.started) return;
         this.started = true;
 
+        this.offSync = this.atlas.conn.onSync((reason) => this.onTrigger(reason));
+
         await this.fullSync();
+    }
+
+    /**
+     * Connectivity restored - refresh every subscribed mission since change
+     * events that fired while offline or disconnected were not replayed
+     */
+    private onTrigger(reason: SyncTriggerReason): void {
+        this.syncMissions().catch((err: unknown) => {
+            console.error(`AtlasSync: Failed to sync missions after ${reason} restored`, err);
+        });
+    }
+
+    /**
+     * Refresh every subscribed mission (Data Sync) from the server.
+     * Concurrent calls coalesce onto the in-flight sync.
+     */
+    async syncMissions(): Promise<void> {
+        if (this.missions) return this.missions;
+
+        this.missions = this.runMissionSync()
+            .finally(() => {
+                this.missions = null;
+            });
+
+        return this.missions;
     }
 
     /**
@@ -157,8 +195,37 @@ export default class AtlasSync {
             this.timer = undefined;
         }
 
+        if (this.offSync) {
+            this.offSync();
+            this.offSync = undefined;
+        }
+
         this.queue = [];
         this.started = false;
+    }
+
+    private async runMissionSync(): Promise<void> {
+        const subscribed = await Subscription.localList({ subscribed: true });
+
+        const results = await Promise.allSettled([...subscribed].map(async ({ guid }) => {
+            const sub = await Subscription.from(guid, { subscribed: true });
+            if (!sub) return;
+
+            // push() never rejects; failures stay pending for the next trigger
+            await sub.feature.push();
+
+            // SubscriptionFeature.refresh() posts Mission_Change_Feature so
+            // the main thread repaints the mission overlay
+            await sub.refresh({ refreshMission: true });
+        }));
+
+        const guids = [...subscribed].map(({ guid }) => guid);
+        for (let i = 0; i < results.length; i++) {
+            const result = results[i];
+            if (result.status === 'rejected') {
+                console.error(`AtlasSync: Failed to sync mission ${guids[i]}`, result.reason);
+            }
+        }
     }
 
     private async runFullSync(): Promise<void> {
@@ -177,6 +244,7 @@ export default class AtlasSync {
             [SyncDataType.MissionTemplate, () => MissionTemplate.sync()],
             [SyncDataType.Profile, () => ProfileConfig.sync({ refresh: true })],
             [SyncDataType.Server, () => ServerManager.sync()],
+            [SyncDataType.Config, () => Config.sync()],
         ];
 
         const results = await Promise.allSettled(tasks.map(([, task]) => task()));
@@ -213,6 +281,10 @@ export default class AtlasSync {
             purge: [...result.updated, ...result.removed],
             added: result.added
         });
+
+        if (result.failed.length) {
+            throw new Error(`Failed to sync iconsets: ${result.failed.join(', ')}`);
+        }
     }
 
     /**
@@ -264,11 +336,6 @@ export default class AtlasSync {
         for (const event of deduped.values()) {
             try {
                 await this.syncEvent(event);
-
-                this.atlas.postMessage({
-                    type: WorkerMessageType.Sync_Update,
-                    body: event
-                });
             } catch (err) {
                 console.error(`AtlasSync: Failed to sync ${event.type}`, err);
             }
@@ -298,7 +365,6 @@ export default class AtlasSync {
                 // feature (a no-op) while other clients render it.
                 await this.atlas.db.add(event.body as Feature, { skipSave: true });
             } else if (event.id !== undefined) {
-                // No inline payload - fetch just the mutated feature
                 await this.syncFeature(String(event.id));
             } else {
                 // Bulk feature change with no id (e.g. delete-all) - reconcile

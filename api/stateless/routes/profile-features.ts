@@ -10,7 +10,7 @@ import Auth from '../../common/auth.js';
 import { ProfileFeature } from '../../common/schema.js';
 import { StandardResponse, FeatureResponse, GeoJSONFeatureCollection, GeoJSONFeature } from '../../common/types.js';
 import { ExportFeatureFormat } from '../../common/enums.js';
-import { enabledGeofence } from '../lib/control/feature.js';
+import { enabledGeofence, isUserPuck } from '../lib/control/feature.js';
 import ConnectionEvents, { ConnectionEventDataType, ConnectionEventAction } from '../lib/connection-events.js';
 import { sql } from 'drizzle-orm';
 import * as Default from '../lib/limits.js';
@@ -214,6 +214,17 @@ export default async function router(schema: Schema, config: ConfigStateless) {
                     Used primarily by the Events Task for importing DataPackage CoTs
                 `,
             }),
+            submit: Type.Boolean({
+                default: false,
+                description: 'Submit the feature as a CoT to the TAK Server on the user\'s connection',
+            }),
+            archive: Type.Boolean({
+                default: true,
+                description: `
+                    Save the feature to the database
+                    Disable for live/ephemeral features that are only submitted and/or broadcast
+                `,
+            }),
         }),
         body: FeatureResponse,
         res: FeatureResponse,
@@ -225,6 +236,32 @@ export default async function router(schema: Schema, config: ConfigStateless) {
                 if (coords.length === 2) coords.push(0);
                 return coords;
             });
+
+            const hubOpts = {
+                connection: user.email,
+                write: req.query.submit,
+                broadcast: req.query.broadcast,
+                ensureProfile: req.query.submit,
+                ifPooled: !req.query.submit,
+            };
+
+            if (!req.query.archive) {
+                if (!req.query.submit && !req.query.broadcast) {
+                    throw new Err(400, null, 'Either submit or broadcast must be set if archive is disabled');
+                }
+
+                await config.hub.submitCots({
+                    ...hubOpts,
+                    cots: [await CoTParser.from_geojson(req.body)],
+                });
+
+                res.json(req.body);
+                return;
+            }
+
+            if (isUserPuck(req.body.id, req.body.properties)) {
+                throw new Err(400, null, 'User markers cannot be saved as features');
+            }
 
             // Saving to database implies archived
             req.body.properties.archived = true;
@@ -245,13 +282,10 @@ export default async function router(schema: Schema, config: ConfigStateless) {
                 })),
             } as Static<typeof FeatureResponse>;
 
-            if (req.query.broadcast) {
+            if (req.query.submit || req.query.broadcast) {
                 await config.hub.submitCots({
-                    connection: user.email,
+                    ...hubOpts,
                     cots: [await CoTParser.from_geojson(feat)],
-                    write: false,
-                    broadcast: true,
-                    ifPooled: true,
                 });
             }
 

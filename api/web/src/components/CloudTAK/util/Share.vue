@@ -19,7 +19,7 @@
                     /><span class='mx-2'>{{ selectedGroups.size }}</span>
                 </div>
                 <div class='d-flex align-items-center'>
-                    <IconAmbulance
+                    <IconCloudPin
                         :size='20'
                         stroke='1'
                     /><span class='mx-2'>{{ selectedMissions.size }}</span>
@@ -54,24 +54,33 @@
                 :disabled='loading'
             >
                 <template #option='{ option }'>
-                    <IconUsers
+                    <span
                         v-if='option.value === "users"'
-                        v-tooltip='"Users"'
-                        :size='24'
-                        stroke='1'
-                    />
-                    <IconAffiliate
+                        title='Users'
+                    >
+                        <IconUsers
+                            :size='24'
+                            stroke='1'
+                        />
+                    </span>
+                    <span
                         v-else-if='option.value === "groups"'
-                        v-tooltip='"Channels"'
-                        :size='24'
-                        stroke='1'
-                    />
-                    <IconAmbulance
+                        title='Channels'
+                    >
+                        <IconAffiliate
+                            :size='24'
+                            stroke='1'
+                        />
+                    </span>
+                    <span
                         v-else
-                        v-tooltip='"Data Syncs"'
-                        :size='24'
-                        stroke='1'
-                    />
+                        title='Data Syncs'
+                    >
+                        <IconCloudPin
+                            :size='24'
+                            stroke='1'
+                        />
+                    </span>
                     <span class='ms-2'>{{ option.label }}</span>
                 </template>
             </TablerPillGroup>
@@ -149,7 +158,7 @@
                             class='col-lg-12 py-2 px-2 cloudtak-hover rounded cursor-pointer user-select-none'
                             @click='selectedMissions.has(m) ? selectedMissions.delete(m) : selectedMissions.add(m)'
                         >
-                            <IconAmbulance
+                            <IconCloudPin
                                 v-if='!selectedMissions.has(m)'
                                 :size='24'
                                 stroke='1'
@@ -174,7 +183,7 @@
                     class='col-6'
                 >
                     <TablerButton
-                        v-tooltip='"Share to Selected"'
+                        title='Share to Selected'
                         :disabled='(selectedUsers.size === 0 && selectedGroups.size === 0 && selectedMissions.size === 0) || loading'
                         class='w-100 btn-primary'
                         @click='share'
@@ -189,7 +198,7 @@
                 </div>
                 <div class='col-6'>
                     <TablerButton
-                        v-tooltip='"Broadcast to All Users"'
+                        title='Broadcast to All Users'
                         :disabled='loading'
                         class='w-100 btn-secondary'
                         @click='broadcast'
@@ -210,7 +219,7 @@
 <script setup lang='ts'>
 import { ref, computed, watch, onMounted } from 'vue';
 import type { Ref } from 'vue';
-import { liveQuery } from 'dexie';
+import { liveQuery } from '../../../database.ts';
 import { useObservable } from '@vueuse/rxjs';
 import { from } from 'rxjs';
 import { OriginMode } from '../../../base/cot.ts';
@@ -230,7 +239,7 @@ import {
     IconCheck,
     IconBroadcast,
     IconAffiliate,
-    IconAmbulance,
+    IconCloudPin,
     IconShare2
 } from '@tabler/icons-vue';
 import Subscription from '../../../base/subscription.ts';

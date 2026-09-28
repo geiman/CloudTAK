@@ -1,4 +1,5 @@
-import Dexie, { type EntityTable } from 'dexie';
+import Dexie, { liveQuery as dexieLiveQuery, RangeSet, type EntityTable, type Observable } from 'dexie';
+import { withTimeout, TimeoutError } from './utils/async.ts';
 import type {
     Feature,
     GroupChannel,
@@ -9,6 +10,7 @@ import type {
     MissionLog,
     Contact,
     Server,
+    ProfileFile,
     ProfileOverlayList
 } from './types.ts';
 
@@ -99,9 +101,15 @@ export interface DBIconset {
     default_neutral: string | null;
     default_unknown: string | null;
     skip_resize: boolean;
+    /** version/updated of the iconset whose icons are cached in db.icon */
+    icons_version?: number;
+    icons_updated?: string;
 }
 
 export type DBOverlay = ProfileOverlayList["items"][number];
+
+/** Profile asset metadata retained for files downloaded for offline use */
+export type DBProfileFile = ProfileFile;
 
 export interface DBFilter {
     id: string;
@@ -151,6 +159,12 @@ export interface DBSubscriptionFeature {
     mission: string;
     properties: Feature["properties"];
     geometry: Feature["geometry"];
+    /** False while a local change has not been confirmed by the server */
+    synced: boolean;
+    /** Tombstone for a local delete that has not been confirmed by the server */
+    deleted: boolean;
+    attempts: number;
+    error?: string;
 }
 
 export interface DBSubscriptionLayer {
@@ -282,6 +296,7 @@ export type DatabaseType = Dexie & {
     mission_template_log: EntityTable<DBMissionTemplateLog, 'id'>,
     kv: EntityTable<DBKV, 'key'>,
     profile: EntityTable<DBProfileConfig, 'key'>,
+    profile_file: EntityTable<DBProfileFile, 'id'>,
     config: EntityTable<DBConfig, 'key'>,
     cache: EntityTable<DBCache, 'key'>,
     contact: EntityTable<Contact, 'uid'>
@@ -289,7 +304,7 @@ export type DatabaseType = Dexie & {
 
 export const db = new Dexie('CloudTAK') as DatabaseType;
 
-db.version(2).stores({
+db.version(4).stores({
     kv: 'key',
 
     server: '_id',
@@ -304,6 +319,7 @@ db.version(2).stores({
     video: 'id, username',
     feature: 'id, path',
     profile: 'key',
+    profile_file: 'id, name, path',
     contact: 'uid, callsign',
     config: 'key',
     cache: 'key',
@@ -325,6 +341,12 @@ db.version(2).stores({
 
     mission_template: 'id, name',
     mission_template_log: 'id, template, [template+id]',
+}).upgrade(async (tx) => {
+    await tx.table('subscription_feature').toCollection().modify({
+        synced: true,
+        deleted: false,
+        attempts: 0,
+    });
 });
 
 let reopenPromise: Promise<void> | null = null;
@@ -335,6 +357,8 @@ let reopenPromise: Promise<void> | null = null;
 // proactively on pagehide and suppress the auto-reopen; a pageshow (bfcache
 // restore) resumes.
 let shuttingDown = false;
+
+let suspended = false;
 
 if (typeof window !== 'undefined') {
     window.addEventListener('pagehide', () => {
@@ -356,13 +380,13 @@ if (typeof window !== 'undefined') {
 }
 
 export async function ensureDatabase(): Promise<void> {
-    if (shuttingDown || db.isOpen()) return;
+    if (shuttingDown || suspended || db.isOpen()) return;
 
     if (!reopenPromise) {
         reopenPromise = (async () => {
             let lastError: unknown;
             for (let attempt = 0; attempt < 5; attempt++) {
-                if (shuttingDown || db.isOpen()) return;
+                if (shuttingDown || suspended || db.isOpen()) return;
 
                 try {
                     await db.open();
@@ -402,8 +426,112 @@ const TRANSIENT_DB_ERROR_MESSAGES = [
     'premature commit'
 ];
 
+// A close that arrives while suspended (the storage process died) is
+// reopened on resume rather than immediately
+let closedWhileSuspended = false;
+
 db.on('close', () => {
-    if (!shuttingDown) void ensureDatabase();
+    if (shuttingDown) return;
+
+    if (suspended) {
+        closedWhileSuspended = true;
+        return;
+    }
+
+    void ensureDatabase();
+});
+
+/** Thrown for any IndexedDB access while suspendDatabase() is in effect */
+export class DatabaseSuspendedError extends Error {
+    constructor(message = 'IndexedDB is suspended while the app is in the background') {
+        super(message);
+        this.name = 'DatabaseSuspendedError';
+    }
+}
+
+export class DatabaseUnavailableError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'DatabaseUnavailableError';
+    }
+}
+
+// Feature ids whose persist was skipped while suspended. Re-persisted from
+// the in-memory copy on resume so the offline cache does not drift.
+const deferredFeatureIds = new Set<string>();
+
+export function isDatabaseSuspended(): boolean {
+    return suspended;
+}
+
+// Matched by name - the class does not survive the Comlink boundary
+export function isDatabaseSuspendedError(err: unknown): boolean {
+    return (err as { name?: string } | null)?.name === 'DatabaseSuspendedError';
+}
+
+let liveQueryDropped = false;
+
+/**
+ * Dexie liveQuery that survives suspension. Any other rejection ends the
+ * subscription for good; Dexie discards an AbortError and keeps listening,
+ * and resumeDatabase() re-runs what was skipped.
+ */
+export function liveQuery<T>(querier: () => T | Promise<T>): Observable<T> {
+    return dexieLiveQuery(async () => {
+        try {
+            return await querier();
+        } catch (err) {
+            if (!isDatabaseSuspendedError(err)) throw err;
+            liveQueryDropped = true;
+            throw new DOMException('liveQuery skipped while suspended', 'AbortError');
+        }
+    });
+}
+
+/**
+ * Reject every IndexedDB transaction synchronously, before an
+ * IDBTransaction is opened, so nothing is ever in flight while the app is
+ * backgrounded. A closed database is not reopened until resumeDatabase().
+ */
+export function suspendDatabase(): void {
+    suspended = true;
+}
+
+export function resumeDatabase(): void {
+    if (!suspended) return;
+    suspended = false;
+
+    if (closedWhileSuspended && !shuttingDown) {
+        closedWhileSuspended = false;
+        void ensureDatabase();
+    }
+
+    if (liveQueryDropped) {
+        liveQueryDropped = false;
+        Dexie.on.storagemutated.fire({ all: new RangeSet(-Infinity, [[]]) });
+    }
+}
+
+export function deferFeaturePersist(id: string): void {
+    deferredFeatureIds.add(id);
+}
+
+export function takeDeferredFeatureIds(): string[] {
+    const ids = [...deferredFeatureIds];
+    deferredFeatureIds.clear();
+    return ids;
+}
+
+db.use({
+    stack: 'dbcore',
+    name: 'CloudTAKSuspend',
+    create: (core) => ({
+        ...core,
+        transaction: (stores, mode, options) => {
+            if (suspended) throw new DatabaseSuspendedError();
+            return core.transaction(stores, mode, options);
+        }
+    })
 });
 
 export function isTransientDbError(err: unknown): boolean {
@@ -415,6 +543,9 @@ export function isTransientDbError(err: unknown): boolean {
 }
 
 export async function withDbRetry<T>(fn: () => Promise<T>, attempts = 4): Promise<T> {
+    // Never let a retry reopen a closed database while suspended
+    if (suspended) throw new DatabaseSuspendedError();
+
     let lastError: unknown;
 
     for (let attempt = 0; attempt < attempts; attempt++) {
@@ -431,4 +562,27 @@ export async function withDbRetry<T>(fn: () => Promise<T>, attempts = 4): Promis
     }
 
     throw lastError;
+}
+
+/**
+ * Bounded round trip to the storage process. A wedged IndexedDB (see
+ * suspendDatabase()) never answers, so callers on a boot path use this to
+ * fail in seconds with a DatabaseUnavailableError instead of hanging until
+ * their own, much longer, stage timeout.
+ */
+export async function probeDatabase(timeoutMs: number): Promise<void> {
+    const probe = (async () => {
+        await ensureDatabase();
+        await db.config.count();
+    })();
+
+    try {
+        await withTimeout(probe, timeoutMs, 'IndexedDB probe');
+    } catch (err) {
+        if (err instanceof TimeoutError) {
+            throw new DatabaseUnavailableError(`IndexedDB did not respond within ${timeoutMs}ms - the WebView storage process is not answering`);
+        }
+
+        throw err;
+    }
 }

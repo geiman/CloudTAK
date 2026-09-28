@@ -1,11 +1,10 @@
 import { Static, Type } from '@sinclair/typebox';
 import Schema from '@openaddresses/batch-schema';
-import { GenerateUpsert } from '@openaddresses/batch-generic';
 import crypto from 'node:crypto';
 import Err from '@openaddresses/batch-error';
-import { ConnectionFeature } from '../../common/schema.js';
 import Auth, { AuthResourceAccess } from '../../common/auth.js';
 import Style from '../../common/style.js';
+import { archiveCots } from '../lib/control/feature.js';
 import type ConfigStateless from '../config.js';
 import { HistoryOptions } from '@tak-ps/node-tak/lib/api/query';
 import { CoTParser, Feature } from '@tak-ps/node-cot';
@@ -123,8 +122,8 @@ export default async function router(schema: Schema, config: ConfigStateless) {
                     // Once NodeJS supports Set.difference we can simplify this
                     const inputFeats = new Set(req.body.uids);
 
-                    const features = await api.MissionLayer.latestFeats(
-                        data.name,
+                    const { features } = await api.MissionLayer.latestFeats(
+                        data.mission_guid || data.name,
                         `layer-${layer.id}`,
                         { token: data.mission_token || undefined },
                     );
@@ -137,7 +136,7 @@ export default async function router(schema: Schema, config: ConfigStateless) {
                              *  cots.push(cot);
                              */
                             await api.Mission.detachContents(
-                                data.name,
+                                data.mission_guid || data.name,
                                 { uid: String(feat.id) },
                                 { token: data.mission_token || undefined },
                             );
@@ -150,7 +149,7 @@ export default async function router(schema: Schema, config: ConfigStateless) {
                     }
 
                     const pathMap = await api.MissionLayer.listAsPathMap(
-                        data.name,
+                        data.mission_guid || data.name,
                         { token: data.mission_token || undefined },
                     );
 
@@ -169,7 +168,7 @@ export default async function router(schema: Schema, config: ConfigStateless) {
 
                             if (!pathMapEntry) {
                                 const missionLayer = await api.MissionLayer.create(
-                                    data.name,
+                                    data.mission_guid || data.name,
                                     {
                                         uid: `layer-${layer.id}-${crypto.randomUUID()}`,
                                         name: p,
@@ -206,7 +205,7 @@ export default async function router(schema: Schema, config: ConfigStateless) {
 
                         if (api.MissionLayer.isEmpty(pathLayer)) {
                             await api.MissionLayer.delete(
-                                data.name,
+                                data.mission_guid || data.name,
                                 {
                                     uid: [pathLayer.uid],
                                     creatorUid: `connection-${data.connection}-data-${data.id}`,
@@ -238,27 +237,7 @@ export default async function router(schema: Schema, config: ConfigStateless) {
             } else {
                 cots = cots.filter(cot => !cot.is_stale());
 
-                const insertValues = [];
-                for (const cot of cots) {
-                    insertValues.push({
-                        path: '/',
-                        connection: layer.connection,
-                        layer: layer.id,
-                        ...(await CoTParser.to_geojson(cot)),
-                    });
-                }
-
-                try {
-                    if (insertValues.length && req.query.archive) {
-                        await config.models.ConnectionFeature.generate(insertValues, {
-                            upsert: GenerateUpsert.UPDATE,
-                            upsertTarget: [ConnectionFeature.connection, ConnectionFeature.id],
-                        });
-                    }
-                } catch (err) {
-                    // We don't throw as priority is TAK Server Delivery
-                    console.error(err);
-                }
+                if (req.query.archive) await archiveCots(config, cots, layer.connection, layer.id);
             }
 
             if (cots.length === 0 && !errors.length) {

@@ -15,7 +15,7 @@
                     :inline='true'
                     desc='Loading Task'
                 />
-                <template v-else-if='selected.id'>
+                <template v-else-if='selected.prefix'>
                     <div class='col-12 d-flex align-items-center user-select-none'>
                         <img
                             v-if='selected.logo'
@@ -34,17 +34,57 @@
                             class='mx-2'
                             v-text='selected.name'
                         />
-                        <div class='ms-auto btn-list'>
+                        <div class='ms-auto btn-list align-items-center'>
+                            <template v-if='updates'>
+                                <div
+                                    v-if='loading.update'
+                                    class='spinner-border spinner-border-sm'
+                                    role='status'
+                                />
+                                <div
+                                    v-else-if='checkedUpdate && !latestVersion'
+                                    class='d-flex align-items-center'
+                                >
+                                    <span class='small text-muted'>Up to date</span>
+                                    <TablerRefreshButton
+                                        title='Check for Updates'
+                                        class='ms-1'
+                                        :size='20'
+                                        :loading='loading.update'
+                                        @click='checkUpdates'
+                                    />
+                                </div>
+                                <button
+                                    v-else-if='latestVersion'
+                                    class='btn btn-sm btn-primary'
+                                    @click='emit("update", { prefix: String(selected.prefix), from: String(selected.version), to: latestVersion })'
+                                >
+                                    Update to v<span v-text='latestVersion' />
+                                </button>
+                                <button
+                                    v-else
+                                    class='btn btn-sm btn-secondary'
+                                    @click='checkUpdates'
+                                >
+                                    <IconRefresh
+                                        :size='16'
+                                        stroke='1'
+                                        class='me-1'
+                                    />
+                                    Check for Updates
+                                </button>
+                            </template>
+
                             <TablerEnum
                                 v-model='selected.version'
+                                :disabled='disabled'
                                 :options='selected.versions'
                             />
 
-
                             <TablerIconButton
-                                v-if='selected.id'
+                                v-if='!disabled'
                                 title='Remove Task'
-                                @click='selected.id = undefined'
+                                @click='selected = { id: undefined }'
                             >
                                 <IconTrash
                                     :size='32'
@@ -128,7 +168,7 @@
                 </template>
             </div>
             <div
-                v-if='!loading.main && !loading.task && list.total > paging.limit && !selected.id'
+                v-if='!loading.main && !loading.task && list.total > paging.limit && !selected.prefix'
                 class='card-footer d-flex'
             >
                 <div class='ms-auto'>
@@ -193,6 +233,7 @@ import type { APIList } from '../../types.ts';
 import {
     IconStar,
     IconTrash,
+    IconRefresh,
     IconBroadcast,
     IconInfoSquare,
 } from '@tabler/icons-vue';
@@ -205,6 +246,7 @@ import {
     TablerInput,
     TablerPager,
     TablerNone,
+    TablerRefreshButton,
 } from '@tak-ps/vue-tabler';
 
 interface Task {
@@ -221,17 +263,29 @@ interface Task {
     [key: string]: unknown;
 }
 
+export interface TaskUpdate {
+    prefix: string;
+    from: string;
+    to: string;
+}
+
 const props = withDefaults(defineProps<{
     modelValue?: string;
     disabled?: boolean;
+    updates?: boolean;
 }>(), {
     modelValue: undefined,
     disabled: false,
+    updates: false,
 });
 
 const emit = defineEmits<{
     (e: 'update:modelValue', value: string | undefined): void;
+    (e: 'update', value: TaskUpdate): void;
 }>();
+
+const checkedUpdate = ref(false);
+const latestVersion = ref<string>();
 
 const loading = ref<Record<string, boolean>>({
     main: true,
@@ -269,10 +323,11 @@ async function resolveTask(task: Task): Promise<Task> {
     const existing = list.value.items.find((item) => item.prefix === task.prefix);
     if (existing) return existing;
 
-    const res = await server.GET('/api/task', {
+    const res = await server.GET('/api/integration', {
         params: {
             query: {
-                filter: String(task.prefix || ''),
+                filter: '',
+                prefix: String(task.prefix),
                 limit: 1,
                 page: 0,
                 order: paging.value.order,
@@ -283,13 +338,17 @@ async function resolveTask(task: Task): Promise<Task> {
 
     if (res.error) throw new Error(res.error.message);
 
-    const match = res.data.items.find((item) => item.prefix === task.prefix);
-
-    return match || task;
+    // Unregistered tasks still render using their prefix as the name
+    return res.data.items[0] || { ...task, name: task.prefix };
 }
 
+watch(() => [selected.value.prefix, selected.value.version], () => {
+    checkedUpdate.value = false;
+    latestVersion.value = undefined;
+});
+
 watch(selected, () => {
-    if (selected.value.id) {
+    if (selected.value.prefix) {
         emit('update:modelValue', `${selected.value.prefix}-v${selected.value.version}`);
     } else {
         emit('update:modelValue', undefined);
@@ -301,10 +360,10 @@ watch(selected, () => {
 watch(infoModal, async function() {
     if (!infoModal.value) return;
 
-    const res = await server.GET('/api/task/{:task}/readme', {
+    const res = await server.GET('/api/integration/{:integrationid}/readme', {
         params: {
             path: {
-                ':task': Number(infoModal.value.id)
+                ':integrationid': Number(infoModal.value.id)
             }
         }
     });
@@ -346,10 +405,10 @@ async function select(task: Task, version?: string) {
     loading.value.task = true;
 
     const resolvedTask = await resolveTask(task);
-    const res = await server.GET('/api/task/raw/{:task}', {
+    const res = await server.GET('/api/integration/raw/{:prefix}', {
         params: {
             path: {
-                ':task': String(task.prefix)
+                ':prefix': String(task.prefix)
             }
         }
     });
@@ -366,9 +425,36 @@ async function select(task: Task, version?: string) {
     loading.value.task = false;
 }
 
+async function checkUpdates() {
+    if (!selected.value.prefix) return;
+
+    loading.value.update = true;
+
+    try {
+        const res = await server.GET('/api/integration/raw/{:prefix}', {
+            params: {
+                path: {
+                    ':prefix': String(selected.value.prefix)
+                }
+            }
+        });
+
+        if (res.error) throw new Error(res.error.message);
+
+        const versions = res.data.versions.map((v) => v.version);
+        selected.value.versions = versions;
+
+        const latest = versions[0];
+        latestVersion.value = (latest && latest !== selected.value.version) ? latest : undefined;
+        checkedUpdate.value = true;
+    } finally {
+        loading.value.update = false;
+    }
+}
+
 async function listTasks() {
     loading.value.list = true;
-    const res = await server.GET('/api/task', {
+    const res = await server.GET('/api/integration', {
         params: {
             query: {
                 filter: paging.value.filter,

@@ -9,21 +9,26 @@ import { OrientationPermission } from './device/orientation.ts';
 import { StoragePermission } from './device/storage.ts';
 import { WakeLockPermission } from './device/wake-lock.ts';
 import { NetworkStatus } from './device/network.ts';
+import { BatteryStatus } from './device/battery.ts';
 import type { BrowserPermissionState, BrowserPermissionType, DevicePermissionContext, FileSystemAccessHandle } from './device/types.ts';
 export type { BrowserPermissionState, BrowserPermissionType } from './device/types.ts';
 export { CameraPermission } from './device/camera.ts';
 export { FileSystemPermission } from './device/file-system.ts';
 export { GeolocationPermission } from './device/geolocation.ts';
+export type { NativeDeliveryOptions } from './device/geolocation.ts';
 export { BrowserNotificationPermission } from './device/notification.ts';
 export type { PushNotificationData } from './device/notification.ts';
 export { OrientationPermission } from './device/orientation.ts';
 export { StoragePermission } from './device/storage.ts';
 export { WakeLockPermission } from './device/wake-lock.ts';
 export { NetworkStatus } from './device/network.ts';
+export { BatteryStatus } from './device/battery.ts';
+export type { BatteryInfo } from './device/battery.ts';
 
 export const useDeviceStore = defineStore('device', () => {
     const permissions = reactive<Record<BrowserPermissionType, BrowserPermissionState>>({
         location: 'unknown',
+        backgroundLocation: 'unknown',
         notification: 'unknown',
         orientation: 'unknown',
         storage: 'unknown',
@@ -60,6 +65,18 @@ export const useDeviceStore = defineStore('device', () => {
     const wakeLock = markRaw(new WakeLockPermission(context));
     const fileSystem = markRaw(new FileSystemPermission(context));
     const network = markRaw(new NetworkStatus());
+    const battery = markRaw(new BatteryStatus());
+
+    const REQUIRED_PERMISSIONS: BrowserPermissionType[] = ['location', 'notification'];
+
+    function isPermissionSatisfied(type: BrowserPermissionType): boolean {
+        const state = permissions[type];
+        return state === 'granted' || state === 'when_in_use' || state === 'unsupported';
+    }
+
+    function hasRequiredPermissions(): boolean {
+        return REQUIRED_PERMISSIONS.every(isPermissionSatisfied);
+    }
 
     async function refreshPermissionStatuses(): Promise<void> {
         await Promise.all([
@@ -85,6 +102,7 @@ export const useDeviceStore = defineStore('device', () => {
     return {
         permissions,
         network,
+        battery,
         geolocation,
         notification,
         orientation,
@@ -93,6 +111,9 @@ export const useDeviceStore = defineStore('device', () => {
         wakeLock,
         fileSystem,
         setPermissionStatus,
+        requiredPermissions: REQUIRED_PERMISSIONS,
+        isPermissionSatisfied,
+        hasRequiredPermissions,
         refreshPermissionStatuses,
         initializePermissionSubscriptions,
         hasOrientationSupport: () => orientation.hasSupport(),

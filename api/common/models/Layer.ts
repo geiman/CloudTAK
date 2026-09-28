@@ -6,7 +6,7 @@ import { FilterContainer } from '../filter.js';
 import { Layer_Priority } from '../enums.js';
 import { Static, Type } from '@sinclair/typebox';
 import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
-import { Connection, Layer, LayerIncoming, LayerOutgoing } from '../schema.js';
+import { Connection, Integration, Layer, LayerIncoming, LayerOutgoing } from '../schema.js';
 import { sql, eq, asc, desc, is, SQL } from 'drizzle-orm';
 
 export const Layer_Config = Type.Object({
@@ -22,6 +22,7 @@ export const AugmentedLayerOutgoing = Type.Object({
     environment: Type.Any(),
     ephemeral: Type.Record(Type.String(), Type.Any()),
     filters: FilterContainer,
+    subscriptions: Type.Array(Type.String()),
 });
 
 export const AugmentedLayerIncoming = Type.Object({
@@ -43,7 +44,6 @@ export const AugmentedLayer = Type.Object({
     status: Type.Optional(Type.String()),
     created: Type.String(),
     updated: Type.String(),
-    template: Type.Boolean(),
     connection: Type.Union([Type.Null(), Type.Integer()]),
     username: Type.Union([Type.Null(), Type.String()]),
     uuid: Type.String(),
@@ -52,10 +52,21 @@ export const AugmentedLayer = Type.Object({
     enabled: Type.Boolean(),
     protected: Type.Boolean(),
     logging: Type.Boolean(),
-    task: Type.String(),
+    task: Type.String({ description: 'Container tag as <integration prefix>-v<version>' }),
+    version: Type.String(),
+    integration: Type.Object({
+        name: Type.String(),
+        icon: Type.Union([Type.Null(), Type.String()], { description: 'Base64 Data URL of the Integration Icon' }),
+    }),
     memory: Type.Integer(),
     timeout: Type.Integer(),
     priority: Type.Enum(Layer_Priority),
+    permissions: Type.Array(Type.String()),
+
+    /** @deprecated Layer Templates were removed - always false, retained for ETL Task compatibility */
+    template: Type.Boolean({
+        description: 'Deprecated: Layer Templates have been removed - this value is always false',
+    }),
 
     alarm_period: Type.Integer(),
     alarm_evals: Type.Integer(),
@@ -78,26 +89,30 @@ export default class LayerModel extends Modeler<typeof Layer> {
         super(pool, Layer);
     }
 
+    /**
+     * Distinct Integration prefixes in use by at least one Layer
+     */
     async tasks(): Promise<string[]> {
         const pgres = await this.pool
-            .select({
-                task: Layer.task,
+            .selectDistinct({
+                prefix: Integration.prefix,
             })
-            .from(Layer);
+            .from(Layer)
+            .innerJoin(Integration, eq(Layer.task, Integration.id));
 
-        if (pgres.length === 0) {
-            return [];
-        } else {
-            const taskSet: Set<string> = new Set();
-            for (const t of pgres) {
-                taskSet.add(t.task.replace(/-v\d+\.\d+\.\d+/, ''));
-            }
-
-            return Array.from(taskSet);
-        }
+        return pgres.map(t => t.prefix);
     }
 
-    parse(l: Static<typeof AugmentedLayer>): Static<typeof AugmentedLayer> {
+    parse(input: Omit<Static<typeof AugmentedLayer>, 'template'>): Static<typeof AugmentedLayer> {
+        const l = input as Static<typeof AugmentedLayer>;
+
+        // Layer Templates have been removed but ETL Tasks still require the key to be present
+        l.template = false;
+
+        if (!l.parent || !l.parent.id) {
+            delete l.parent;
+        }
+
         if (l.incoming && l.incoming.layer) {
             if (typeof l.incoming.config === 'string') l.incoming.config = JSON.parse(l.incoming.config);
             if (typeof l.incoming.styles === 'string') l.incoming.styles = JSON.parse(l.incoming.styles);
@@ -153,11 +168,16 @@ export default class LayerModel extends Modeler<typeof Layer> {
                 enabled: Layer.enabled,
                 protected: Layer.protected,
                 logging: Layer.logging,
-                task: Layer.task,
-                template: Layer.template,
+                task: sql<string>`${Integration.prefix} || '-v' || ${Layer.version}`,
+                version: Layer.version,
+                integration: jsonBuildObject({
+                    name: Integration.name,
+                    icon: Integration.logo,
+                }),
                 connection: Layer.connection,
                 memory: Layer.memory,
                 timeout: Layer.timeout,
+                permissions: Layer.permissions,
 
                 alarm_period: Layer.alarm_period,
                 alarm_evals: Layer.alarm_evals,
@@ -190,9 +210,11 @@ export default class LayerModel extends Modeler<typeof Layer> {
                     environment: LayerOutgoing.environment,
                     ephemeral: LayerOutgoing.ephemeral,
                     filters: LayerOutgoing.filters,
+                    subscriptions: LayerOutgoing.subscriptions,
                 }),
             })
             .from(Layer)
+            .innerJoin(Integration, eq(Layer.task, Integration.id))
             .leftJoin(Connection, eq(Layer.connection, Connection.id))
             .leftJoin(LayerIncoming, eq(LayerIncoming.layer, Layer.id))
             .leftJoin(LayerOutgoing, eq(LayerOutgoing.layer, Layer.id))
@@ -201,7 +223,7 @@ export default class LayerModel extends Modeler<typeof Layer> {
 
         if (pgres.length !== 1) throw new Err(404, null, `Item Not Found`);
 
-        return this.parse(pgres[0] as Static<typeof AugmentedLayer>);
+        return this.parse(pgres[0] as Omit<Static<typeof AugmentedLayer>, 'template'>);
     }
 
     async augmented_count(query: GenericCountInput = {}): Promise<number> {
@@ -235,11 +257,16 @@ export default class LayerModel extends Modeler<typeof Layer> {
                 enabled: Layer.enabled,
                 protected: Layer.protected,
                 logging: Layer.logging,
-                task: Layer.task,
-                template: Layer.template,
+                task: sql<string>`${Integration.prefix} || '-v' || ${Layer.version}`,
+                version: Layer.version,
+                integration: jsonBuildObject({
+                    name: Integration.name,
+                    icon: Integration.logo,
+                }),
                 connection: Layer.connection,
                 memory: Layer.memory,
                 timeout: Layer.timeout,
+                permissions: Layer.permissions,
 
                 alarm_period: Layer.alarm_period,
                 alarm_evals: Layer.alarm_evals,
@@ -272,9 +299,11 @@ export default class LayerModel extends Modeler<typeof Layer> {
                     environment: LayerOutgoing.environment,
                     ephemeral: LayerOutgoing.ephemeral,
                     filters: LayerOutgoing.filters,
+                    subscriptions: LayerOutgoing.subscriptions,
                 }),
             })
             .from(Layer)
+            .innerJoin(Integration, eq(Layer.task, Integration.id))
             .leftJoin(Connection, eq(Layer.connection, Connection.id))
             .leftJoin(LayerIncoming, eq(LayerIncoming.layer, Layer.id))
             .leftJoin(LayerOutgoing, eq(LayerOutgoing.layer, Layer.id))
@@ -289,7 +318,7 @@ export default class LayerModel extends Modeler<typeof Layer> {
             return {
                 total: parseInt(pgres[0].count),
                 items: pgres.map((t) => {
-                    return this.parse(t as Static<typeof AugmentedLayer>);
+                    return this.parse(t as Omit<Static<typeof AugmentedLayer>, 'template'>);
                 }),
             };
         }

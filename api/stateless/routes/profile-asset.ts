@@ -1,81 +1,22 @@
 import path from 'node:path';
-import { Static, Type } from '@sinclair/typebox';
+import { Type } from '@sinclair/typebox';
 import { StandardResponse, ProfileFileResponse } from '../../common/types.js';
 import { sql, eq } from 'drizzle-orm';
-import { fetch } from '@tak-ps/node-safeurl';
 import Schema from '@openaddresses/batch-schema';
 import Err from '@openaddresses/batch-error';
 import Auth from '../../common/auth.js';
 import S3 from '../../common/aws/s3.js';
-import jwt from 'jsonwebtoken';
-import { TAKAPI, APIAuthCertificate } from '@tak-ps/node-tak';
+import IconsetControl from '../../common/control/iconset.js';
+import ProfileFileControl from '../../common/control/profile-file.js';
 import { ProfileFile, ProfileFileChannel } from '../../common/schema.js';
 import type ConfigStateless from '../config.js';
-import activeChannels from '../lib/tak-channels.js';
+import { userChannels } from '../lib/tak-channels.js';
+import { profileAssetTileJSON } from '../lib/tilejson.js';
 import * as Default from '../lib/limits.js';
 
-const CONTENT_TYPES: Record<string, string> = {
-    json: 'application/json',
-    png: 'image/png',
-    jpg: 'image/jpeg',
-    jpeg: 'image/jpeg',
-    webp: 'image/webp',
-    gif: 'image/gif',
-    tif: 'image/tiff',
-    tiff: 'image/tiff',
-};
-
-const GROUNDOVERLAY_EXT = /^\.groundoverlay-\d+\.(png|jpg|jpeg|webp|gif|tif|tiff)$/i;
-const GROUNDOVERLAY_MANIFEST_MAX_BYTES = 5 * 1024 * 1024;
-
-const GroundOverlayManifest = Type.Object({
-    overlays: Type.Array(Type.Object({
-        name: Type.String(),
-        mime: Type.Optional(Type.String()),
-        ext: Type.String(),
-        opacity: Type.Optional(Type.Number()),
-        coordinates: Type.Array(Type.Tuple([Type.Number(), Type.Number()]), {
-            minItems: 4,
-            maxItems: 4,
-        }),
-    })),
-});
-
 export default async function router(schema: Schema, config: ConfigStateless) {
-    async function ensureIconsetPermission(iconset: string | null | undefined, email: string) {
-        if (iconset === undefined || iconset === null || iconset === '') return;
-
-        const iconsetRes = await config.models.Iconset.from(iconset);
-
-        if (iconsetRes.username !== email) {
-            throw new Err(403, null, `You do not have permission to associate iconset '${iconset}'`);
-        }
-    }
-
-    async function readGroundOverlayManifest(key: string): Promise<Static<typeof GroundOverlayManifest>> {
-        const head = await S3.head(key);
-        const contentLength = head.ContentLength || 0;
-        if (contentLength > GROUNDOVERLAY_MANIFEST_MAX_BYTES) {
-            throw new Err(413, null, 'Ground overlay manifest exceeds the 5 MiB limit');
-        }
-
-        const stream = await S3.get(key);
-        const chunks: Buffer[] = [];
-        let total = 0;
-
-        for await (const chunk of stream) {
-            const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-            total += buffer.length;
-
-            if (total > GROUNDOVERLAY_MANIFEST_MAX_BYTES) {
-                throw new Err(413, null, 'Ground overlay manifest exceeds the 5 MiB limit');
-            }
-
-            chunks.push(buffer);
-        }
-
-        return JSON.parse(Buffer.concat(chunks).toString('utf8')) as Static<typeof GroundOverlayManifest>;
-    }
+    const iconsetControl = new IconsetControl(config);
+    const profileFileControl = new ProfileFileControl(config);
 
     await schema.get('/profile/asset', {
         name: 'List Files',
@@ -107,9 +48,7 @@ export default async function router(schema: Schema, config: ConfigStateless) {
     }, async (req, res) => {
         try {
             const user = await Auth.as_user(config, req);
-            const profile = await config.models.Profile.from(user.email);
-            const api = await TAKAPI.init(new URL(String(config.server.api)), new APIAuthCertificate(profile.auth.cert, profile.auth.key));
-            const channels = [...await activeChannels(api)];
+            const channels = [...await userChannels(config, user.email)];
             const where = channels.length
                 ? sql`
                     name ~* ${req.query.filter}
@@ -167,6 +106,12 @@ export default async function router(schema: Schema, config: ConfigStateless) {
                 throw new Err(403, null, 'You do not have permission to delete this asset');
             }
 
+            const files = [file];
+            for (let index = 0; index < files.length; index++) {
+                files.push(...await config.pg.select().from(ProfileFile)
+                    .where(eq(ProfileFile.parent, files[index].id)));
+            }
+
             await config.models.ProfileFile.delete(req.params.asset);
 
             if (file.iconset) {
@@ -186,9 +131,9 @@ export default async function router(schema: Schema, config: ConfigStateless) {
                 }
             }
 
-            await S3.del(`profile/${user.email}/${req.params.asset}`, {
+            await Promise.all(files.map(child => S3.del(`profile/${child.username}/${child.id}`, {
                 recurse: true,
-            });
+            })));
 
             res.json({
                 status: 200,
@@ -208,6 +153,7 @@ export default async function router(schema: Schema, config: ConfigStateless) {
                 description: 'Random UUID v4 of uploaded asset',
             }),
             name: Type.String(),
+            parent: Type.Optional(Type.Union([Type.Null(), Type.String({ format: 'uuid' })])),
             path: Type.String({
                 default: '/',
             }),
@@ -233,11 +179,16 @@ export default async function router(schema: Schema, config: ConfigStateless) {
                 });
             }
 
-            await ensureIconsetPermission(req.body.iconset, user.email);
+            if (req.body.parent) {
+                await profileFileControl.ensureParentPermission(req.body.parent, user.email, req.body.id);
+            }
+
+            await iconsetControl.ensurePermission(req.body.iconset, user.email);
 
             const file = await config.models.ProfileFile.generate({
                 id: req.body.id,
                 username: user.email,
+                parent: req.body.parent ?? null,
                 name: req.body.name,
                 path: req.body.path,
                 iconset: req.body.iconset ?? null,
@@ -262,6 +213,7 @@ export default async function router(schema: Schema, config: ConfigStateless) {
         }),
         body: Type.Object({
             path: Type.Optional(Type.String()),
+            parent: Type.Optional(Type.Union([Type.Null(), Type.String({ format: 'uuid' })])),
             artifacts: Type.Optional(Type.Array(Type.Object({
                 ext: Type.String(),
             }))),
@@ -278,6 +230,10 @@ export default async function router(schema: Schema, config: ConfigStateless) {
 
             if (file.username !== user.email) {
                 throw new Err(403, null, 'You do not have permission to modify this asset');
+            }
+
+            if (req.body.parent) {
+                await profileFileControl.ensureParentPermission(req.body.parent, user.email, file.id);
             }
 
             if (req.body.artifacts) {
@@ -299,9 +255,10 @@ export default async function router(schema: Schema, config: ConfigStateless) {
                 iconsetValue = req.body.iconset;
             }
 
-            await ensureIconsetPermission(iconsetValue, user.email);
+            await iconsetControl.ensurePermission(iconsetValue, user.email);
 
             file = await config.models.ProfileFile.commit(req.params.asset, {
+                parent: req.body.parent,
                 name: req.body.name,
                 path: req.body.path,
                 iconset: iconsetValue,
@@ -343,98 +300,16 @@ export default async function router(schema: Schema, config: ConfigStateless) {
         try {
             const user = await Auth.as_user(config, req, { token: true });
 
-            const file = await config.models.ProfileFile.from(req.params.asset);
+            const file = await config.models.ProfileFile.augmented_from(req.params.asset);
 
-            if (file.username !== user.email) {
-                throw new Err(403, null, 'You do not have permission to download this asset');
-            }
+            await profileFileControl.ensureReadPermission(file, user.email);
 
-            const ext = req.params.ext.split('.').pop()?.toLowerCase();
-            const contentType = ext ? CONTENT_TYPES[ext] : undefined;
-            if (contentType) res.type(contentType);
+            const object = await S3.getObject(`profile/${file.username}/${req.params.asset}.${req.params.ext}`);
 
-            const stream = await S3.get(`profile/${user.email}/${req.params.asset}.${req.params.ext}`);
+            if (object.contentLength !== undefined) res.set('Content-Length', String(object.contentLength));
+            if (object.contentType) res.set('Content-Type', object.contentType);
 
-            stream.pipe(res);
-        } catch (err) {
-            Err.respond(err, res);
-        }
-    });
-
-    await schema.get('/profile/asset/:asset/groundoverlays', {
-        name: 'Ground Overlay Manifest',
-        group: 'ProfileFile',
-        description: 'Get parsed GroundOverlay metadata extracted from a KML/KMZ asset',
-        query: Type.Object({
-            token: Type.Optional(Type.String()),
-        }),
-        params: Type.Object({
-            asset: Type.String({
-                format: 'uuid',
-            }),
-        }),
-        res: GroundOverlayManifest,
-    }, async (req, res) => {
-        try {
-            const user = await Auth.as_user(config, req, { token: true });
-
-            const file = await config.models.ProfileFile.from(req.params.asset);
-
-            if (file.username !== user.email) {
-                throw new Err(403, null, 'You do not have permission to view this asset');
-            }
-
-            const key = `profile/${user.email}/${req.params.asset}.groundoverlays.json`;
-            if (!await S3.exists(key)) throw new Err(404, null, 'Ground overlay manifest does not exist');
-
-            res.type('application/json');
-            res.json(await readGroundOverlayManifest(key));
-        } catch (err) {
-            Err.respond(err, res);
-        }
-    });
-
-    await schema.get('/profile/asset/:asset/groundoverlay/:index', {
-        name: 'Ground Overlay Image',
-        group: 'ProfileFile',
-        description: 'Get a single GroundOverlay image extracted from a KML/KMZ asset',
-        query: Type.Object({
-            token: Type.Optional(Type.String()),
-        }),
-        params: Type.Object({
-            asset: Type.String({
-                format: 'uuid',
-            }),
-            index: Type.Integer({
-                minimum: 0,
-            }),
-        }),
-    }, async (req, res) => {
-        try {
-            const user = await Auth.as_user(config, req, { token: true });
-
-            const file = await config.models.ProfileFile.from(req.params.asset);
-
-            if (file.username !== user.email) {
-                throw new Err(403, null, 'You do not have permission to view this asset');
-            }
-
-            const key = `profile/${user.email}/${req.params.asset}.groundoverlays.json`;
-            if (!await S3.exists(key)) throw new Err(404, null, 'Ground overlay manifest does not exist');
-            const manifest = await readGroundOverlayManifest(key);
-            const overlay = manifest.overlays[req.params.index];
-            if (!overlay) throw new Err(404, null, 'Ground overlay image does not exist');
-            if (!GROUNDOVERLAY_EXT.test(overlay.ext)) throw new Err(400, null, 'Invalid ground overlay artifact extension');
-
-            const ext = overlay.ext.replace(/^\./, '');
-            const imageKey = `profile/${user.email}/${req.params.asset}${overlay.ext}`;
-            if (!await S3.exists(imageKey)) throw new Err(404, null, 'Ground overlay image does not exist');
-
-            const contentType = overlay.mime || CONTENT_TYPES[ext] || 'application/octet-stream';
-            res.type(contentType);
-
-            const imageStream = await S3.get(imageKey);
-            imageStream.pipe(res);
+            object.body.pipe(res);
         } catch (err) {
             Err.respond(err, res);
         }
@@ -456,40 +331,17 @@ export default async function router(schema: Schema, config: ConfigStateless) {
 
             const file = await config.models.ProfileFile.augmented_from(req.params.asset);
 
-            if (file.username !== user.email) {
-                const fileChannels = (file.channels || []).map(c => Number(c));
-                if (fileChannels.length === 0) {
-                    throw new Err(403, null, 'You do not have permission to view this asset');
-                }
-
-                const profile = await config.models.Profile.from(user.email);
-                const api = await TAKAPI.init(new URL(String(config.server.api)), new APIAuthCertificate(profile.auth.cert, profile.auth.key));
-                const active = await activeChannels(api);
-
-                if (!fileChannels.some(bp => active.has(bp))) {
-                    throw new Err(403, null, 'You do not have permission to view this asset');
-                }
-            }
+            await profileFileControl.ensureReadPermission(file, user.email);
 
             if (!await S3.exists(`profile/${file.username}/${req.params.asset}.pmtiles`)) {
                 throw new Err(404, null, 'Asset does not exist');
             }
 
-            const token = jwt.sign({
-                access: 'profile',
+            res.json(await profileAssetTileJSON(config, {
                 email: user.email,
-                file: `${file.username}/${req.params.asset}`,
-            }, config.SigningSecret);
-
-            const url = new URL(`${config.PMTILES_URL}/tiles/profile/${file.username}/${req.params.asset}`);
-            url.searchParams.append('token', token);
-
-            const tilejson = await fetch(url);
-            if (!tilejson.ok) {
-                throw new Err(tilejson.status, null, `Failed to retrieve TileJSON: ${await tilejson.text()}`);
-            }
-
-            res.json(await tilejson.json());
+                owner: file.username,
+                asset: req.params.asset,
+            }));
         } catch (err) {
             Err.respond(err, res);
         }

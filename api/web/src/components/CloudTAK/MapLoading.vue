@@ -53,7 +53,7 @@
 
 <script setup lang='ts'>
 import Config from '../../base/config.ts';
-import { supportsServiceWorker } from '../../base/capacitor.ts';
+import { supportsServiceWorker, addBackgroundStateListener } from '../../utils/capacitor.ts';
 import { ref, onMounted, onUnmounted } from 'vue';
 import {
     TablerModal,
@@ -64,9 +64,12 @@ const props = defineProps<{
     stage?: string;
 }>();
 
+const RESET_PROMPT_MS = 20000;
+
 const logo = ref('/CloudTAKLogo.svg');
 const showReset = ref(false);
 let resetTimer: ReturnType<typeof setTimeout> | undefined;
+let removeBackgroundListener: (() => void) | undefined;
 
 async function hardReset(): Promise<void> {
     if (supportsServiceWorker()) {
@@ -78,37 +81,41 @@ async function hardReset(): Promise<void> {
     location.reload();
 }
 
-onMounted(async () => {
-    const config = await Config.list(['login::logo']);
-
-    if (config['login::logo']) {
-        logo.value = config['login::logo'];
-    }
-
+function startResetTimer(): void {
+    clearTimeout(resetTimer);
     resetTimer = setTimeout(() => {
         showReset.value = true;
-    }, 20000);
+    }, RESET_PROMPT_MS);
+}
+
+onMounted(async () => {
+    startResetTimer();
+
+    // Count only foreground time - a timer that expired during sleep would
+    // show "Hard Reset" the moment the app resumes
+    removeBackgroundListener = await addBackgroundStateListener((isBackgrounded) => {
+        if (showReset.value) return;
+
+        if (isBackgrounded) {
+            clearTimeout(resetTimer);
+        } else {
+            startResetTimer();
+        }
+    });
+
+    try {
+        const config = await Config.list(['login::logo']);
+
+        if (config['login::logo']) {
+            logo.value = config['login::logo'];
+        }
+    } catch (err) {
+        console.warn('Failed to load custom logo', err);
+    }
 });
 
 onUnmounted(() => {
     clearTimeout(resetTimer);
+    if (removeBackgroundListener) removeBackgroundListener();
 });
 </script>
-
-<style scoped>
-.stage-fade-enter-active,
-.stage-fade-leave-active {
-    transition: opacity 0.4s ease;
-}
-.stage-fade-enter-from,
-.stage-fade-leave-to {
-    opacity: 0;
-}
-
-.reset-fade-enter-active {
-    transition: opacity 1s ease-in;
-}
-.reset-fade-enter-from {
-    opacity: 0;
-}
-</style>

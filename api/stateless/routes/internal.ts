@@ -33,7 +33,6 @@ export default async function router(schema: Schema, config: ConfigStateless) {
             filter: Default.Filter,
             task: Type.Optional(Type.String()),
             data: Type.Optional(Type.Integer({ minimum: 1 })),
-            template: Type.Optional(Type.Boolean()),
             connection: Type.Optional(Type.Integer({ minimum: 1 })),
         }),
         res: Type.Object({
@@ -58,9 +57,8 @@ export default async function router(schema: Schema, config: ConfigStateless) {
                 where: sql`
                     layers.name ~* ${req.query.filter}
                     AND (${Param(req.query.connection)}::BIGINT IS NULL OR ${Param(req.query.connection)}::BIGINT = layers.connection)
-                    AND (${Param(req.query.template)}::BOOLEAN IS NULL OR ${Param(req.query.template)}::BOOLEAN = layers.template)
                     AND (${Param(req.query.data)}::BIGINT IS NULL OR ${Param(req.query.data)}::BIGINT = layers_incoming.data)
-                    AND (${Param(req.query.task)}::TEXT IS NULL OR Starts_With(layers.task, ${Param(req.query.task)}::TEXT))
+                    AND (${Param(req.query.task)}::TEXT IS NULL OR Starts_With(integrations.prefix || '-v' || layers.version, ${Param(req.query.task)}::TEXT))
                 `,
             });
 
@@ -164,13 +162,22 @@ export default async function router(schema: Schema, config: ConfigStateless) {
         res: LayerResponse,
     }, async (req, res) => {
         try {
-            await Auth.is_auth(config, req, {
+            const auth = await Auth.is_auth(config, req, {
                 resources: [
                     { access: AuthResourceAccess.LAYER, id: req.params.layerid },
                 ],
             });
 
             const layer = await config.models.Layer.augmented_from(req.params.layerid);
+
+            // is_auth scopes Layer tokens to this Layer but leaves User tokens unbounded
+            if (auth instanceof AuthUser) {
+                if (layer.connection === null) {
+                    await Auth.as_user(config, req, { admin: true });
+                } else {
+                    await Auth.is_connection_auth(config, auth, layer.connection);
+                }
+            }
 
             let status = 'unknown';
             if (config.StackName !== 'test' && req.query.alarms) {

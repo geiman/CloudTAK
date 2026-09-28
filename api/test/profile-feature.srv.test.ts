@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert';
 import { sql } from 'drizzle-orm';
+import type { TLSSocket } from 'node:tls';
 import Flight from './flight.js';
 
 const flight = new Flight();
@@ -305,6 +306,122 @@ test('PUT: api/profile/feature - Enabled Geofence', async () => {
     } catch (err) {
         assert.ifError(err);
     }
+});
+
+test('PUT: api/profile/feature - Reject User Puck', async () => {
+    const base = {
+        type: 'Feature',
+        path: '/',
+        geometry: {
+            type: 'Point',
+            coordinates: [123.3223, 123.0002, 123],
+        },
+    };
+
+    const properties = {
+        type: 'a-f-G-E-V-C',
+        how: 'm-g',
+        time: time,
+        start: time,
+        stale: time,
+        callsign: 'User Puck',
+        archived: true,
+        center: [123.3223, 123.0002],
+    };
+
+    for (const body of [
+        { ...base, id: 'ANDROID-CloudTAK-puck@example.com', properties },
+        { ...base, id: 'puck-group', properties: { ...properties, group: { name: 'Cyan', role: 'Team Member' } } },
+        { ...base, id: 'puck-takv', properties: { ...properties, takv: { device: 'Pixel', platform: 'ATAK', os: '34', version: '5.0' } } },
+    ]) {
+        const res = await flight.fetch('/api/profile/feature', {
+            method: 'PUT',
+            auth: {
+                bearer: flight.token.admin,
+            },
+            body,
+        }, false);
+
+        assert.equal(res.status, 400, `expected 400 for ${body.id}`);
+        assert.equal(res.body.message, 'User markers cannot be saved as features');
+    }
+
+    const list = await flight.fetch('/api/profile/feature', {
+        method: 'GET',
+        auth: {
+            bearer: flight.token.admin,
+        },
+    }, true);
+
+    assert.ok(!list.body.items.some((f: { id: string }) => f.id.startsWith('puck') || f.id.startsWith('ANDROID-')));
+});
+
+test('PUT: api/profile/feature?archive=false - requires submit or broadcast', async () => {
+    const res = await flight.fetch('/api/profile/feature?archive=false', {
+        method: 'PUT',
+        auth: {
+            bearer: flight.token.admin,
+        },
+        body: {
+            id: 'live-noop',
+            type: 'Feature',
+            path: '/',
+            properties: { type: 'a-f-A-M-H-Q', how: 'm-g', time, start: time, stale: time, callsign: 'UAS', center: [1, 1] },
+            geometry: { type: 'Point', coordinates: [1, 1, 1] },
+        },
+    }, false);
+
+    assert.equal(res.status, 400);
+    assert.equal(res.body.message, 'Either submit or broadcast must be set if archive is disabled');
+});
+
+test('PUT: api/profile/feature?archive=false&submit=true - submitted to TAK Server but not saved', async () => {
+    let received = '';
+    const onData = (data: Buffer) => {
+        received += String(data);
+    };
+    const onSocket = (socket: TLSSocket) => socket.on('data', onData);
+
+    for (const socket of flight.tak.streamingSockets) socket.on('data', onData);
+    flight.tak.streaming.on('secureConnection', onSocket);
+
+    try {
+        const res = await flight.fetch('/api/profile/feature?archive=false&submit=true', {
+            method: 'PUT',
+            auth: {
+                bearer: flight.token.admin,
+            },
+            body: {
+                id: 'live-uas',
+                type: 'Feature',
+                path: '/',
+                properties: { type: 'a-f-A-M-H-Q', how: 'm-g', time, start: time, stale: time, callsign: 'Live UAS', center: [1, 1], remarks: 'DJI UAS - SN: 123', course: 270, speed: 5 },
+                geometry: { type: 'Point', coordinates: [1, 1, 1] },
+            },
+        }, true);
+
+        assert.equal(res.body.id, 'live-uas');
+        assert.equal(res.body.properties.archived, undefined);
+
+        const deadline = Date.now() + 5000;
+        while (!received.includes('uid="live-uas"') && Date.now() < deadline) {
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+
+        assert.ok(received.includes('uid="live-uas"'), 'CoT written to the TAK Server');
+    } finally {
+        flight.tak.streaming.off('secureConnection', onSocket);
+        for (const socket of flight.tak.streamingSockets) socket.off('data', onData);
+    }
+
+    const list = await flight.fetch('/api/profile/feature', {
+        method: 'GET',
+        auth: {
+            bearer: flight.token.admin,
+        },
+    }, true);
+
+    assert.ok(!list.body.items.some((f: { id: string }) => f.id === 'live-uas'));
 });
 
 flight.landing();

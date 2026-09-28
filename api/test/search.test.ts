@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert';
-import AGOL from '../stateless/lib/search/agol.js';
+import AGOL, { searchType } from '../stateless/lib/search/agol.js';
 import ArcGISTokenManager from '../stateless/lib/search/arcgis-token-manager.js';
 import Config from '../common/config.js';
+import { testDatabase, dropTestDatabase } from './db.js';
 
 test('AGOL - constructor with tokenManager', async () => {
     const mockConfig = {
@@ -13,10 +14,10 @@ test('AGOL - constructor with tokenManager', async () => {
     const tokenManager = new ArcGISTokenManager(mockConfig);
 
     const config = await Config.env({
-        postgres: process.env.POSTGRES || 'postgres://postgres@localhost:5432/tak_ps_etl_test',
+        postgres: await testDatabase({ reset: false }),
         silent: true,
         noevents: true,
-        nosinks: true,
+        noetlevents: true,
         nocache: true,
     });
 
@@ -32,10 +33,10 @@ test('AGOL - constructor with tokenManager', async () => {
 
 test('AGOL - constructor without tokenManager', async () => {
     const config = await Config.env({
-        postgres: process.env.POSTGRES || 'postgres://postgres@localhost:5432/tak_ps_etl_test',
+        postgres: await testDatabase({ reset: false }),
         silent: true,
         noevents: true,
-        nosinks: true,
+        noetlevents: true,
         nocache: true,
     });
 
@@ -51,10 +52,10 @@ test('AGOL - constructor without tokenManager', async () => {
 
 test('AGOL - API URLs are correctly set', async () => {
     const config = await Config.env({
-        postgres: process.env.POSTGRES || 'postgres://postgres@localhost:5432/tak_ps_etl_test',
+        postgres: await testDatabase({ reset: false }),
         silent: true,
         noevents: true,
-        nosinks: true,
+        noetlevents: true,
         nocache: true,
     });
 
@@ -69,10 +70,10 @@ test('AGOL - API URLs are correctly set', async () => {
 
 test('AGOL - route method handles empty features', async () => {
     const config = await Config.env({
-        postgres: process.env.POSTGRES || 'postgres://postgres@localhost:5432/tak_ps_etl_test',
+        postgres: await testDatabase({ reset: false }),
         silent: true,
         noevents: true,
-        nosinks: true,
+        noetlevents: true,
         nocache: true,
     });
 
@@ -104,10 +105,10 @@ test('AGOL - route method handles empty features', async () => {
 
 test('AGOL - route method processes valid route data', async () => {
     const config = await Config.env({
-        postgres: process.env.POSTGRES || 'postgres://postgres@localhost:5432/tak_ps_etl_test',
+        postgres: await testDatabase({ reset: false }),
         silent: true,
         noevents: true,
-        nosinks: true,
+        noetlevents: true,
         nocache: true,
     });
 
@@ -145,10 +146,10 @@ test('AGOL - route method processes valid route data', async () => {
 
 test('AGOL - error handling for different error codes', async () => {
     const config = await Config.env({
-        postgres: process.env.POSTGRES || 'postgres://postgres@localhost:5432/tak_ps_etl_test',
+        postgres: await testDatabase({ reset: false }),
         silent: true,
         noevents: true,
-        nosinks: true,
+        noetlevents: true,
         nocache: true,
     });
 
@@ -174,10 +175,10 @@ test('AGOL - error handling for different error codes', async () => {
 
 test('AGOL - validates route input parameters', async () => {
     const config = await Config.env({
-        postgres: process.env.POSTGRES || 'postgres://postgres@localhost:5432/tak_ps_etl_test',
+        postgres: await testDatabase({ reset: false }),
         silent: true,
         noevents: true,
-        nosinks: true,
+        noetlevents: true,
         nocache: true,
     });
 
@@ -205,10 +206,10 @@ test('AGOL - validates route input parameters', async () => {
 
 test('AGOL - URL construction for different endpoints', async () => {
     const config = await Config.env({
-        postgres: process.env.POSTGRES || 'postgres://postgres@localhost:5432/tak_ps_etl_test',
+        postgres: await testDatabase({ reset: false }),
         silent: true,
         noevents: true,
-        nosinks: true,
+        noetlevents: true,
         nocache: true,
     });
 
@@ -226,4 +227,39 @@ test('AGOL - URL construction for different endpoints', async () => {
     assert.ok(geocodeInstance.forwardApi.includes('findAddressCandidates'), 'Forward API has correct endpoint');
 
     config.pg.end();
+});
+
+test('AGOL - searchType', async () => {
+    const cases: Array<[string | undefined, string | undefined, string | undefined, string | undefined]> = [
+        ['PointAddress', '', '200 E Colfax Ave', 'address'],
+        ['StreetAddress', '', '200 W Colfax Ave', 'address'],
+        ['StreetName', '', 'E Colfax Ave', 'street'],
+        ['StreetInt', '', 'E Colfax Ave & Broadway', 'street'],
+        ['Postal', '', '80203', 'postal'],
+        ['Locality', 'City', 'Denver', 'locality'],
+        ['Locality', 'Neighborhood', 'Capitol Hill', 'locality'],
+        ['Locality', 'County', 'Jefferson County', 'region'],
+        ['Locality', 'State or Province', 'Colorado', 'region'],
+        ['POI', 'ATM', 'Wells Fargo', 'poi'],
+        ['POI', '', 'Somewhere', 'poi'],
+        ['POI', 'Hospital', 'Denver Health Medical Center', 'hospital'],
+        ['POI', 'Police Station', 'Denver Police Department District 4', 'police'],
+        ['POI', 'Park', 'Rocky Mountain National Park', 'park'],
+        ['POI', 'Other Parks and Outdoors', 'Washington Park', 'park'],
+        ['POI', 'Mountain', 'Pikes Peak', 'peak'],
+        ['POI', 'Trail', 'Mount Falcon', 'trailhead'],
+        ['POI', 'Park', 'West Trailhead', 'trailhead'],
+        ['POI', 'Parking', 'Lot C', 'parking'],
+        ['StreetName', '', 'Trailhead Rd', 'street'],
+        ['LatLong', '', '39.7, -105', undefined],
+        [undefined, undefined, 'Denver', undefined],
+    ];
+
+    for (const [addrType, type, name, expected] of cases) {
+        assert.equal(searchType(addrType, type, name), expected, `${addrType} / ${type} / ${name}`);
+    }
+});
+
+test('cleanup', async () => {
+    await dropTestDatabase();
 });

@@ -147,41 +147,37 @@
                                 <span class='ms-2'>External Stream URL</span>
                             </div>
                             <div
-                                v-else-if='!secure'
-                                class='d-flex align-items-center user-select-none'
-                            >
-                                <IconArrowsLeftRight
-                                    v-tooltip='"Read/Write User"'
-                                    :size='24'
-                                    stroke='1'
-                                />
-                                <span class='ms-2'>Read-Write User</span>
-                            </div>
-                            <div
                                 v-else
                                 class='col-12'
                             >
+                                <!-- Read vs Publish is always selectable - SRT URLs differ by mode even without credentials -->
                                 <TablerPillGroup
                                     v-model='mode'
                                     :options='[
-                                        { value: "read", label: "Read User" },
-                                        { value: "publish", label: "Write User" }
+                                        { value: "read", label: secure ? "Read User" : "Read" },
+                                        { value: "publish", label: secure ? "Write User" : "Publish" }
                                     ]'
                                     padding='p-1'
                                 >
                                     <template #option='{ option }'>
-                                        <IconBook2
+                                        <span
                                             v-if='option.value === "read"'
-                                            v-tooltip='"Read User"'
-                                            :size='24'
-                                            stroke='1'
-                                        />
-                                        <IconPencil
+                                            :title='secure ? "Read User" : "Read"'
+                                        >
+                                            <IconBook2
+                                                :size='24'
+                                                stroke='1'
+                                            />
+                                        </span>
+                                        <span
                                             v-else
-                                            v-tooltip='"Write User"'
-                                            :size='24'
-                                            stroke='1'
-                                        />
+                                            :title='secure ? "Write User" : "Publish"'
+                                        >
+                                            <IconPencil
+                                                :size='24'
+                                                stroke='1'
+                                            />
+                                        </span>
                                         <span class='mx-2'>{{ option.label }}</span>
                                     </template>
                                 </TablerPillGroup>
@@ -347,18 +343,24 @@
                         @update:model-value='(v: string) => editLease.proxy = v === "proxy" ? "" : null'
                     >
                         <template #option='{ option }'>
-                            <IconDrone
+                            <span
                                 v-if='option.value === "host"'
-                                v-tooltip='"Provide a stream URL to push data to"'
-                                :size='24'
-                                stroke='1'
-                            />
-                            <IconServer
+                                title='Provide a stream URL to push data to'
+                            >
+                                <IconDrone
+                                    :size='24'
+                                    stroke='1'
+                                />
+                            </span>
+                            <span
                                 v-else
-                                v-tooltip='"Pull from existing external Stream URL"'
-                                :size='24'
-                                stroke='1'
-                            />
+                                title='Pull from existing external Stream URL'
+                            >
+                                <IconServer
+                                    :size='24'
+                                    stroke='1'
+                                />
+                            </span>
                             <span class='ms-2'>{{ option.label }}</span>
                         </template>
                     </TablerPillGroup>
@@ -541,7 +543,7 @@
 
 <script setup lang='ts'>
 import { server } from '../../../../std.ts';
-import { validateURL } from '../../../../base/validators.ts';
+import { validateURL } from '../../../../utils/validators.ts';
 import CopyField from '../../util/CopyField.vue';
 import { ref, onMounted } from 'vue';
 import type { paths } from '@cloudtak/api-types';
@@ -553,7 +555,6 @@ import {
     IconServer,
     IconPencil,
     IconWand,
-    IconArrowsLeftRight,
     IconBook2,
     IconAffiliate,
     IconChevronRight,

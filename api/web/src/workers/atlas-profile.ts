@@ -1,16 +1,29 @@
 import type Atlas from './atlas.ts';
 import { std } from '../std.ts';
-import { WorkerMessageType, LocationState } from '../base/events.ts'
+import { WorkerMessageType, LocationState } from '../utils/events.ts'
 import type { Feature, GroupChannel, Server, Profile, Profile_Update, FeaturePropertyCreator } from '../types.ts';
 import ProfileConfig from '../base/profile.ts';
 import ServerManager from '../base/server.ts';
 import GroupManager from '../base/group.ts';
+import COT from '../base/cot.ts';
+
+/**
+ * Marker/icon styling the user's own position must never put on the wire:
+ * `styleProperties()` styles self as a contact skittle locally, but sending
+ * `marker-color` makes node-cot's `from_geojson` emit a synthetic
+ * semi-transparent `<color>` detail native clients never produce for a team
+ * member - they rely solely on `<__group>`
+ */
+const SELF_STYLE_PROPERTIES = ['marker-color', 'marker-opacity', 'icon-opacity', 'icon', 'marker-stroke-color'] as const;
 
 export type ProfileLocationState = {
     source: LocationState
     accuracy: number | undefined
     altitude: number | null | undefined
     coordinates: number[]
+    /** Battery level as a percentage (0-100) - null/undefined when unknown */
+    battery?: number | null
+    charging?: boolean | null
 }
 
 export default class AtlasProfile {
@@ -35,6 +48,7 @@ export default class AtlasProfile {
     profile_loc_freq?: ProfileConfig<'tak_loc_freq'>;
     profile_created?: ProfileConfig<'created'>;
     profile_updated?: ProfileConfig<'updated'>;
+    display_stale?: ProfileConfig<'display_stale'>;
 
     constructor(atlas: Atlas) {
         this.atlas = atlas;
@@ -63,39 +77,82 @@ export default class AtlasProfile {
             this.loadChannels()
         ])
 
-        this.profile_type = await ProfileConfig.get('tak_type');
+        // Each ProfileConfig.get() is an independent IndexedDB read; fetch
+        // them concurrently instead of serially so worker init doesn't pay a
+        // round-trip per key on a warm-cache refresh.
+        const [
+            profile_type,
+            profile_callsign,
+            profile_remarks,
+            profile_group,
+            profile_role,
+            profile_phone,
+            profile_loc,
+            profile_loc_freq,
+            profile_created,
+            profile_updated,
+            display_stale,
+            usernameConfig
+        ] = await Promise.all([
+            ProfileConfig.get('tak_type'),
+            ProfileConfig.get('tak_callsign'),
+            ProfileConfig.get('tak_remarks'),
+            ProfileConfig.get('tak_group'),
+            ProfileConfig.get('tak_role'),
+            ProfileConfig.get('tak_phone'),
+            ProfileConfig.get('tak_loc'),
+            ProfileConfig.get('tak_loc_freq'),
+            ProfileConfig.get('created'),
+            ProfileConfig.get('updated'),
+            ProfileConfig.get('display_stale'),
+            ProfileConfig.get('username')
+        ]);
+
+        this.profile_type = profile_type;
         if (this.profile_type) this.profile_type.subscribe();
 
-        this.profile_callsign = await ProfileConfig.get('tak_callsign');
+        this.profile_callsign = profile_callsign;
         if (this.profile_callsign) this.profile_callsign.subscribe();
 
-        this.profile_remarks = await ProfileConfig.get('tak_remarks');
+        this.profile_remarks = profile_remarks;
         if (this.profile_remarks) this.profile_remarks.subscribe();
 
-        this.profile_group = await ProfileConfig.get('tak_group');
+        this.profile_group = profile_group;
         if (this.profile_group) this.profile_group.subscribe();
 
-        this.profile_role = await ProfileConfig.get('tak_role');
+        this.profile_role = profile_role;
         if (this.profile_role) this.profile_role.subscribe();
 
-        this.profile_phone = await ProfileConfig.get('tak_phone');
+        this.profile_phone = profile_phone;
         if (this.profile_phone) this.profile_phone.subscribe();
 
-        this.profile_loc = await ProfileConfig.get('tak_loc');
+        this.profile_loc = profile_loc;
         if (this.profile_loc) this.profile_loc.subscribe();
 
-        this.profile_loc_freq = await ProfileConfig.get('tak_loc_freq');
+        this.profile_loc_freq = profile_loc_freq;
         if (this.profile_loc_freq) this.profile_loc_freq.subscribe();
 
-        this.profile_created = await ProfileConfig.get('created');
+        this.profile_created = profile_created;
         if (this.profile_created) this.profile_created.subscribe();
 
-        this.profile_updated = await ProfileConfig.get('updated');
+        this.profile_updated = profile_updated;
         if (this.profile_updated) this.profile_updated.subscribe();
 
-        const usernameConfig = await ProfileConfig.get('username');
+        // Read on every diff() tick - kept in memory and followed via liveQuery
+        // rather than paying an IndexedDB round-trip per tick
+        this.display_stale = display_stale || new ProfileConfig('display_stale', 'Immediate');
+        this.display_stale.subscribe();
+
         if (usernameConfig) {
             this.username = usernameConfig.value;
+        }
+
+        // Earliest point the self uid is knowable - AtlasDatabase#init() also
+        // sets this but resolves after conn.connect(), so the first location
+        // send or an echoed-back self CoT would otherwise evaluate is_self
+        // as false and get rendered/styled as a regular contact
+        if (this.username) {
+            COT.selfUid = this.uid();
         }
 
         this.updateLocation();
@@ -164,6 +221,9 @@ export default class AtlasProfile {
         this.profile_updated?.destroy();
         this.profile_updated = undefined;
 
+        this.display_stale?.destroy();
+        this.display_stale = undefined;
+
         this.username = null;
         this.server = null;
         this.location = {
@@ -172,6 +232,14 @@ export default class AtlasProfile {
             altitude: undefined,
             coordinates: [0, 0]
         };
+    }
+
+    /** Stop the periodic self CoT; setupTimer() restarts it */
+    pauseTimer(): void {
+        if (this.timerSelf) {
+            clearInterval(this.timerSelf);
+            this.timerSelf = undefined;
+        }
     }
 
     setupTimer() {
@@ -193,8 +261,16 @@ export default class AtlasProfile {
             const me = await this.atlas.db.get(this.uid());
 
             if (me) {
-                const feat = me.as_feature();
+                // Clone - as_feature() hands out live references and the
+                // local copy must keep its skittle styling
+                const feat = me.as_feature({ clone: true });
+
                 feat.properties.archived = false;
+
+                for (const prop of SELF_STYLE_PROPERTIES) {
+                    delete feat.properties[prop];
+                }
+
                 this.atlas.conn.sendCOT(feat)
             }
         }, (this.profile_loc_freq && this.profile_loc_freq.value) ? Number(this.profile_loc_freq.value) : 5000);
@@ -248,6 +324,10 @@ export default class AtlasProfile {
             this.location.source = LocationState.Preset;
             this.location.accuracy = undefined;
             this.location.altitude = undefined;
+            // Manual locations receive no live GPS broadcasts, so any battery
+            // state from a previous Live fix would go permanently stale
+            this.location.battery = undefined;
+            this.location.charging = undefined;
             this.location.coordinates = (this.profile_loc.value as { coordinates: number[] }).coordinates;
 
             this.atlas.postMessage({
@@ -310,7 +390,7 @@ export default class AtlasProfile {
     async updateChannels(channels: Array<GroupChannel>): Promise<Array<GroupChannel>> {
         await this.postChannelStatus();
 
-        await GroupManager.update(channels);
+        await GroupManager.updateAll(channels);
 
         return channels;
     }
@@ -342,6 +422,8 @@ export default class AtlasProfile {
             this.location.coordinates = coords;
             this.location.accuracy = undefined;
             this.location.altitude = undefined;
+            this.location.battery = undefined;
+            this.location.charging = undefined;
             if (this.profile_loc) this.profile_loc.value = body.tak_loc;
 
             this.atlas.postMessage({
@@ -407,6 +489,20 @@ export default class AtlasProfile {
             this.atlas.postMessage({
                 type: WorkerMessageType.Profile_Distance_Unit,
                 body: { unit: body.display_distance }
+            });
+        }
+
+        if (body.display_elevation) {
+            this.atlas.postMessage({
+                type: WorkerMessageType.Profile_Elevation_Unit,
+                body: { unit: body.display_elevation }
+            });
+        }
+
+        if (body.display_speed) {
+            this.atlas.postMessage({
+                type: WorkerMessageType.Profile_Speed_Unit,
+                body: { unit: body.display_speed }
             });
         }
 
@@ -477,7 +573,11 @@ export default class AtlasProfile {
                     version: this.server.version
                 },
                 hae,
-                ...(accuracy !== undefined && { ce: accuracy })
+                ...(accuracy !== undefined && { ce: accuracy }),
+                // TAK status battery is a stringified percentage
+                ...(typeof this.location.battery === 'number' && {
+                    status: { battery: String(this.location.battery) }
+                })
             } as Feature['properties'],
             geometry: { type: 'Point', coordinates: [...coordinates, hae] }
         }

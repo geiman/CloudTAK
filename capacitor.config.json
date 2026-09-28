@@ -10,9 +10,10 @@
             "@capacitor-firebase/messaging",
             "@capacitor/app",
             "@capacitor/browser",
-            "@capacitor/network",
+            "@capawesome/capacitor-network",
             "@capacitor/camera",
             "@capacitor/clipboard",
+            "@capacitor/device",
             "@capacitor/geolocation",
             "@capacitor/haptics",
             "@capacitor/keyboard",
@@ -27,6 +28,10 @@
         "useLegacyBridge": true
     },
     "plugins": {
+        "StatusBar": {
+            "overlaysWebView": true,
+            "style": "DARK"
+        },
         "FirebaseMessaging": {
             "presentationOptions": [
                 "alert",
@@ -36,7 +41,7 @@
         },
         "CapacitorUpdater": {
             "appId": "io.cloudtak.app",
-            "version": "13.45.1",
+            "version": "13.98.0",
             "autoUpdate": "atBackground"
         }
     }

@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert';
+import jwt from 'jsonwebtoken';
 import Flight from './flight.js';
 
 const flight = new Flight();
@@ -7,6 +8,29 @@ const flight = new Flight();
 flight.init({ takserver: true });
 flight.takeoff();
 flight.user();
+flight.integration('test-task');
+flight.connection();
+
+const scopedLayerToken = 'etl.' + jwt.sign({ access: 'layer', id: 1, internal: true }, 'coe-wildland-fire');
+const unscopedLayerToken = 'etl.' + jwt.sign({ access: 'layer', id: 2, internal: true }, 'coe-wildland-fire');
+
+test('Setup: search layers', async () => {
+    await flight.config!.models.Layer.generate({
+        name: 'Search Scoped Layer',
+        task: 1,
+        version: '1.0.0',
+        connection: 1,
+        permissions: ['search:read'],
+    });
+
+    await flight.config!.models.Layer.generate({
+        name: 'Search Unscoped Layer',
+        task: 1,
+        version: '1.0.0',
+        connection: 1,
+        permissions: ['feature:submit'],
+    });
+});
 
 test('GET /api/search/reverse/:longitude/:latitude - success', async () => {
     try {
@@ -61,6 +85,23 @@ test('GET /api/search/forward - success', async () => {
 
         assert.ok(res.body.items, 'Items array present');
         assert.ok(Array.isArray(res.body.items), 'Items is an array');
+    } catch (err) {
+        assert.ifError(err);
+    }
+});
+
+test('GET /api/search - no providers configured', async () => {
+    try {
+        const res = await flight.fetch('/api/search', {
+            method: 'GET',
+            auth: { bearer: flight.token.admin },
+        }, true);
+
+        assert.deepEqual(res.body, {
+            reverse: { enabled: false, providers: [] },
+            route: { enabled: false, providers: [] },
+            forward: { enabled: false, providers: [] },
+        });
     } catch (err) {
         assert.ifError(err);
     }
@@ -133,6 +174,87 @@ test('GET /api/search/reverse/:longitude/:latitude - weather fallback', async ()
         assert.ok(res.body.sun, 'Sun data present');
         // Weather may be present from fallback or null if APIs fail
         assert.ok(res.body.weather !== undefined, 'Weather field present');
+    } catch (err) {
+        assert.ifError(err);
+    }
+});
+
+test('GET /api/search/reverse/:longitude/:latitude - layer token with search:read', async () => {
+    try {
+        const res = await flight.fetch('/api/search/reverse/-105/39.7?elevation=1655', {
+            method: 'GET',
+            auth: { bearer: scopedLayerToken },
+        }, true);
+
+        assert.ok(res.body.sun, 'Sun data present');
+        assert.ok(res.body.elevation.includes('ft'), 'Elevation defaults to feet for layer tokens');
+    } catch (err) {
+        assert.ifError(err);
+    }
+});
+
+test('GET /api/search/forward - layer token with search:read', async () => {
+    try {
+        const res = await flight.fetch('/api/search/forward?query=Denver&magicKey=test', {
+            method: 'GET',
+            auth: { bearer: scopedLayerToken },
+        }, true);
+
+        assert.ok(Array.isArray(res.body.items), 'Items is an array');
+    } catch (err) {
+        assert.ifError(err);
+    }
+});
+
+test('GET /api/search/reverse/:longitude/:latitude - layer token without search:read', async () => {
+    try {
+        const res = await flight.fetch('/api/search/reverse/-105/39.7', {
+            method: 'GET',
+            auth: { bearer: unscopedLayerToken },
+        }, false);
+
+        assert.equal(res.status, 403);
+        assert.equal(res.body.message, 'Layer token does not have the search:read permission');
+    } catch (err) {
+        assert.ifError(err);
+    }
+});
+
+test('GET /api/search/forward - layer token without search:read', async () => {
+    try {
+        const res = await flight.fetch('/api/search/forward?query=Denver&magicKey=test', {
+            method: 'GET',
+            auth: { bearer: unscopedLayerToken },
+        }, false);
+
+        assert.equal(res.status, 403);
+    } catch (err) {
+        assert.ifError(err);
+    }
+});
+
+test('GET /api/search/suggest - layer token with search:read', async () => {
+    try {
+        const res = await flight.fetch('/api/search/suggest?query=Denver&limit=1', {
+            method: 'GET',
+            auth: { bearer: scopedLayerToken },
+        }, true);
+
+        assert.ok(Array.isArray(res.body.items), 'Items is an array');
+    } catch (err) {
+        assert.ifError(err);
+    }
+});
+
+test('GET /api/search/suggest - layer token without search:read', async () => {
+    try {
+        const res = await flight.fetch('/api/search/suggest?query=Denver', {
+            method: 'GET',
+            auth: { bearer: unscopedLayerToken },
+        }, false);
+
+        assert.equal(res.status, 403);
+        assert.equal(res.body.message, 'Layer token does not have the search:read permission');
     } catch (err) {
         assert.ifError(err);
     }

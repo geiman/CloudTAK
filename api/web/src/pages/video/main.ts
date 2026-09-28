@@ -1,11 +1,8 @@
 import { createApp } from 'vue'
 import * as VueRouter from 'vue-router'
 import { createPinia } from 'pinia'
-import { initServiceWorker } from '../../base/service-worker.ts';
+import { initServiceWorker } from '../../utils/service-worker.ts';
 import { initGlobalErrorReporting, vueErrorHandler } from '../../lib/reporting/index.ts';
-
-import 'floating-vue/dist/style.css'
-import FloatingVue from 'floating-vue'
 
 import App from '../../App.vue'
 
@@ -29,5 +26,4 @@ const pinia = createPinia()
 app.config.errorHandler = vueErrorHandler;
 app.use(router);
 app.use(pinia);
-app.use(FloatingVue);
 app.mount('#app');

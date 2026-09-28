@@ -60,7 +60,7 @@
 
 <script setup lang='ts'>
 import Config from '../base/config.ts';
-import { supportsServiceWorker } from '../base/capacitor.ts';
+import { supportsServiceWorker } from '../utils/capacitor.ts';
 import { ref, onMounted, onUnmounted } from 'vue'
 
 const props = defineProps<{
@@ -106,21 +106,3 @@ onUnmounted(() => {
     clearTimeout(resetTimer);
 });
 </script>
-
-<style scoped>
-.stage-fade-enter-active,
-.stage-fade-leave-active {
-    transition: opacity 0.4s ease;
-}
-.stage-fade-enter-from,
-.stage-fade-leave-to {
-    opacity: 0;
-}
-
-.reset-fade-enter-active {
-    transition: opacity 1s ease-in;
-}
-.reset-fade-enter-from {
-    opacity: 0;
-}
-</style>

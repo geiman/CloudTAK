@@ -1,5 +1,10 @@
 <template>
-    <div style='overflow: auto;'>
+    <div
+        class='h-full w-full cloudtak-page'
+        style='overflow: auto;'
+    >
+        <NavHeader title='Connections' />
+
         <div class='page-wrapper'>
             <div class='page-header d-print-none'>
                 <div class='container-xl'>
@@ -74,18 +79,24 @@
                                                 @update:model-value='(v: string) => { connection.readonly = v === "external" }'
                                             >
                                                 <template #option='{ option }'>
-                                                    <IconCloud
+                                                    <span
                                                         v-if='option.value === "cloud"'
-                                                        v-tooltip='"Cloud Integration"'
-                                                        :size='32'
-                                                        stroke='1'
-                                                    />
-                                                    <IconDrone
+                                                        title='Cloud Integration'
+                                                    >
+                                                        <IconCloud
+                                                            :size='32'
+                                                            stroke='1'
+                                                        />
+                                                    </span>
+                                                    <span
                                                         v-if='option.value === "external"'
-                                                        v-tooltip='"External Integration"'
-                                                        :size='32'
-                                                        stroke='1'
-                                                    />
+                                                        title='External Integration'
+                                                    >
+                                                        <IconDrone
+                                                            :size='32'
+                                                            stroke='1'
+                                                        />
+                                                    </span>
                                                     <span class='mx-2'>{{ option.label }}</span>
                                                 </template>
                                             </TablerPillGroup>
@@ -111,6 +122,13 @@
                                         </div>
                                     </div>
                                 </div>
+
+                                <CertificateChannels
+                                    v-if='route.params.connectionid'
+                                    :key='channelsKey'
+                                    v-model='channels'
+                                    :connection='connection'
+                                />
 
                                 <template v-if='isNextReady || route.params.connectionid'>
                                     <div class='card-header'>
@@ -212,7 +230,7 @@
 
                                                     <div class='ms-auto'>
                                                         <button
-                                                            :disabled='!route.params.connectionid && !isReady'
+                                                            :disabled='(!route.params.connectionid && !isReady) || !channels.valid'
                                                             class='cursor-pointer btn btn-primary'
                                                             @click='create'
                                                         >
@@ -240,11 +258,14 @@ import { ref, computed, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { server } from '../../std.ts';
 import PageFooter from '../PageFooter.vue';
+import NavHeader from '../util/NavHeader.vue';
 import AgencySelect from './Connection/AgencySelect.vue';
 import CertificateP12 from './Connection/CertificateP12.vue';
 import CertificateLogin from './Connection/CertificateLogin.vue';
 import CertificateRaw from './Connection/CertificateRaw.vue';
 import CertificateMachineUser from './Connection/CertificateMachineUser.vue';
+import CertificateChannels from './Connection/CertificateChannels.vue';
+import type { ChannelChanges } from './Connection/CertificateChannels.vue';
 import {
     IconLock,
     IconCloud,
@@ -299,6 +320,15 @@ const errors = ref<Record<string, string>>({
 });
 
 const agencyDisabled = ref(false);
+
+// Incremented to reload channel membership once pending changes have been submitted
+const channelsKey = ref(0);
+
+const channels = ref<ChannelChanges>({
+    attach: [],
+    detach: [],
+    valid: true
+});
 
 const certTypeOptions = computed(() => {
     const opts: { value: string; label: string }[] = [];
@@ -397,6 +427,25 @@ async function create() {
     }
 
     if (route.params.connectionid) {
+        if (channels.value.attach.length || channels.value.detach.length) {
+            const chres = await server.PATCH('/api/connection/{:connectionid}/channel', {
+                params: {
+                    path: {
+                        ':connectionid': Number(route.params.connectionid)
+                    }
+                },
+                body: {
+                    attach: channels.value.attach,
+                    detach: channels.value.detach
+                }
+            });
+
+            if (chres.error) throw new Error(chres.error.message);
+
+            channels.value = { attach: [], detach: [], valid: true };
+            channelsKey.value++;
+        }
+
         const res = await server.PATCH('/api/connection/{:connectionid}', {
             params: {
                 path: {

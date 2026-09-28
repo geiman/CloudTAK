@@ -7,7 +7,12 @@ import CP from 'child_process';
  *    node build.js            # builds and pushes all containers
  *    node build.js api        # builds and pushes only the API container
  *    node build.js <taskname> # builds and pushes only the specified task container
- *    node build.js .          # Build an ETL task in the current directory
+ *
+ * Environment may be a comma separated list of environments in the same
+ * AWS account - the image is built once and pushed to each of them
+ *
+ * Note: ETL task containers are built from their own repositories with the
+ * cloudtak-etl CLI published by @tak-ps/etl - `npx cloudtak-etl`
  */
 
 process.env.GITSHA = sha();
@@ -24,6 +29,8 @@ for (const env of [
         throw new Error(`${env} Env Var must be set`);
     }
 }
+
+const environments = process.env.Environment.split(',').map((e) => e.trim()).filter(Boolean);
 
 await login();
 
@@ -54,7 +61,8 @@ if (!target) {
     if (target === 'api') {
         await cloudtak_api(plugins);
     } else if (target === '.') {
-        await cloudtak_etl();
+        console.error('not ok - ETL builds have moved to the cloudtak-etl CLI - run `npx cloudtak-etl` from the ETL repo');
+        process.exit(1);
     } else {
         await cloudtak_task(target);
     }
@@ -80,57 +88,31 @@ function login() {
 
 }
 
-function cloudtak_etl() {
-    // Get Git Repo Name
-    const basename = (CP.execSync(`
-        basename $(git rev-parse --show-toplevel)
-    `)).toString().trim();
-
-    const version = (CP.execSync(`
-        jq .version ./package.json | tr -d '"'
-    `)).toString().trim();
-
-    return new Promise((resolve, reject) => {
-        const $ = CP.exec(`
-            docker build -t ${basename}:${version} . \
-            && docker tag ${basename}:${version} "$\{AWS_ACCOUNT_ID}.dkr.ecr.$\{AWS_REGION}.amazonaws.com/tak-vpc-${process.env.Environment}-cloudtak-tasks:${basename}-v${version}" \
-            && docker push "$\{AWS_ACCOUNT_ID}.dkr.ecr.$\{AWS_REGION}.amazonaws.com/tak-vpc-${process.env.Environment}-cloudtak-tasks:${basename}-v${version}"
-        `, (err) => {
-            if (err) return reject(err);
-            return resolve();
-        });
-
-        $.stdout.pipe(process.stdout);
-        $.stderr.pipe(process.stderr);
-    });
-}
-
 function cloudtak_api(plugins = []) {
     const buildArgs = plugins.length ? `--build-arg WEB_PLUGINS="${plugins.join(',')}"` : '';
 
-    return new Promise((resolve, reject) => {
-        const $ = CP.exec(`
-            docker compose build ${buildArgs} api \
-            && docker tag cloudtak-api:latest "$\{AWS_ACCOUNT_ID}.dkr.ecr.$\{AWS_REGION}.amazonaws.com/tak-vpc-${process.env.Environment}-cloudtak-api:$\{GITSHA}" \
-            && docker push "$\{AWS_ACCOUNT_ID}.dkr.ecr.$\{AWS_REGION}.amazonaws.com/tak-vpc-${process.env.Environment}-cloudtak-api:$\{GITSHA}"
-        `, (err) => {
-            if (err) return reject(err);
-            return resolve();
-        });
-
-        $.stdout.pipe(process.stdout);
-        $.stderr.pipe(process.stderr);
-    });
+    return build('api', `${buildArgs} ${tags()} ./api/`);
 }
 
-async function cloudtak_task(task) {
-    process.env.TASK = task;
+function cloudtak_task(task) {
+    return build(task, `-f ./tasks/${task}/Dockerfile ${tags(`${task}-`)} .`);
+}
+
+function tags(prefix = '') {
+    return environments.map((environment) => {
+        return `-t "$\{AWS_ACCOUNT_ID}.dkr.ecr.$\{AWS_REGION}.amazonaws.com/tak-vpc-${environment}-cloudtak-api:${prefix}$\{GITSHA}"`;
+    }).join(' ');
+}
+
+function build(scope, args) {
+    // GitHub Actions cache is only reachable when the runtime token is exposed to the step
+    const cache = process.env.ACTIONS_RUNTIME_TOKEN
+        ? `--cache-from type=gha,scope=ecr-${scope} --cache-to type=gha,mode=max,scope=ecr-${scope},ignore-error=true`
+        : '';
 
     return new Promise((resolve, reject) => {
         const $ = CP.exec(`
-            docker buildx build --platform linux/amd64 --provenance=false --load -f ./tasks/$\{TASK}/Dockerfile . -t cloudtak-$\{TASK} \
-            && docker tag cloudtak-$\{TASK}:latest "$\{AWS_ACCOUNT_ID}.dkr.ecr.$\{AWS_REGION}.amazonaws.com/tak-vpc-${process.env.Environment}-cloudtak-api:$\{TASK}-$\{GITSHA}" \
-            && docker push "$\{AWS_ACCOUNT_ID}.dkr.ecr.$\{AWS_REGION}.amazonaws.com/tak-vpc-${process.env.Environment}-cloudtak-api:$\{TASK}-$\{GITSHA}"
+            docker buildx build --platform linux/amd64 --provenance=false --push ${cache} ${args}
         `, (err) => {
             if (err) return reject(err);
             return resolve();
@@ -139,7 +121,6 @@ async function cloudtak_task(task) {
         $.stdout.pipe(process.stdout);
         $.stderr.pipe(process.stderr);
     });
-
 }
 
 function sha() {

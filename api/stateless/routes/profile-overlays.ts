@@ -1,12 +1,14 @@
 import { Static, Type } from '@sinclair/typebox';
 import { BasemapProtocol, TileJSONActions } from '../lib/interface-basemap.js';
 import { fromProtocol } from '../lib/factory-basemap.js';
+import { basemapTileJSON, profileAssetTileJSON } from '../lib/tilejson.js';
 import type ConfigStateless from '../config.js';
 import ProfileControl from '../lib/control/profile.js';
+import UserControl from '../lib/control/user.js';
 import Schema from '@openaddresses/batch-schema';
 import S3 from '../../common/aws/s3.js';
 import Err from '@openaddresses/batch-error';
-import Auth from '../../common/auth.js';
+import Auth, { AuthUser } from '../../common/auth.js';
 import { BasemapTerrain_Encoding } from '../../common/enums.js';
 import { ProfileOverlay } from '../../common/schema.js';
 import path from 'node:path';
@@ -15,12 +17,48 @@ import ConnectionEvents, { ConnectionEventDataType, ConnectionEventAction } from
 import { sql } from 'drizzle-orm';
 import { TAKAPI, APIAuthCertificate } from '@tak-ps/node-tak';
 import * as Default from '../lib/limits.js';
+import { authenticatedProfile } from '../../common/control/profile.js';
+
+// Upstream documents vary in shape: only `tiles` is required. Response validation strips unlisted keys.
+const OverlayTileJSON = Type.Object({
+    tilejson: Type.Optional(Type.String()),
+    version: Type.Optional(Type.String()),
+    scheme: Type.Optional(Type.String()),
+    name: Type.Optional(Type.String()),
+    description: Type.Optional(Type.String()),
+    attribution: Type.Optional(Type.String()),
+    type: Type.Optional(Type.String()),
+    format: Type.Optional(Type.String()),
+    encoding: Type.Optional(Type.String()),
+    tileSize: Type.Optional(Type.Number()),
+    minzoom: Type.Optional(Type.Number()),
+    maxzoom: Type.Optional(Type.Number()),
+    tiles: Type.Array(Type.String()),
+    bounds: Type.Optional(Type.Array(Type.Number())),
+    center: Type.Optional(Type.Array(Type.Number())),
+    vector_layers: Type.Optional(Type.Array(Type.Object({
+        id: Type.String(),
+        fields: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
+        minzoom: Type.Optional(Type.Number()),
+        maxzoom: Type.Optional(Type.Number()),
+        description: Type.Optional(Type.String()),
+    }))),
+});
 
 const AugmentedProfileOverlayResponse = Type.Composite([
     ProfileOverlayResponse,
     Type.Object({
         actions: TileJSONActions,
+        attribution: Type.String({ default: '', description: 'Attribution of the underlying basemap, empty if not applicable' }),
         encoding: Type.Optional(Type.Enum(BasemapTerrain_Encoding)),
+        tilejson: Type.Union([Type.Null(), OverlayTileJSON], {
+            description: `
+                TileJSON for the overlay's tile source, derived from the underlying Basemap or hosted asset
+                at request time - never persisted server-side. Tile URLs are token-free; clients append
+                their own session token. Null for overlays without a tile source (missions) or when the
+                document could not be resolved.
+            `,
+        }),
     }),
 ]);
 
@@ -30,29 +68,70 @@ type SerializableProfileOverlay = Omit<Static<typeof ProfileOverlayResponse>, 'o
 
 function serializeOverlay(
     overlay: SerializableProfileOverlay,
-    actions: Static<typeof TileJSONActions>,
-    encoding?: BasemapTerrain_Encoding,
+    extras: {
+        actions: Static<typeof TileJSONActions>;
+        encoding?: BasemapTerrain_Encoding;
+        attribution?: string;
+        tilejson: Static<typeof OverlayTileJSON> | null;
+    },
 ): Static<typeof AugmentedProfileOverlayResponse> {
     return {
         ...overlay,
         opacity: Number(overlay.opacity),
-        actions,
-        ...(encoding ? { encoding } : {}),
+        actions: extras.actions,
+        attribution: extras.attribution ?? '',
+        tilejson: extras.tilejson,
+        ...(extras.encoding ? { encoding: extras.encoding } : {}),
     } as Static<typeof AugmentedProfileOverlayResponse>;
 }
 
-const OverlayCoordinates = Type.Array(Type.Tuple([Type.Number(), Type.Number()]), {
-    minItems: 4,
-    maxItems: 4,
-});
+// Null on failure so an unreachable upstream never drops the overlay from the list
+async function resolveTileJSON(
+    overlayId: number,
+    resolve: () => Promise<Static<typeof OverlayTileJSON>>,
+): Promise<Static<typeof OverlayTileJSON> | null> {
+    try {
+        return await resolve();
+    } catch (err) {
+        console.error(`Could not resolve TileJSON for overlay ${overlayId}`, err);
+        return null;
+    }
+}
 
-const OverlayCoordinatesField = Type.Union([
-    Type.Null(),
-    OverlayCoordinates,
-]);
+async function augmentOverlay(
+    config: ConfigStateless,
+    overlay: SerializableProfileOverlay,
+    user: AuthUser,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    basemap?: any,
+): Promise<Static<typeof AugmentedProfileOverlayResponse>> {
+    if (overlay.mode === 'basemap' || overlay.mode === 'overlay') {
+        if (!overlay.mode_id) throw new Err(500, null, 'Overlay missing mode_id');
+        if (!basemap) basemap = await config.models.Basemap.from(parseInt(overlay.mode_id));
+
+        return serializeOverlay(overlay, {
+            actions: fromProtocol(basemap.protocol, basemap).actions(),
+            encoding: basemap.type === 'raster-dem' ? basemap.encoding : undefined,
+            attribution: basemap.attribution || '',
+            tilejson: await resolveTileJSON(overlay.id, () => basemapTileJSON(config, basemap, { upstreamToken: user.token })),
+        });
+    }
+
+    let tilejson: Static<typeof OverlayTileJSON> | null = null;
+    if (overlay.mode === 'profile') {
+        tilejson = await resolveTileJSON(overlay.id, () => profileAssetTileJSON(config, {
+            email: user.email,
+            owner: overlay.username,
+            asset: path.parse(overlay.url.replace(/\/tile$/, '')).name,
+        }));
+    }
+
+    return serializeOverlay(overlay, { actions: fromProtocol().actions(), tilejson });
+}
 
 export default async function router(schema: Schema, config: ConfigStateless) {
     const profileControl = new ProfileControl(config);
+    const userControl = new UserControl(config);
 
     await schema.get('/profile/overlay', {
         name: 'Get Overlays',
@@ -85,6 +164,8 @@ export default async function router(schema: Schema, config: ConfigStateless) {
     }, async (req, res) => {
         try {
             const user = await Auth.as_user(config, req);
+
+            await userControl.ensureDefaultTerrain(user.email);
 
             const [overlays, terrain, snapping] = await Promise.all([
                 config.models.ProfileOverlay.list({
@@ -124,18 +205,14 @@ export default async function router(schema: Schema, config: ConfigStateless) {
             const hasMissionOverlays = overlays.items.some(item => item.mode === 'mission' && item.mode_id);
             let api: TAKAPI | null = null;
             if (hasMissionOverlays) {
-                const profile = await config.models.Profile.from(user.email);
+                const profile = await authenticatedProfile(config, user.email);
                 api = await TAKAPI.init(new URL(String(config.server.api)), new APIAuthCertificate(profile.auth.cert, profile.auth.key));
             }
 
             // Check all overlays in parallel
             const results = await Promise.all(overlays.items.map(async (item) => {
                 if (item.mode === 'profile') {
-                    if (item.type === 'image') {
-                        if (!item.mode_id || !(await S3.exists(`profile/${item.username}/${item.mode_id}.groundoverlays.json`))) {
-                            return { keep: false as const, item };
-                        }
-                    } else if (!(await S3.exists(`profile/${item.username}/${path.parse(item.url.replace(/\/tile$/, '')).name}.pmtiles`))) {
+                    if (!(await S3.exists(`profile/${item.username}/${path.parse(item.url.replace(/\/tile$/, '')).name}.pmtiles`))) {
                         return { keep: false as const, item };
                     }
                 } else if (item.mode === 'data') {
@@ -149,21 +226,20 @@ export default async function router(schema: Schema, config: ConfigStateless) {
                         return {
                             keep: true as const,
                             item,
-                            actions: fromProtocol(basemap.protocol, basemap).actions(),
-                            encoding: basemap.type === 'raster-dem' ? basemap.encoding : undefined,
+                            augmented: await augmentOverlay(config, item, user, basemap),
                         };
                     } catch (err) {
                         console.error('Could not find basemap', err);
                         return { keep: false as const, item };
                     }
                 } else if (item.mode === 'mission' && item.mode_id && api) {
-                    const subscription = await profileControl.subscription(user.email, item.name);
+                    const subscription = await profileControl.subscription(user.email, item.mode_id);
                     if (!(await api.Mission.access(item.mode_id, subscription))) {
                         return { keep: false as const, item };
                     }
                 }
 
-                return { keep: true as const, item, actions: fromProtocol().actions() };
+                return { keep: true as const, item, augmented: await augmentOverlay(config, item, user) };
             }));
 
             // Batch all deletions in parallel
@@ -180,7 +256,7 @@ export default async function router(schema: Schema, config: ConfigStateless) {
                     removed.push({ ...result.item, opacity: Number(result.item.opacity) });
                     total--;
                 } else {
-                    items.push(serializeOverlay(result.item, result.actions, result.encoding));
+                    items.push(result.augmented);
                 }
             }
 
@@ -205,18 +281,7 @@ export default async function router(schema: Schema, config: ConfigStateless) {
             const overlay = await config.models.ProfileOverlay.from(req.params.overlay);
             if (overlay.username !== user.email) throw new Err(401, null, 'Cannot get another\'s overlay');
 
-            if (overlay.mode === 'basemap' || overlay.mode === 'overlay') {
-                if (!overlay.mode_id) throw new Err(500, null, 'Overlay missing mode_id');
-                const basemap = await config.models.Basemap.from(parseInt(overlay.mode_id));
-
-                res.json(serializeOverlay(
-                    overlay,
-                    fromProtocol(basemap.protocol, basemap).actions(),
-                    basemap.type === 'raster-dem' ? basemap.encoding : undefined,
-                ));
-            } else {
-                res.json(serializeOverlay(overlay, fromProtocol().actions()));
-            }
+            res.json(await augmentOverlay(config, overlay, user));
         } catch (err) {
             Err.respond(err, res);
         }
@@ -240,7 +305,6 @@ export default async function router(schema: Schema, config: ConfigStateless) {
             visible: Type.Optional(Type.Boolean()),
             url: Type.Optional(Type.String()),
             mode_id: Type.Optional(Type.String()),
-            coordinates: Type.Optional(OverlayCoordinatesField),
             styles: Type.Optional(Type.Array(Type.Unknown())),
         }),
         res: AugmentedProfileOverlayResponse,
@@ -262,12 +326,14 @@ export default async function router(schema: Schema, config: ConfigStateless) {
 
             if (req.body.active && overlay.mode !== 'mission') {
                 throw new Err(400, null, 'Only mission overlays can be made active');
-            } else if (req.body.active) {
-                await config.models.ProfileOverlay.commit(sql`
-                    username = ${user.email}
-                `, {
-                    active: false,
-                });
+            } else if (req.body.active && !overlay.active) {
+                await config.pg.update(ProfileOverlay)
+                    .set({ active: false })
+                    .where(sql`
+                        username = ${user.email}
+                        AND active
+                        AND id != ${overlay.id}
+                    `);
             }
 
             overlay = await config.models.ProfileOverlay.commit(req.params.overlay, {
@@ -275,19 +341,7 @@ export default async function router(schema: Schema, config: ConfigStateless) {
                 opacity: req.body.opacity !== undefined ? String(req.body.opacity) : undefined,
             });
 
-            let serialized: Static<typeof AugmentedProfileOverlayResponse>;
-            if (overlay.mode === 'basemap' || overlay.mode === 'overlay') {
-                if (!overlay.mode_id) throw new Err(500, null, 'Overlay missing mode_id');
-                const basemap = await config.models.Basemap.from(parseInt(overlay.mode_id));
-
-                serialized = serializeOverlay(
-                    overlay,
-                    fromProtocol(basemap.protocol, basemap).actions(),
-                    basemap.type === 'raster-dem' ? basemap.encoding : undefined,
-                );
-            } else {
-                serialized = serializeOverlay(overlay, fromProtocol().actions());
-            }
+            const serialized = await augmentOverlay(config, overlay, user);
 
             // Include the serialized overlay so receiving clients can apply
             // it directly instead of re-listing overlays (which is slow due
@@ -315,7 +369,6 @@ export default async function router(schema: Schema, config: ConfigStateless) {
             visible: Type.Optional(Type.Boolean()),
             mode: Type.String(),
             mode_id: Type.Optional(Type.String()),
-            coordinates: Type.Optional(OverlayCoordinatesField),
             styles: Type.Optional(Type.Array(Type.Unknown())),
             token: Type.Optional(Type.String()),
             url: Type.String(),
@@ -345,18 +398,19 @@ export default async function router(schema: Schema, config: ConfigStateless) {
             if (req.body.active && req.body.mode !== 'mission') {
                 throw new Err(400, null, 'Only mission overlays can be made active');
             } else if (req.body.active) {
-                await config.models.ProfileOverlay.commit(sql`
-                    username = ${user.email}
-                `, {
-                    active: false,
-                });
+                await config.pg.update(ProfileOverlay)
+                    .set({ active: false })
+                    .where(sql`
+                        username = ${user.email}
+                        AND active
+                    `);
             }
 
             let overlay;
             if (req.body.mode === 'mission') {
                 if (!req.body.mode_id) throw new Err(400, null, 'Mode: Mission must have mode_id set');
 
-                const profile = await config.models.Profile.from(user.email);
+                const profile = await authenticatedProfile(config, user.email);
                 const api = await TAKAPI.init(new URL(String(config.server.api)), new APIAuthCertificate(profile.auth.cert, profile.auth.key));
 
                 const sub = await api.Mission.subscribe(req.body.mode_id, {
@@ -389,19 +443,7 @@ export default async function router(schema: Schema, config: ConfigStateless) {
                 });
             }
 
-            let serialized: Static<typeof AugmentedProfileOverlayResponse>;
-            if (overlay.mode === 'basemap' || overlay.mode === 'overlay') {
-                if (!overlay.mode_id) throw new Err(500, null, 'Overlay missing mode_id');
-                const basemap = await config.models.Basemap.from(parseInt(overlay.mode_id));
-
-                serialized = serializeOverlay(
-                    overlay,
-                    fromProtocol(basemap.protocol, basemap).actions(),
-                    basemap.type === 'raster-dem' ? basemap.encoding : undefined,
-                );
-            } else {
-                serialized = serializeOverlay(overlay, fromProtocol().actions());
-            }
+            const serialized = await augmentOverlay(config, overlay, user);
 
             // Include the serialized overlay so receiving clients can apply
             // it directly instead of re-listing overlays (which is slow due
@@ -439,7 +481,7 @@ export default async function router(schema: Schema, config: ConfigStateless) {
             await config.models.ProfileOverlay.delete(overlay.id);
 
             if (overlay.mode === 'mission' && overlay.mode_id) {
-                const profile = await config.models.Profile.from(user.email);
+                const profile = await authenticatedProfile(config, user.email);
                 const api = await TAKAPI.init(new URL(String(config.server.api)), new APIAuthCertificate(profile.auth.cert, profile.auth.key));
 
                 try {

@@ -12,6 +12,7 @@ import Alarm from '../lib/aws/alarm.js';
 import type ConfigStateless from '../config.js';
 import Schedule from '../../common/schedule.js';
 import LayerControl from '../lib/control/layer.js';
+import CommonLayerControl from '../../common/control/layer.js';
 import { Param } from '@openaddresses/batch-generic';
 import { sql, eq } from 'drizzle-orm';
 import type { InferInsertModel } from 'drizzle-orm';
@@ -22,7 +23,7 @@ import {
     LayerOutgoingResponse,
     LayerUpdateManagementListResponse,
 } from '../../common/types.js';
-import { LayerIncoming, LayerOutgoing } from '../../common/schema.js';
+import { LayerIncoming, LayerOutgoing, ConnectionFeature, VideoLease } from '../../common/schema.js';
 import DataMission from '../lib/data-mission.js';
 import { MAX_LAYERS_IN_DATA_SYNC } from '../lib/data-mission.js';
 import { Layer_Config } from '../../common/models/Layer.js';
@@ -183,7 +184,7 @@ export default async function router(schema: Schema, config: ConfigStateless) {
     await schema.post('/connection/:connectionid/layer', {
         name: 'Create Layer',
         group: 'Layer',
-        description: 'Register a new layer',
+        description: 'Register a new layer - a Connection ID of 0 creates a server-wide Admin Layer',
         query: Type.Object({
             alarms: Type.Boolean({
                 default: false,
@@ -191,7 +192,7 @@ export default async function router(schema: Schema, config: ConfigStateless) {
             }),
         }),
         params: Type.Object({
-            connectionid: Type.Integer({ minimum: 1 }),
+            connectionid: Type.Integer({ minimum: 0 }),
         }),
         body: Type.Object({
             name: Default.NameField,
@@ -220,23 +221,61 @@ export default async function router(schema: Schema, config: ConfigStateless) {
             alarm_evals: Type.Optional(Type.Integer()),
             alarm_points: Type.Optional(Type.Integer()),
             protected: Type.Boolean({ default: false }),
+            permissions: Type.Optional(Type.Array(Type.String(), {
+                description: 'Permissions granted to the Layer as <permission>:<level> pairs - ie video:read or video:*',
+            })),
+            incoming: Type.Optional(Type.Object({
+                cron: Type.Optional(Type.Union([Type.Null(), Type.String()])),
+                webhooks: Type.Optional(Type.Boolean()),
+            }, {
+                description: 'Create an Incoming Config alongside the Layer',
+            })),
+            outgoing: Type.Optional(Type.Object({}, {
+                description: 'Create an Outgoing Config alongside the Layer',
+            })),
         }),
         res: LayerResponse,
     }, async (req, res) => {
         try {
-            const { connection, auth } = await Auth.is_connection(config, req, {
-                resources: [{ access: AuthResourceAccess.CONNECTION, id: req.params.connectionid }],
-            }, req.params.connectionid);
+            let username: string | null = null;
+            if (req.params.connectionid === 0) {
+                const user = await Auth.as_user(config, req, { admin: true });
+                username = user.email;
+            } else {
+                const { connection, auth } = await Auth.is_connection(config, req, {
+                    resources: [{ access: AuthResourceAccess.CONNECTION, id: req.params.connectionid }],
+                }, req.params.connectionid);
 
-            if (connection.readonly) throw new Err(400, null, 'Connection is Read-Only mode');
+                if (connection.readonly) throw new Err(400, null, 'Connection is Read-Only mode');
+
+                username = auth instanceof AuthUser ? auth.email : null;
+            }
+
+            CommonLayerControl.validatePermissions(req.body.permissions);
+
+            if (req.body.incoming && req.body.incoming.cron) {
+                Schedule.is_valid(req.body.incoming.cron);
+            }
+
+            const { incoming, outgoing, ...body } = req.body;
 
             const layer = await layerControl.generate({
-                ...req.body,
-                connection: req.params.connectionid,
-                username: auth instanceof AuthUser ? auth.email : null,
+                ...body,
+                connection: req.params.connectionid || null,
+                username,
             }, {
                 alarms: req.query.alarms,
+                incoming,
+                outgoing,
             });
+
+            if (layer.incoming) {
+                await config.hub.eventSet(layer.id, layer.incoming.cron && !Schedule.is_aws(layer.incoming.cron) && layer.enabled ? layer.incoming.cron : null);
+            }
+
+            if (layer.outgoing && layer.connection !== null) {
+                await config.hub.featureRefresh(layer.connection);
+            }
 
             res.json(layer);
         } catch (err) {
@@ -555,10 +594,17 @@ export default async function router(schema: Schema, config: ConfigStateless) {
                 await Filter.validate(req.body.filters);
             }
 
+            const capabilities = await layerControl.capabilities(layer.task);
+
             const incoming = await config.models.LayerOutgoing.generate({
                 layer: layer.id,
                 ...req.body,
+                ...(capabilities ? { subscriptions: CommonLayerControl.outgoingSubscriptions(capabilities) } : {}),
             });
+
+            if (layer.connection !== null) {
+                await config.hub.featureRefresh(layer.connection);
+            }
 
             layer = await layerControl.from(connection, req.params.layerid);
 
@@ -619,6 +665,10 @@ export default async function router(schema: Schema, config: ConfigStateless) {
 
             const outgoing = await config.models.LayerOutgoing.commit(layer.id, updated);
 
+            if (layer.connection !== null) {
+                await config.hub.featureRefresh(layer.connection);
+            }
+
             if (req.body.environment) {
                 await Lambda.invoke(config, layer.id, 'environment:outgoing');
             }
@@ -667,6 +717,10 @@ export default async function router(schema: Schema, config: ConfigStateless) {
             if (!status.endsWith('_COMPLETE')) throw new Err(400, null, 'Layer is still Deploying, Wait for Deploy to succeed before deleting');
 
             await config.models.LayerOutgoing.delete(layer.id);
+
+            if (layer.connection !== null) {
+                await config.hub.featureRefresh(layer.connection);
+            }
 
             layer = await layerControl.from(connection, req.params.layerid);
 
@@ -721,10 +775,16 @@ export default async function router(schema: Schema, config: ConfigStateless) {
             alarm_period: Type.Optional(Type.Integer()),
             alarm_evals: Type.Optional(Type.Integer()),
             alarm_points: Type.Optional(Type.Integer()),
+
+            permissions: Type.Optional(Type.Array(Type.String(), {
+                description: 'Permissions granted to the Layer as <permission>:<level> pairs - ie video:read or video:*',
+            })),
         }),
         res: LayerResponse,
     }, async (req, res) => {
         try {
+            CommonLayerControl.validatePermissions(req.body.permissions);
+
             const resources = [
                 { access: AuthResourceAccess.CONNECTION, id: req.params.connectionid },
                 { access: AuthResourceAccess.LAYER, id: req.params.layerid },
@@ -740,8 +800,32 @@ export default async function router(schema: Schema, config: ConfigStateless) {
                 }
             } else {
                 const auth = await Auth.is_connection(config, req, { resources }, req.params.connectionid);
+
+                if (req.body.permissions !== undefined && auth.layer) {
+                    throw new Err(403, null, 'Layer tokens cannot modify Layer permissions');
+                }
+
                 connection = auth.connection;
                 layer = await layerControl.from(connection, req.params.layerid);
+            }
+
+            const task = req.body.task || layer.task;
+            const taskChanged = req.body.task !== undefined && req.body.task !== layer.task;
+
+            const patch: Partial<InferInsertModel<typeof Layer>> = { ...req.body, task: undefined, version: undefined };
+            if (taskChanged) {
+                const resolved = await layerControl.resolve(task);
+                patch.task = resolved.integration.id;
+                patch.version = resolved.version;
+            }
+
+            let capabilities = null;
+            if (req.body.permissions !== undefined || (taskChanged && layer.outgoing)) {
+                capabilities = await layerControl.capabilities(task);
+            }
+
+            if (req.body.permissions !== undefined && capabilities) {
+                CommonLayerControl.validateManifestPermissions(req.body.permissions, capabilities, task);
             }
 
             let changed = false;
@@ -760,8 +844,15 @@ export default async function router(schema: Schema, config: ConfigStateless) {
 
             await config.models.Layer.commit(layer.id, {
                 updated: sql`Now()`,
-                ...req.body,
+                ...patch,
             });
+
+            if (taskChanged && layer.outgoing && capabilities) {
+                await config.models.LayerOutgoing.commit(layer.id, {
+                    updated: sql`Now()`,
+                    subscriptions: CommonLayerControl.outgoingSubscriptions(capabilities),
+                });
+            }
 
             layer = await layerControl.from(connection, req.params.layerid);
 
@@ -777,6 +868,10 @@ export default async function router(schema: Schema, config: ConfigStateless) {
 
             if (layer.incoming) {
                 await config.hub.eventSet(layer.id, layer.incoming.cron && !Schedule.is_aws(layer.incoming.cron) && layer.enabled ? layer.incoming.cron : null);
+            }
+
+            if (layer.outgoing && layer.connection !== null) {
+                await config.hub.featureRefresh(layer.connection);
             }
 
             let status = 'unknown';
@@ -947,9 +1042,20 @@ export default async function router(schema: Schema, config: ConfigStateless) {
 
             if (layer.outgoing) {
                 await config.models.LayerOutgoing.delete(req.params.layerid);
+
+                if (layer.connection !== null) {
+                    await config.hub.featureRefresh(layer.connection);
+                }
             }
 
             await config.hub.eventSet(layer.id, null);
+
+            await config.pg.delete(ConnectionFeature)
+                .where(eq(ConnectionFeature.layer, layer.id));
+
+            await config.pg.update(VideoLease)
+                .set({ layer: null })
+                .where(eq(VideoLease.layer, layer.id));
 
             await config.models.Layer.delete(req.params.layerid);
 

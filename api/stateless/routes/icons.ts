@@ -10,9 +10,9 @@ import Sprites from '../lib/sprites.js';
 import { ZipArchive } from '@archiver/archiver';
 import xmljs from 'xml-js';
 import { Param } from '@openaddresses/batch-generic';
-import { sql } from 'drizzle-orm';
+import { sql, eq } from 'drizzle-orm';
 import { StandardResponse, IconResponse, IconsetResponse } from '../../common/types.js';
-import { Icon, Iconset } from '../../common/schema.js';
+import { Icon, Iconset, ProfileFile, BasemapVector, ProfileOverlay } from '../../common/schema.js';
 import * as Default from '../lib/limits.js';
 
 export type SpriteRecord = {
@@ -158,16 +158,17 @@ export default async function router(schema: Schema, config: ConfigStateless) {
                 throw new Err(400, null, 'Only System Admin can edit Server Resource');
             }
 
-            if (typeof req.body.public === 'boolean' && user.access === AuthUserAccess.ADMIN) {
-                if (req.body.public === true) {
-                    await config.models.Iconset.commit(req.params.iconset, { username: null });
-                } else {
-                    await config.models.Iconset.commit(req.params.iconset, { username: user.email });
-                }
+            const { public: isPublic, ...body } = req.body;
+
+            if (isPublic !== undefined && user.access !== AuthUserAccess.ADMIN) {
+                throw new Err(400, null, 'Only System Admins can change Iconset visibility');
             }
 
-            delete req.body.public;
-            const iconset = await config.models.Iconset.commit(req.params.iconset, req.body);
+            const iconset = await config.models.Iconset.commit(req.params.iconset, {
+                ...body,
+                ...(isPublic === true ? { username: null } : {}),
+                ...(isPublic === false && !existing.username ? { username: user.email } : {}),
+            });
 
             res.json(iconset);
         } catch (err) {
@@ -322,6 +323,19 @@ export default async function router(schema: Schema, config: ConfigStateless) {
             }
 
             await config.models.Icon.delete(sql`iconset = ${req.params.iconset}`);
+
+            await config.pg.update(ProfileFile)
+                .set({ iconset: null })
+                .where(eq(ProfileFile.iconset, req.params.iconset));
+
+            await config.pg.update(BasemapVector)
+                .set({ iconset: null })
+                .where(eq(BasemapVector.iconset, req.params.iconset));
+
+            await config.pg.update(ProfileOverlay)
+                .set({ iconset: null })
+                .where(eq(ProfileOverlay.iconset, req.params.iconset));
+
             await config.models.Iconset.delete(String(req.params.iconset));
 
             res.json({

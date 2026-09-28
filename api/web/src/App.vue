@@ -9,8 +9,8 @@
         <!-- New-version upgrade banner -->
         <div
             v-if='updateAvailable'
-            class='d-flex align-items-center justify-content-center flex-wrap gap-2 px-3 py-2'
-            style='background: rgba(20,20,20,0.88); backdrop-filter: blur(6px);'
+            class='d-flex align-items-center justify-content-center flex-wrap gap-2 px-3 pb-2'
+            style='background: rgba(20,20,20,0.88); backdrop-filter: blur(6px); padding-top: calc(0.5rem + var(--status-bar-height, 0px));'
         >
             <IconRefresh
                 size='16'
@@ -34,8 +34,8 @@
         <!-- Session expiry warning banner -->
         <div
             v-if='sessionWarningShown'
-            class='d-flex align-items-center justify-content-center flex-wrap gap-2 px-3 py-2'
-            style='background: rgba(20,20,20,0.88); backdrop-filter: blur(6px);'
+            class='d-flex align-items-center justify-content-center flex-wrap gap-2 px-3 pb-2'
+            style='background: rgba(20,20,20,0.88); backdrop-filter: blur(6px); padding-top: calc(0.5rem + var(--status-bar-height, 0px));'
         >
             <IconClock
                 size='16'
@@ -56,110 +56,6 @@
                 @click='sessionWarningDismissed = true'
             />
         </div>
-        <header
-            v-if='navShown'
-            class='navbar navbar-expand-md d-print-none'
-        >
-            <div class='container-xl'>
-                <div class='col-auto'>
-                    <img
-                        alt='Agency Logo'
-                        :src='appStore.loginLogo || "/CloudTAKLogo.svg"'
-                        class='cursor-pointer'
-                        draggable='false'
-                        height='50'
-                        width='50'
-                        @click='external("/")'
-                    >
-                </div>
-                <div class='col mx-2'>
-                    <div
-                        class='page-pretitle'
-                        v-text='appStore.loginName || ""'
-                    />
-                    <h2 class='page-title'>
-                        CloudTAK
-                    </h2>
-                </div>
-
-                <div
-                    v-if='appStore.user'
-                    class='ms-auto'
-                >
-                    <div class='btn-list'>
-                        <a
-                            class='btn btn-dark'
-                            target='_blank'
-                            rel='noreferrer'
-                            @click='external("/docs")'
-                        >
-                            <IconCode
-                                size='32'
-                                stroke='1'
-                            />Docs
-                        </a>
-                        <div class='dropdown'>
-                            <div
-                                id='userProfileButton'
-                                type='button'
-                                data-bs-toggle='dropdown'
-                                aria-expanded='false'
-                                class='btn btn-dark'
-                            >
-                                <IconUser
-                                    size='32'
-                                    stroke='1'
-                                />
-                            </div>
-                            <ul
-                                class='dropdown-menu'
-                                aria-labelledby='userProfileButton'
-                            >
-                                <div
-                                    class='d-flex dropdown-item cursor-pointer cloudtak-hover'
-                                    @click='external("/connection")'
-                                >
-                                    <IconNetwork
-                                        size='32'
-                                        stroke='1'
-                                    />
-                                    <span class='mx-2'>Connections</span>
-                                </div>
-                                <div
-                                    class='d-flex dropdown-item cursor-pointer cloudtak-hover'
-                                    @click='external("/admin")'
-                                >
-                                    <IconSettings
-                                        size='32'
-                                        stroke='1'
-                                    />
-                                    <span class='mx-2'>Admin</span>
-                                    <TablerBadge
-                                        class='ms-auto'
-                                        background-color='rgba(239, 68, 68, 0.2)'
-                                        border-color='rgba(239, 68, 68, 0.5)'
-                                        text-color='#dc2626'
-                                    >
-                                        Admin
-                                    </TablerBadge>
-                                </div>
-                                <div
-                                    class='d-flex dropdown-item cursor-pointer cloudtak-hover'
-                                    @click='appStore.logout'
-                                >
-                                    <IconLogout
-                                        size='32'
-                                        stroke='1'
-                                    />
-                                    <span class='mx-2'>Logout</span>
-                                </div>
-                            </ul>
-                        </div>
-                        <div />
-                    </div>
-                </div>
-            </div>
-        </header>
 
         <Loading
             v-if='!mounted || (appStore.loading && !route.path.includes("configure") && !route.path.includes("login"))'
@@ -174,7 +70,14 @@
             v-if='error'
             :err='error'
             @close='error = undefined'
-        />
+        >
+            <template #advanced='{ body }'>
+                <CopyField
+                    mode='pre'
+                    :model-value='body'
+                />
+            </template>
+        </TablerError>
         <ChannelChangeModal
             v-if='mapStore.channelChange'
             @close='mapStore.channelChange = false'
@@ -189,34 +92,29 @@
 </template>
 
 <script setup lang='ts'>
+import CopyField from './components/CloudTAK/util/CopyField.vue';
 import { ref, computed, onErrorCaptured, onMounted, onUnmounted } from 'vue'
-import { liveQuery } from 'dexie';
-import { isTransientDbError } from './database.ts';
+import { isTransientDbError, isDatabaseSuspendedError, liveQuery } from './database.ts';
 import { useRoute, useRouter } from 'vue-router';
+// Tabler's stylesheet is loaded from src/style.scss via the <head> of each
+// HTML entry point - only its JS behaviours are pulled in here.
 import '@tabler/core/dist/js/tabler.min.js';
-import '@tabler/core/dist/css/tabler.min.css';
 import {
     IconClock,
-    IconCode,
-    IconLogout,
-    IconUser,
-    IconNetwork,
-    IconSettings,
     IconRefresh,
 } from '@tabler/icons-vue';
 import Loading from './components/Loading.vue';
 import {
-    TablerBadge,
     TablerError
 } from '@tak-ps/vue-tabler';
 import ChannelChangeModal from './components/CloudTAK/Menu/ChannelChangeModal.vue';
 import NotificationToast from './components/CloudTAK/util/NotificationToast.vue';
 import TAKNotification_ from './base/notification.ts';
 const TAKNotification = TAKNotification_;
-import { supportsServiceWorker } from './base/capacitor.ts';
+import { supportsServiceWorker, addBackButtonListener, minimizeApp } from './utils/capacitor.ts';
 import { useObservable } from '@vueuse/rxjs';
 import { from } from 'rxjs';
-import { applyServiceWorkerUpdate } from './base/service-worker.ts';
+import { applyServiceWorkerUpdate } from './utils/service-worker.ts';
 
 import { useAppStore } from './stores/app.ts';
 import { useMapStore } from './stores/map.ts';
@@ -230,6 +128,7 @@ const mapStore = useMapStore();
 const deviceStore = useDeviceStore();
 
 let removeNotificationAction: (() => void) | undefined;
+let removeBackButton: (() => void) | undefined;
 
 const toastNotifications = useObservable(
     from(liveQuery(async () => {
@@ -253,6 +152,9 @@ const error = ref<Error | undefined>();
 
 const SESSION_WARNING_MS = 30 * 60 * 1000;
 const SESSION_CHECK_INTERVAL_MS = 30 * 1000;
+// Refresh silently once this much of the token's life remains - the warning
+// banner is only reached when refreshing has failed
+const SESSION_REFRESH_MS = 24 * 60 * 60 * 1000;
 
 const sessionRemainingMs = ref<number | null>(null);
 const sessionWarningDismissed = ref(false);
@@ -284,6 +186,12 @@ function checkSessionExpiry() {
     const remaining = appStore.tokenExpiry - Date.now();
     sessionRemainingMs.value = remaining;
 
+    // Short lifetimes refresh at their halfway point instead
+    const refreshAt = Math.min(SESSION_REFRESH_MS, (appStore.tokenLifetime ?? SESSION_REFRESH_MS * 2) / 2);
+    if (remaining <= refreshAt) {
+        void appStore.refreshSession();
+    }
+
     if (remaining > SESSION_WARNING_MS) {
         // A fresh token was issued - re-arm the dismissed warning
         sessionWarningDismissed.value = false;
@@ -293,21 +201,10 @@ function checkSessionExpiry() {
     }
 }
 
-const navShown = computed<boolean>(() => {
-    if (!route || !route.name) {
-        return false;
-    } else {
-        return (
-            !String(route.name).startsWith("home")
-            && !["login", "configure"].includes(String(route.name))
-        )
-    }
-});
-
 onErrorCaptured((err) => {
     const e = err instanceof Error ? err : new Error(String(err));
 
-    if (isTransientDbError(e)) {
+    if (isTransientDbError(e) || isDatabaseSuspendedError(e)) {
         return false;
     }
 
@@ -332,7 +229,7 @@ onMounted(async () => {
     // Register before any awaits so early promise rejections are captured
     window.addEventListener('unhandledrejection', (e) => {
         const err = e.reason instanceof Error ? e.reason : new Error(String(e.reason));
-        if (isTransientDbError(err)) {
+        if (isTransientDbError(err) || isDatabaseSuspendedError(err)) {
             return;
         }
         error.value = err;
@@ -341,6 +238,15 @@ onMounted(async () => {
     if (supportsServiceWorker()) {
         window.addEventListener('sw:update-available', onSwUpdateAvailable);
     }
+
+    removeBackButton = await addBackButtonListener(() => {
+        const back = router.options.history.state.back;
+        if (route.name === 'login' || !back || String(back).startsWith('/login')) {
+            void minimizeApp();
+        } else {
+            router.back();
+        }
+    });
 
     // Deep link when the user taps a push notification (path from its payload)
     removeNotificationAction = deviceStore.onNotificationAction((data) => {
@@ -367,6 +273,7 @@ onMounted(async () => {
 onUnmounted(() => {
     window.removeEventListener('sw:update-available', onSwUpdateAvailable);
     if (removeNotificationAction) removeNotificationAction();
+    if (removeBackButton) removeBackButton();
 
     if (sessionExpiryTimer !== undefined) {
         clearInterval(sessionExpiryTimer);
@@ -376,170 +283,4 @@ onUnmounted(() => {
     appStore.teardown();
 });
 
-function external(url: string) {
-    window.location.href = url;
-}
 </script>
-
-<style lang='scss'>
-$cloudtak-default: #182433;
-$cloudtak-child:  #192f45;
-$cloudtak-yellow: #FFB703;
-$cloudtak-orange: #FF9820;
-$cloudtak-navy: #023047;
-$cloudtak-blue: #07556D;
-
-:root {
-    --cloudtak-light: rgba(var(--tblr-primary-rgb), 0.08);
-}
-
-.cloudtak-gradient {
-    background: radial-gradient(at left top, $cloudtak-blue, $cloudtak-navy);
-}
-
-.cloudtak-gradient-light {
-    background: radial-gradient(at left top, #f7fbff, #dde8f4);
-}
-
-.btn-primary {
-    background-color: $cloudtak-blue !important;
-}
-
-html[data-bs-theme='dark'] {
-    --tabler-input-bg: var(--tblr-bg-forms, var(--tblr-bg-surface, var(--tblr-body-bg)));
-}
-
-html[data-bs-theme='light'] {
-    --tabler-input-bg: var(--cloudtak-light);
-}
-
-html[data-bs-theme='dark'] .cloudtak-accent {
-    background-color: #192f45 !important;
-    border-color: rgba(255, 255, 255, 0.14) !important;
-    box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.06);
-}
-
-html[data-bs-theme='light'] .cloudtak-accent {
-    background-color: var(--tblr-primary-lt) !important;
-}
-
-html[data-bs-theme='light'] .cloudtak-accent.text-white {
-    color: var(--tblr-body-color) !important;
-}
-
-html[data-bs-theme='dark'] .cloudtak-bg {
-    background-color: #283547 !important;
-}
-
-html[data-bs-theme='light'] .cloudtak-bg {
-    background-color: var(--tblr-light) !important;
-    color: var(--tblr-body-color);
-}
-
-html[data-bs-theme='light'] .cloudtak-bg.text-white {
-    color: var(--tblr-body-color) !important;
-}
-
-html[data-bs-theme='light'] .cloudtak-bg .text-white:not(.badge):not(.btn):not([class*='bg-']),
-html[data-bs-theme='light'] .cloudtak-accent .text-white:not(.badge):not(.btn):not([class*='bg-']) {
-    color: var(--tblr-body-color) !important;
-}
-
-html[data-bs-theme='light'] .cloudtak-bg .text-white-50:not(.badge):not(.btn):not([class*='bg-']),
-html[data-bs-theme='light'] .cloudtak-accent .text-white-50:not(.badge):not(.btn):not([class*='bg-']) {
-    color: var(--tblr-secondary-color) !important;
-}
-
-.bg-child {
-    background-color: $cloudtak-child !important;
-}
-
-/*
- * Shared surface for panels floating above the map (navigation banner,
- * map controls, draggable floating panes). Sets --tblr-border-color so
- * Bootstrap border utilities inside the panel pick up the same subtle
- * separator color.
- */
-.cloudtak-panel {
-    border-radius: 8px;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
-}
-
-html[data-bs-theme='dark'] .cloudtak-panel {
-    --tblr-border-color: rgba(255, 255, 255, 0.14);
-    background-color: rgba(40, 53, 71, 0.95);
-    color: rgba(255, 255, 255, 0.92);
-    border: 1px solid rgba(255, 255, 255, 0.14);
-}
-
-html[data-bs-theme='light'] .cloudtak-panel {
-    --tblr-border-color: rgba(0, 0, 0, 0.12);
-    background-color: rgba(255, 255, 255, 0.95);
-    color: var(--tblr-body-color);
-    border: 1px solid rgba(0, 0, 0, 0.12);
-}
-
-html[data-bs-theme='light'] .cloudtak-panel .text-white:not(.badge):not(.btn):not([class*='bg-']) {
-    color: var(--tblr-body-color) !important;
-}
-
-html[data-bs-theme='light'] .cloudtak-panel .text-white-50:not(.badge):not(.btn):not([class*='bg-']) {
-    color: var(--tblr-secondary-color) !important;
-}
-
-.cloudtak-hover {
-    border: 1px solid transparent;
-    transition: background-color 0.15s ease, border-color 0.15s ease;
-}
-
-html[data-bs-theme='dark'] .cloudtak-hover:hover,
-html[data-bs-theme='dark'] .cloudtak-hover:focus-visible,
-html[data-bs-theme='dark'] .cloudtak-hover:focus-within {
-    border-radius: 6px;
-    border-color: color-mix(in srgb, var(--tblr-light) 30%, transparent);
-    background: color-mix(in srgb, var(--tblr-light) 12%, transparent);
-}
-
-html[data-bs-theme='light'] .cloudtak-hover:hover,
-html[data-bs-theme='light'] .cloudtak-hover:focus-visible,
-html[data-bs-theme='light'] .cloudtak-hover:focus-within {
-    border-radius: 6px;
-    border-color: color-mix(in srgb, var(--tblr-body-color) 18%, transparent);
-    background: color-mix(in srgb, var(--tblr-body-color) 8%, transparent);
-}
-
-html[data-bs-theme='dark'] .cloudtak-accent.cloudtak-hover:hover,
-html[data-bs-theme='dark'] .cloudtak-accent.cloudtak-hover:focus-visible,
-html[data-bs-theme='dark'] .cloudtak-accent.cloudtak-hover:focus-within {
-    background-color: color-mix(in srgb, #192f45 82%, white 18%) !important;
-}
-
-html[data-bs-theme='light'] .cloudtak-accent.cloudtak-hover:hover,
-html[data-bs-theme='light'] .cloudtak-accent.cloudtak-hover:focus-visible,
-html[data-bs-theme='light'] .cloudtak-accent.cloudtak-hover:focus-within {
-    background-color: color-mix(in srgb, var(--tblr-primary-lt) 82%, var(--tblr-body-color) 18%) !important;
-}
-
-.cloudtak-hover-hidden {
-    visibility: hidden;
-}
-
-.cloudtak-hover:hover .cloudtak-hover-hidden,
-.cloudtak-hover:focus-within .cloudtak-hover-hidden {
-    visibility: visible;
-}
-
-.border-light {
-    border-radius: 6px;
-    background-color: rgba(0, 0, 0, 0.2);
-}
-
-.border-dark {
-    background: #0f172a;
-}
-.btn-check:checked + .btn:hover {
-    background-color: var(--tblr-primary) !important;
-    border-color: var(--tblr-primary) !important;
-    color: white !important;
-}
-</style>

@@ -3,6 +3,7 @@ import Err from '@openaddresses/batch-error';
 import { CoTParser } from '@tak-ps/node-cot';
 import type { GeofenceStatus } from '../../../stateful/lib/connection-geofence.js';
 import type { HubClient, ConnStatus, PoolSummary, PresenceMap, SubmitCotsRequest } from '../../../common/hub/index.js';
+import type { WebSocket_Event } from '../../../common/enums.js';
 import type Config from '../../../common/config.js';
 
 const DEFAULT_TIMEOUT_MS = 10 * 1000;
@@ -141,8 +142,8 @@ export default class RemoteHub implements HubClient {
         if (!res.submitted) throw new Err(200, null, res.message);
     }
 
-    async wsNotify(key: string, payload: unknown, excludeSession?: string): Promise<void> {
-        await this.#call('/ws/notify', { key, payload, excludeSession }, {
+    async wsNotify(key: string, payload: unknown, excludeSession?: string, event?: WebSocket_Event): Promise<void> {
+        await this.#call('/ws/notify', { key, payload, excludeSession, event }, {
             timeout: 5 * 1000,
         });
     }
@@ -153,8 +154,22 @@ export default class RemoteHub implements HubClient {
         });
     }
 
+    async wsRevoke(sessions: string[]): Promise<void> {
+        await this.#call('/ws/revoke', { sessions }, {
+            timeout: 5 * 1000,
+        });
+    }
+
     async eventSet(layerid: number, cron: string | null): Promise<void> {
         await this.#call('/event/set', { layerid, cron });
+    }
+
+    async featureRefresh(connection: number): Promise<void> {
+        await this.#call('/feature/refresh', { connection });
+    }
+
+    async coreEventSubmit(event: string): Promise<void> {
+        await this.#call(`/core/event/${encodeURIComponent(event)}`, {});
     }
 
     async geofenceRefresh(): Promise<void> {

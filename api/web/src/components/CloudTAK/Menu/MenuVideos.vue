@@ -46,18 +46,24 @@
                 ]'
             >
                 <template #option='{ option }'>
-                    <IconVideo
+                    <span
                         v-if='option.value === "connections"'
-                        v-tooltip='"Video Connections"'
-                        :size='32'
-                        stroke='1'
-                    />
-                    <IconServer2
+                        title='Video Connections'
+                    >
+                        <IconVideo
+                            :size='32'
+                            stroke='1'
+                        />
+                    </span>
+                    <span
                         v-else
-                        v-tooltip='"Video Leases"'
-                        :size='32'
-                        stroke='1'
-                    />
+                        title='Video Leases'
+                    >
+                        <IconServer2
+                            :size='32'
+                            stroke='1'
+                        />
+                    </span>
                     <span class='ms-2'>{{ option.label }}</span>
                 </template>
             </TablerPillGroup>
@@ -220,10 +226,16 @@
                         </div>
 
                         <div class='d-flex btn-list ms-auto'>
-                            <TablerDelete
-                                displaytype='icon'
-                                @delete='deleteLease(l)'
-                            />
+                            <TablerIconButton
+                                :title='getLeasePlayTitle(l)'
+                                :disabled='!isLeasePlayable(l)'
+                                @click.stop='isLeasePlayable(l) && floatStore.addLease(l)'
+                            >
+                                <IconPlayerPlay
+                                    :size='24'
+                                    stroke='1'
+                                />
+                            </TablerIconButton>
                         </div>
                     </StandardItem>
                 </div>
@@ -257,7 +269,7 @@ import StandardItem from '../util/StandardItem.vue';
 import { server } from '../../../std.ts';
 import COT from '../../../base/cot.ts';
 import ProfileConfig from '../../../base/profile.ts';
-import type { VideoLease, VideoConnectionList } from '../../../types.ts';
+import type { VideoLease, VideoLeaseList, VideoConnectionList } from '../../../types.ts';
 
 import { useMapStore } from '../../../stores/map.ts';
 import { useFloatStore } from '../../../stores/float.ts';
@@ -266,7 +278,6 @@ import {
     TablerInput,
     TablerAlert,
     TablerPager,
-    TablerDelete,
     TablerLoading,
     TablerIconButton,
     TablerRefreshButton,
@@ -277,6 +288,7 @@ import {
     IconVideo,
     IconPencil,
     IconServer2,
+    IconPlayerPlay,
     IconVideoPlus,
     IconCar,
     IconWalk,
@@ -309,7 +321,7 @@ const loading = ref({
 });
 const lease = ref();
 const isSystemAdmin = ref(false);
-const leases = ref<{ total: number, items: VideoLease[] }>({ total: 0, items: [] });
+const leases = ref<VideoLeaseList>({ total: 0, items: [] });
 const connections = ref<VideoConnectionList>({ videoConnections: [] });
 const videos = ref<Set<COT>>(new Set())
 
@@ -413,24 +425,6 @@ async function fetchConnections(): Promise<void> {
     loading.value.connections = false;
 }
 
-async function deleteLease(lease: VideoLease): Promise<void> {
-    loading.value.main = true;
-
-    try {
-        const res = await server.DELETE('/api/video/lease/{:lease}', {
-            params: { path: { ':lease': lease.id } }
-        });
-        if (res.error) throw new Error(res.error.message);
-
-        await fetchLeases();
-
-        loading.value.main = false;
-    } catch (err) {
-        loading.value.main = false;
-        throw err;
-    }
-}
-
 function getLeaseIcon(sourceType: string) {
     switch (sourceType) {
         case 'vehicle': return IconCar;
@@ -442,6 +436,18 @@ function getLeaseIcon(sourceType: string) {
         case 'screenshare': return IconDeviceDesktop;
         default: return IconVideo;
     }
+}
+
+// Proxied sources are pulled by MediaMTX on demand, so they are only
+// reported ready while being watched - treat them as always playable
+function isLeasePlayable(lease: VideoLeaseList['items'][number]): boolean {
+    return lease.active || lease.proxy !== null;
+}
+
+function getLeasePlayTitle(lease: VideoLeaseList['items'][number]): string {
+    if (lease.active) return 'Play Lease';
+    if (lease.proxy !== null) return 'Play Lease - starts on demand';
+    return 'Lease is not currently streaming';
 }
 
 function getLeaseDescription(lease: VideoLease): string {

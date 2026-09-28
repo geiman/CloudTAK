@@ -1,69 +1,8 @@
 import { Type, Static } from '@sinclair/typebox';
 import jsonata from 'jsonata';
 import type { Feature } from '@tak-ps/node-cot';
-import handlebars from 'handlebars';
+import handlebars from './handlebars.js';
 import Err from '@openaddresses/batch-error';
-import sanitizer from 'sanitize-html';
-
-handlebars.registerHelper('fallback', (...params: Array<unknown>) => {
-    params.pop(); // Contains Config stuff from handlebars
-    const found = params.find(el => !!el);
-    return found;
-});
-
-handlebars.registerHelper('slice', (text: string, start: number, end?: number) => {
-    if (text && !isNaN(Number(start)) && !isNaN(Number(end))) {
-        return text.substring(start, end);
-    } else if (text && !isNaN(Number(start))) {
-        return text.substring(start);
-    } else {
-        return '';
-    }
-});
-
-handlebars.registerHelper('htmlstrip', (text: string) => {
-    if (!text) return '';
-
-    let addLine = false;
-    let addSpace = false;
-    const newLine = ['tr'];
-    const newSpace = ['td'];
-
-    return sanitizer(text, {
-        allowedTags: [],
-        onCloseTag: (tagName) => {
-            addLine = newLine.includes(tagName);
-            addSpace = newSpace.includes(tagName);
-        },
-        textFilter: (text) => {
-            if (addLine) {
-                addLine = false;
-                text = '\n' + text;
-            }
-
-            if (addSpace) {
-                addSpace = false;
-                text = ': ' + text;
-            }
-
-            return text;
-        },
-    }).trim();
-});
-
-// Replace all occurrences of a search string with replacement text
-// Usage: {{replace currentMessage '[nl]' ' '}} or chained {{replace (replace text '[nl]' ' ') '[np]' ' '}}
-handlebars.registerHelper('replace', (text: string, search: string, replacement: string) => {
-    if (!text) return '';
-    return text.replaceAll(search, replacement);
-});
-
-// Round numbers to specified decimal places (defaults to 2)
-// Usage: {{round depth 2}} or {{round magnitude 1}}
-handlebars.registerHelper('round', (number: number, decimals: number = 2) => {
-    if (number == null || isNaN(number)) return '';
-    return Number(number).toFixed(decimals);
-});
 
 interface validateStyleGeometry {
     'marker-color'?: string;
@@ -124,6 +63,12 @@ export const StylePoint = Type.Object({
 });
 
 export const StyleLine = Type.Object({
+    'type': Type.Optional(Type.Union([
+        Type.Literal('u-d-f'),
+        Type.Literal('b-m-r'),
+    ], {
+        description: 'CoT Type for LineString Features - u-d-f: User Drawn Line (default) or b-m-r: Route',
+    })),
     'stroke': Type.Optional(Type.String()),
     'stroke-style': Type.Optional(Type.String()),
     'stroke-opacity': Type.Optional(Type.String()),
@@ -590,6 +535,7 @@ export default class Style {
             if (style.point.marti) this.#applyMarti(style.point.marti, feature);
         } else if (feature.geometry.type === 'LineString' && style.line) {
             if (style.line.id) feature.id = this.compile(style.line.id, feature.properties.metadata);
+            if (style.line.type) feature.properties.type = style.line.type;
             if (style.line.remarks) feature.properties.remarks = this.compile(style.line.remarks, feature.properties.metadata);
             if (style.line.phone) {
                 feature.properties.contact = feature.properties.contact || {};

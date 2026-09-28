@@ -3,6 +3,14 @@
         v-model='isOpen'
         label='Map Settings'
     >
+        <template #icon>
+            <IconMap
+                :size='18'
+                stroke='1'
+                color='#6b7990'
+                class='ms-2 me-1'
+            />
+        </template>
         <template #right>
             <TablerIconButton
                 v-if='!edit && isOpen'
@@ -33,7 +41,7 @@
                 </TablerIconButton>
             </div>
         </template>
-        <div class='col-lg-12 py-2 px-2 border rounded'>
+        <div class='col-lg-12 py-2 px-2'>
             <TablerLoading v-if='loading' />
             <template v-else>
                 <TablerAlert
@@ -88,31 +96,90 @@
                         />
                     </div>
                     <div class='col-lg-12 mt-3'>
-                        <TablerInput
-                            v-model='config[`map::groundoverlay::max_size_mb`]'
-                            label='GroundOverlay Max Size (MiB)'
-                            description='Maximum size allowed for a single imported GroundOverlay image.'
-                            :error='validatePositiveInteger(config[`map::groundoverlay::max_size_mb`])'
-                            :disabled='!edit'
+                        <label class='form-label'>Favourite Basemaps</label>
+
+                        <TablerNone
+                            v-if='!favs.length'
+                            :compact='true'
+                            :create='false'
+                            label='No Favourite Basemaps'
                         />
-                    </div>
-                    <div class='col-lg-12'>
-                        <TablerInput
-                            v-model='config[`map::groundoverlay::max_total_size_mb`]'
-                            label='GroundOverlay Total Budget (MiB)'
-                            description='Maximum combined GroundOverlay download budget for one imported asset.'
-                            :error='validatePositiveInteger(config[`map::groundoverlay::max_total_size_mb`])'
-                            :disabled='!edit'
-                        />
-                    </div>
-                    <div class='col-lg-12'>
-                        <TablerInput
-                            v-model='config[`map::groundoverlay::max_count`]'
-                            label='GroundOverlay Max Count'
-                            description='Maximum number of GroundOverlay images allowed per imported asset.'
-                            :error='validatePositiveInteger(config[`map::groundoverlay::max_count`])'
-                            :disabled='!edit'
-                        />
+
+                        <div class='d-flex flex-column gap-2'>
+                            <template
+                                v-for='(fav, i) in favs'
+                                :key='i'
+                            >
+                                <StandardItem
+                                    v-if='!edit'
+                                    class='d-flex align-items-center'
+                                >
+                                    <div class='icon-wrapper d-flex align-items-center justify-content-center rounded-circle bg-black bg-opacity-25 ms-2 my-2 overflow-hidden'>
+                                        <img
+                                            v-if='fav.image'
+                                            :src='fav.image'
+                                            :alt='fav.name'
+                                            class='fav-preview'
+                                        >
+                                        <IconPhoto
+                                            v-else
+                                            :size='24'
+                                            stroke='1'
+                                        />
+                                    </div>
+
+                                    <div class='ms-3 flex-grow-1 fav-content'>
+                                        <span class='fw-semibold'>{{ fav.name }}</span>
+                                    </div>
+                                </StandardItem>
+
+                                <StandardItem
+                                    v-else
+                                    class='px-3 py-2'
+                                >
+                                    <div class='d-flex align-items-center mb-2'>
+                                        <div class='fw-semibold'>
+                                            Favourite {{ i + 1 }}
+                                        </div>
+                                        <div class='ms-auto'>
+                                            <TablerIconButton
+                                                title='Remove Favourite'
+                                                @click='favs.splice(i, 1)'
+                                            >
+                                                <IconTrash
+                                                    :size='20'
+                                                    stroke='1'
+                                                />
+                                            </TablerIconButton>
+                                        </div>
+                                    </div>
+
+                                    <BasemapSelect
+                                        v-model='fav.id'
+                                        :disabled='!edit'
+                                    />
+
+                                    <TablerUploadLogo
+                                        v-model='fav.image'
+                                        :input-id='`basemap-fav-image-${i}`'
+                                        label='Preview Image (PNG)'
+                                        :disabled='!edit'
+                                    />
+                                </StandardItem>
+                            </template>
+
+                            <button
+                                v-if='edit && favs.length < 3'
+                                class='btn btn-secondary w-100'
+                                @click='favs.push({ id: null, name: "", image: "" })'
+                            >
+                                <IconPlus
+                                    :size='20'
+                                    stroke='1'
+                                />
+                                <span class='mx-2'>Add Favourite</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </template>
@@ -122,20 +189,27 @@
 
 <script setup lang="ts">
 import SlideDownHeader from '../../CloudTAK/util/SlideDownHeader.vue';
+import StandardItem from '../../CloudTAK/util/StandardItem.vue';
 import { ref, watch, onMounted } from 'vue';
 import { server } from '../../../std.ts';
-import { validateLatLng } from '../../../base/validators.ts';
+import { validateLatLng } from '../../../utils/validators.ts';
 import BasemapSelect from '../../util/BasemapSelect.vue';
 import {
     TablerLoading,
     TablerInput,
     TablerIconButton,
-    TablerAlert
+    TablerAlert,
+    TablerNone,
+    TablerUploadLogo
 } from '@tak-ps/vue-tabler';
 import {
     IconPencil,
     IconDeviceFloppy,
-    IconX
+    IconPhoto,
+    IconPlus,
+    IconTrash,
+    IconX,
+    IconMap
 } from '@tabler/icons-vue';
 
 const isOpen = ref<boolean>(false);
@@ -150,20 +224,22 @@ const config = ref<{
     'map::pitch': number;
     'map::basemap': number | null;
     'map::terrain': number | null;
-    'map::groundoverlay::max_size_mb': number;
-    'map::groundoverlay::max_total_size_mb': number;
-    'map::groundoverlay::max_count': number;
 }>({
     'map::center': '40,-100', // Default Lat,Lng
     'map::zoom': 4,
     'map::bearing': 0,
     'map::pitch': 0,
     'map::basemap': null,
-    'map::terrain': null,
-    'map::groundoverlay::max_size_mb': 500,
-    'map::groundoverlay::max_total_size_mb': 1024,
-    'map::groundoverlay::max_count': 10
+    'map::terrain': null
 });
+
+type BasemapFavDraft = {
+    id: number | null;
+    name: string;
+    image: string;
+};
+
+const favs = ref<Array<BasemapFavDraft>>([]);
 
 onMounted(() => {
      if (isOpen.value) fetch();
@@ -173,12 +249,6 @@ watch(isOpen, (newState) => {
     if (newState && !edit.value) fetch();
 });
 
-function validatePositiveInteger(value: number): string {
-    return Number.isInteger(Number(value)) && Number(value) >= 1
-        ? ''
-        : 'Value must be a positive integer';
-}
-
 async function fetch() {
     loading.value = true;
     err.value = null;
@@ -186,11 +256,13 @@ async function fetch() {
         const res = await server.GET('/api/config', {
             params: {
                 query: {
-                    keys: Object.keys(config.value).join(',')
+                    keys: [...Object.keys(config.value), 'map::basemap::favs'].join(',')
                 }
             }
         });
         if (res.error) throw new Error(res.error.message);
+
+        favs.value = (res.data['map::basemap::favs'] ?? []).map((fav) => ({ ...fav }));
 
         config.value = {
             // DB is Lng,Lat. UI is Lat,Lng
@@ -202,9 +274,6 @@ async function fetch() {
             'map::pitch': res.data['map::pitch'] ?? config.value['map::pitch'],
             'map::basemap': res.data['map::basemap'] ?? config.value['map::basemap'],
             'map::terrain': res.data['map::terrain'] ?? config.value['map::terrain'],
-            'map::groundoverlay::max_size_mb': Number(res.data['map::groundoverlay::max_size_mb'] ?? config.value['map::groundoverlay::max_size_mb']),
-            'map::groundoverlay::max_total_size_mb': Number(res.data['map::groundoverlay::max_total_size_mb'] ?? config.value['map::groundoverlay::max_total_size_mb']),
-            'map::groundoverlay::max_count': Number(res.data['map::groundoverlay::max_count'] ?? config.value['map::groundoverlay::max_count']),
         };
     } catch (error) {
         err.value = error instanceof Error ? error : new Error(String(error));
@@ -219,14 +288,41 @@ async function save() {
         const payload = { ...config.value };
         // Save as Lng,Lat
         payload['map::center'] = payload['map::center'].split(',').reverse().join(',');
-        payload['map::groundoverlay::max_size_mb'] = Number(payload['map::groundoverlay::max_size_mb']);
-        payload['map::groundoverlay::max_total_size_mb'] = Number(payload['map::groundoverlay::max_total_size_mb']);
-        payload['map::groundoverlay::max_count'] = Number(payload['map::groundoverlay::max_count']);
+
+        const favsPayload: Array<{ id: number; name: string; image: string }> = [];
+        for (const fav of favs.value) {
+            if (fav.id === null) {
+                throw new Error('Each Favourite Basemap must have a Basemap selected');
+            } else if (!fav.image) {
+                throw new Error('Each Favourite Basemap must have a Preview Image');
+            } else if (favsPayload.some((existing) => existing.id === fav.id)) {
+                throw new Error('Favourite Basemaps must be unique');
+            }
+
+            const basemapRes = await server.GET('/api/basemap/{:basemapid}', {
+                params: { path: { ':basemapid': fav.id } }
+            });
+
+            if (basemapRes.error) throw new Error(basemapRes.error.message);
+            if (typeof basemapRes.data === 'string' || !basemapRes.data) throw new Error('Unexpected Basemap Response');
+
+            favsPayload.push({
+                id: fav.id,
+                name: basemapRes.data.name,
+                image: fav.image
+            });
+        }
 
         const res = await server.PUT('/api/config', {
-            body: payload
+            body: {
+                ...payload,
+                'map::basemap::favs': favsPayload.length ? favsPayload : null
+            }
         });
         if (res.error) throw new Error(res.error.message);
+
+        favs.value = favsPayload.map((fav) => ({ ...fav }));
+
         edit.value = false;
     } catch (error) {
         err.value = error instanceof Error ? error : new Error(String(error));
@@ -235,3 +331,15 @@ async function save() {
     loading.value = false;
 }
 </script>
+
+<style scoped>
+.fav-preview {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.fav-content {
+    min-width: 0;
+}
+</style>

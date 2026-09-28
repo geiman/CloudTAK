@@ -4,8 +4,8 @@
 */
 
 import { std } from '../std.ts';
-import { db, withDbRetry } from '../database.ts';
-import type { DBSubscriptionChanges } from '../database.ts';
+import { db, withDbRetry, isDatabaseSuspended, deferFeaturePersist, takeDeferredFeatureIds } from '../database.ts';
+import type { DBSubscriptionChanges, DBFeature } from '../database.ts';
 import { LngLatBounds } from 'maplibre-gl'
 import jsonata from 'jsonata';
 import type Atlas from './atlas.ts';
@@ -14,12 +14,16 @@ import { coordEach } from '@turf/meta'
 import COT, { OriginMode } from '../base/cot.ts';
 import ContactManager from '../base/contact.ts';
 import TAKNotification, { NotificationType } from '../base/notification.ts';
-import { WorkerMessageType } from '../base/events.ts';
+import { WorkerMessageType } from '../utils/events.ts';
 import type { GeoJSONSourceDiff, LngLatLike } from 'maplibre-gl';
 import { booleanWithin } from '@turf/boolean-within';
+import { isEqual } from '@ver0/deep-equal';
 import type { Polygon } from 'geojson';
 import type { InputFeature, Feature, APIList, Contact } from '../types.ts';
-import ProfileConfig from '../base/profile.ts';
+import type {
+    Feature as GeoJSONFeature,
+    Geometry as GeoJSONGeometry,
+} from 'geojson';
 import * as Comlink from 'comlink';
 import AtlasBreadcrumb from './atlas-breadcrumb.ts';
 
@@ -37,6 +41,10 @@ export default class AtlasDatabase {
     // Archived feature ids as last seen from the server - used by
     // loadArchive() to prune features deleted remotely
     archiveIds: Set<string>;
+
+    // While base features are hydrating, disallow loadArchive() from running to avoid
+    // competing against a half-populated store
+    hydrating?: Promise<void>;
 
     // Stores Active Mission if present
     mission?: string;
@@ -100,11 +108,11 @@ export default class AtlasDatabase {
 
     async init(): Promise<void> {
         COT.selfUid = this.atlas.profile.uid();
-        try {
-            await this.loadArchive();
-        } catch (err) {
-            console.error('Failed to load archived features:', err);
-        }
+
+        this.hydrating = this.hydrate().catch((err) => {
+            console.error('Failed to hydrate features from local database:', err);
+        });
+
         await this.breadcrumb.load();
     }
 
@@ -120,7 +128,6 @@ export default class AtlasDatabase {
             coordEach(cot.geometry, (coord) => {
                 const min = coord.slice(0, 2) as [number, number];
 
-                // Don't Send Invalid Coords
                 if (min[0] < -180 || min[0] > 180 || min[1] < -90 || min[1] > 90) {
                     return;
                 }
@@ -145,7 +152,7 @@ export default class AtlasDatabase {
         diff.update = [];
         const staleDelete = new Set<string>();
 
-        const display_stale = (await ProfileConfig.get('display_stale'))?.value || 'Immediate';
+        const display_stale = this.displayStale();
 
         for (const cot of this.cots.values()) {
             // The user's own position is drawn by the GeolocateControl puck
@@ -157,16 +164,7 @@ export default class AtlasDatabase {
             if (this.pendingHidden.has(String(cot.id))) {
                 diff.remove.push(cot.vectorId())
                 this.pendingHidden.delete(cot.id);
-            } else if (
-                !['Never'].includes(display_stale)
-                && !cot.properties.archived
-                && (
-                    display_stale === 'Immediate'       && now > stale
-                    || display_stale === '10 Minutes'   && now > stale + 600000
-                    || display_stale === '30 Minutes'   && now > stale + 600000 * 3
-                    || display_stale === '1 Hour'       && now > stale + 600000 * 6
-                )
-            ) {
+            } else if (!cot.properties.archived && AtlasDatabase.staleElapsed(display_stale, stale, now)) {
                 diff.remove.push(cot.vectorId())
                 staleDelete.add(cot.id);
             } else if (!cot.properties.archived) {
@@ -236,24 +234,127 @@ export default class AtlasDatabase {
 
         this.pendingUpdate.clear();
 
-        for (const id of staleDelete) {
-            this.cots.delete(id);
-            await withDbRetry(() => db.feature.delete(id));
-        }
+        // Memory is the source of truth for the map - drop removed features
+        // synchronously and let IndexedDB catch up off the render path
+        const removed = new Set<string>(staleDelete);
 
         for (const id of this.pendingDelete) {
-            const cot = await this.get(id);
+            const cot = this.cots.get(id);
             if (!cot) continue;
 
             diff.remove.push(cot.vectorId());
-
-            this.cots.delete(id);
-            await withDbRetry(() => db.feature.delete(id));
+            removed.add(id);
         }
 
         this.pendingDelete.clear();
 
+        for (const id of removed) this.cots.delete(id);
+        this.persistRemoval(removed);
+
         return diff;
+    }
+
+    /**
+     * Delete removed features from IndexedDB without blocking the caller.
+     * A feature re-created while the delete is queued is written back
+     * afterwards so the offline cache matches memory.
+     */
+    persistRemoval(ids: Set<string>): void {
+        if (!ids.size) return;
+
+        const removal = (async () => {
+            await withDbRetry(() => db.feature.bulkDelete([...ids]));
+
+            const revived: DBFeature[] = [];
+            for (const id of ids) {
+                const cot = this.cots.get(id);
+                if (!cot || cot.origin.mode !== OriginMode.CONNECTION) continue;
+
+                revived.push({
+                    id: cot.id,
+                    path: cot.path,
+                    properties: cot.properties,
+                    geometry: cot.geometry
+                });
+            }
+
+            if (revived.length) {
+                await withDbRetry(() => db.feature.bulkPut(revived));
+            }
+        })();
+
+        removal.catch((err: unknown) => {
+            console.error('Failed to persist feature removal', err);
+        });
+    }
+
+    /** Current display_stale setting from the in-memory profile cache */
+    displayStale(): string {
+        return String(this.atlas.profile.display_stale?.value || 'Immediate');
+    }
+
+    /**
+     * Has a CoT's stale time exceeded the user's configured display window
+     */
+    static staleElapsed(display_stale: string, stale: number, now: number): boolean {
+        return !['Never'].includes(display_stale) && (
+            display_stale === 'Immediate'       && now > stale
+            || display_stale === '10 Minutes'   && now > stale + 600000
+            || display_stale === '30 Minutes'   && now > stale + 600000 * 3
+            || display_stale === '1 Hour'       && now > stale + 600000 * 6
+        );
+    }
+
+    /**
+     * Full-state render of every visible CoT, for replacing the map source
+     * contents wholesale via setData. diff() consumes its pending queues
+     * even when the main thread fails to apply the result, so a lost diff
+     * (or any doubt after an app resume) is recovered here; the queues are
+     * cleared as the snapshot supersedes them.
+     */
+    async snapshot(): Promise<Array<GeoJSONFeature<GeoJSONGeometry, Record<string, unknown>>>> {
+        const now = +new Date();
+        const display_stale = this.displayStale();
+
+        // Queue consumption and the cots iteration happen synchronously
+        // (no awaits) so a feature added mid-snapshot can never be dropped
+        // from both the snapshot and the next diff
+        const deleted = new Set<string>(this.pendingDelete);
+        const hidden = new Set<string>(this.pendingHidden);
+
+        this.pendingCreate.clear();
+        this.pendingUpdate.clear();
+        this.pendingHidden.clear();
+        this.pendingUnhide.clear();
+        this.pendingDelete.clear();
+
+        const features: Array<GeoJSONFeature<GeoJSONGeometry, Record<string, unknown>>> = [];
+
+        for (const cot of this.cots.values()) {
+            // The user's own position is drawn by the GeolocateControl puck
+            // rather than as a CoT marker on the map.
+            if (cot.is_self || deleted.has(cot.id) || hidden.has(cot.id)) continue;
+
+            const stale = new Date(cot.properties.stale).getTime();
+
+            if (!cot.properties.archived) {
+                if (AtlasDatabase.staleElapsed(display_stale, stale, now)) {
+                    deleted.add(cot.id);
+                    continue;
+                }
+
+                const opacity = now < stale ? 1 : 0.5;
+                cot.properties['icon-opacity'] = opacity;
+                cot.properties['marker-opacity'] = opacity;
+            }
+
+            features.push(cot.as_rendered());
+        }
+
+        for (const id of deleted) this.cots.delete(id);
+        this.persistRemoval(deleted);
+
+        return features;
     }
 
     /**
@@ -305,7 +406,7 @@ export default class AtlasDatabase {
             for (const sub of await Subscription.localList({
                 subscribed: true
             })) {
-                const store = await Subscription.from(sub.guid, this.atlas.token, {
+                const store = await Subscription.from(sub.guid, {
                     subscribed: true
                 });
 
@@ -335,24 +436,6 @@ export default class AtlasDatabase {
         }
     }
 
-    async filterDelete(
-        filter: string,
-        opts: {
-            mission?: boolean,
-        } = {}
-    ): Promise<void> {
-        const cots = await this.filter(filter, opts);
-
-        const all = [];
-        for (const cot of cots.values()) {
-            all.push(this.remove(cot.id, {
-                mission: opts.mission || false
-            }));
-        }
-
-        await Promise.allSettled(all);
-    }
-
     async paths(store?: Map<string, COT>): Promise<Array<NestedArray>> {
         if (!store) store = this.cots;
 
@@ -378,9 +461,45 @@ export default class AtlasDatabase {
      * Return CoTs touching a given polygon
      *
      * @param poly - GeoJSON Polygon to test CoTs against
+     * @param opts.mission - If set, test features from the given Mission GUID instead of the CoT store
      */
-    async touching(poly: Polygon): Promise<Set<COT>> {
+    async touching(
+        poly: Polygon,
+        opts: {
+            mission?: string
+        } = {}
+    ): Promise<Set<COT>> {
         const within: Set<COT> = new Set();
+
+        if (opts.mission) {
+            const sub = await db.subscription.get(opts.mission);
+            if (!sub || !sub.subscribed) return within;
+
+            const feats = await db.subscription_feature
+                .where('mission')
+                .equals(opts.mission)
+                .filter((f) => !f.deleted)
+                .toArray();
+
+            for (const feat of feats) {
+                const feature: Feature = {
+                    id: feat.id,
+                    type: 'Feature',
+                    path: feat.path,
+                    properties: feat.properties,
+                    geometry: feat.geometry,
+                };
+
+                if (booleanWithin(feature, poly)) {
+                    within.add(await COT.load(feature, {
+                        mode: OriginMode.MISSION,
+                        mode_id: opts.mission
+                    }));
+                }
+            }
+
+            return within;
+        }
 
         for (const cot of this.cots.values()) {
             if (booleanWithin(cot.as_feature(), poly)) {
@@ -389,6 +508,47 @@ export default class AtlasDatabase {
         }
 
         return within;
+    }
+
+    /**
+     * Hydrate the in-memory store from the local Dexie feature database.
+     *
+     * Runs at startup instead of loadArchive() so that every feature the
+     * client has previously persisted (archived and non-archived alike) is
+     * rendered immediately without waiting on a network round-trip. This lets
+     * CloudTAK restore its last-known state when refreshed offline or on a
+     * degraded connection. The authoritative reconciliation against the
+     * server still happens later via loadArchive() during the AtlasSync full
+     * sync.
+     */
+    async hydrate(): Promise<void> {
+        const features = await db.feature.toArray();
+
+        for (const feat of features) {
+            // Seed archiveIds so the subsequent loadArchive() can prune
+            // features deleted on the server while this client was offline -
+            // without this the cached copy would linger until a later sync.
+            if (feat.properties.archived) {
+                this.archiveIds.add(String(feat.id));
+            }
+
+            await this.add({
+                ...feat,
+                type: 'Feature'
+            } as InputFeature, {
+                skipSave: true,
+                skipBroadcast: true,
+                // The feature already lives in db.feature and is a
+                // CONNECTION-origin profile feature, so avoid the redundant
+                // write-back and the per-feature mission-store scan.
+                skipDatabase: true,
+                skipMissionLookup: true
+            });
+        }
+
+        this.atlas.postMessage({
+            type: WorkerMessageType.Feature_Archived_Added,
+        });
     }
 
     /**
@@ -403,6 +563,11 @@ export default class AtlasDatabase {
      * still in flight is never removed.
      */
     async loadArchive(): Promise<void> {
+        // Wait for the local hydrate to finish first so we never reconcile
+        // against a half-populated store or resurrect a feature the server
+        // deleted (hydrate seeds archiveIds; this prunes against it).
+        if (this.hydrating) await this.hydrating;
+
         const archive = await std('/api/profile/feature', {
             token: this.atlas.token
         }) as APIList<Feature>;
@@ -430,6 +595,32 @@ export default class AtlasDatabase {
         this.atlas.postMessage({
             type: WorkerMessageType.Feature_Archived_Added,
         });
+    }
+
+    /**
+     * Persist features whose IndexedDB write was skipped while the database
+     * was suspended (app backgrounded on native). Returns the number written.
+     */
+    async flushDeferred(): Promise<number> {
+        const rows: DBFeature[] = [];
+
+        for (const id of takeDeferredFeatureIds()) {
+            const cot = this.cots.get(id);
+            if (!cot || cot.origin.mode !== OriginMode.CONNECTION) continue;
+
+            rows.push({
+                id: cot.id,
+                path: cot.path,
+                properties: cot.properties,
+                geometry: cot.geometry
+            });
+        }
+
+        if (rows.length) {
+            await withDbRetry(() => db.feature.bulkPut(rows));
+        }
+
+        return rows.length;
     }
 
     /**
@@ -492,7 +683,7 @@ export default class AtlasDatabase {
                 });
             }
         } else if (cot.origin.mode === OriginMode.MISSION && cot.origin.mode_id) {
-            const subscription = await Subscription.from(cot.origin.mode_id, this.atlas.token, {
+            const subscription = await Subscription.from(cot.origin.mode_id, {
                 subscribed: true
             });
 
@@ -562,7 +753,7 @@ export default class AtlasDatabase {
                 if (change.type === 'ADD_CONTENT') {
                     if (change.contentUid) this.subscriptionPending.set(change.contentUid, task.properties.mission.guid);
                 } else if (change.type === 'REMOVE_CONTENT') {
-                    const sub = await Subscription.from(task.properties.mission.guid, this.atlas.token, {
+                    const sub = await Subscription.from(task.properties.mission.guid, {
                         subscribed: true
                     });
                     if (!sub) {
@@ -582,7 +773,7 @@ export default class AtlasDatabase {
             }
 
             if (doMissionRefresh && task.properties.mission.guid) {
-                const sub = await Subscription.from(task.properties.mission.guid, this.atlas.token, {
+                const sub = await Subscription.from(task.properties.mission.guid, {
                     subscribed: true
                 });
 
@@ -600,7 +791,7 @@ export default class AtlasDatabase {
                 });
             }
         } else if (task.properties.type === 't-x-m-c-l' && task.properties.mission && task.properties.mission.guid) {
-            const sub = await Subscription.from(task.properties.mission.guid, this.atlas.token, {
+            const sub = await Subscription.from(task.properties.mission.guid, {
                 subscribed: true
             });
 
@@ -611,7 +802,7 @@ export default class AtlasDatabase {
 
             await sub.log.refresh();
         } else if (task.properties.type === 't-x-m-c-m' && task.properties.mission && task.properties.mission.guid) {
-            const sub = await Subscription.from(task.properties.mission.guid, this.atlas.token, {
+            const sub = await Subscription.from(task.properties.mission.guid, {
                 subscribed: true
             });
 
@@ -635,6 +826,9 @@ export default class AtlasDatabase {
      * @param opts.skipSave - Don't save the COT to the Profile Feature Database
      * @param opts.skipBroadcast - Don't broadcast the COT on the internal message bus to the UI
      * @param opts.authored - If the COT is authored, append creator information if the CoT is new & potentially add it to a mission
+     * @param opts.render - Defaults to true. When false, suppress the Mission_Change_Feature notification that reloads & re-renders the mission overlay. Callers adding many features to a mission at once (eg. a lasso import) should pass false and trigger a single loadMission() when finished.
+     * @param opts.skipDatabase - Don't persist a newly created COT back to the Dexie feature table. Used when the feature already originates from that table (eg. startup hydrate) so we avoid a redundant IndexedDB write per feature.
+     * @param opts.skipMissionLookup - Don't scan subscribed mission stores when checking for an existing COT. Used when the caller knows the feature is a CONNECTION-origin profile feature (eg. startup hydrate) so we avoid an IndexedDB mission scan per feature.
      */
     async add(
         feature: InputFeature,
@@ -642,6 +836,9 @@ export default class AtlasDatabase {
             skipSave?: boolean;
             skipBroadcast?: boolean;
             authored?: boolean,
+            render?: boolean,
+            skipDatabase?: boolean,
+            skipMissionLookup?: boolean,
         }
     ): Promise<COT | void> {
         if (!opts) opts = {};
@@ -650,16 +847,14 @@ export default class AtlasDatabase {
 
         const feat = feature as Feature;
 
-        // Check if CoT exists
         let exists = await this.get(feat.properties.id, {
-            mission: true
+            mission: opts.skipMissionLookup !== true
         });
 
         if (opts.authored && !exists) {
             feat.properties.creator = await this.atlas.profile.creator();
         }
 
-        // New CoT destined for a Mission
         if (
             !exists && (
                 (this.mission && opts.authored) // Authored CoT and we have an active Mission
@@ -677,16 +872,20 @@ export default class AtlasDatabase {
             const pendingGuid = this.subscriptionPending.get(feat.id);
             this.subscriptionPending.delete(feat.id);
 
+            // The feature's own mission must win over the Active Mission -
+            // otherwise updates to features in other subscribed missions get
+            // refiled (and, if authored, re-published) into the Active Mission
             const mission_guid =
-                this.mission // An Active Mission
-                || pendingGuid
-                || feat.origin?.mode_id; // The feature has a Mission Origin
+                pendingGuid // A Mission Change event told us which mission this belongs to
+                || feat.origin?.mode_id // The feature carries an explicit Mission Origin
+                || (exists && exists.origin.mode === OriginMode.MISSION ? exists.origin.mode_id : undefined) // Already filed in a Mission store
+                || this.mission; // An authored feature destined for the Active Mission
 
             if (!mission_guid) {
                 throw new Error(`Cannot add ${feat.id} to a mission as no mission GUID was found - Please report this error`);
             }
 
-            const sub = await Subscription.from(mission_guid, this.atlas.token, {
+            const sub = await Subscription.from(mission_guid, {
                 subscribed: true
             });
 
@@ -698,49 +897,63 @@ export default class AtlasDatabase {
                 exists = await COT.load(feat, {
                     mode: OriginMode.MISSION,
                     mode_id: mission_guid
-                }, opts);
+                }, {
+                    // Destination is a Data Sync - the feature lives in the
+                    // mission, so never submit it to the profile feature API.
+                    skipSave: true
+                });
             } else {
                 await exists.update({
                     path: feat.path,
                     properties: feat.properties,
                     geometry: feat.geometry
-                }, { skipSave: opts.skipSave })
+                }, { skipSave: true })
             }
 
             await sub.feature.update(this.atlas, exists, {
                 skipNetwork: !opts.authored
             });
 
-            this.atlas.postMessage({
-                type: WorkerMessageType.Mission_Change_Feature,
-                body: {
-                    guid: mission_guid
-                }
-            });
+            if (opts.render !== false) {
+                this.atlas.postMessage({
+                    type: WorkerMessageType.Mission_Change_Feature,
+                    body: {
+                        guid: mission_guid
+                    }
+                });
+            }
 
             await this.breadcrumb.update(exists);
 
             return exists;
         } else {
             if (exists) {
-                const changed = await exists.update({
+                const existing = exists;
+                const geometryMoved = opts.authored === true
+                    && !!feat.geometry
+                    && !isEqual(existing.geometry, feat.geometry);
+
+                await existing.update({
                     path: feat.path,
                     properties: feat.properties,
                     geometry: feat.geometry
-                }, { skipSave: opts.skipSave })
+                }, {
+                    skipSave: opts.skipSave,
+                    // Queue the render as soon as memory is current rather than
+                    // after the IndexedDB write, which can lag by seconds after
+                    // a resume. Skip a not-yet-flushed pending-create COT
+                    // (mutated in place) to avoid a duplicate add+update in one diff.
+                    onApplied: (changed) => {
+                        if (changed && !this.pendingCreate.has(existing.id)) {
+                            this.pendingUpdate.set(existing.id, existing);
+                        }
+                    }
+                });
 
-                // Only queue a map update when the CoT actually changed and it
-                // isn't still waiting to be added. A pending-create COT is
-                // mutated in place, so also pushing it to pendingUpdate would
-                // emit a duplicate add+update for the same feature id in one
-                // diff. This keeps idempotent re-adds (loadArchive / feature
-                // sync events, including a client receiving its own change)
-                // from disturbing a freshly drawn, not-yet-flushed feature.
-                if (changed && !this.pendingCreate.has(exists.id)) {
-                    this.pendingUpdate.set(exists.id, exists);
+                if (geometryMoved) {
+                    await this.syncCoreEventGeometry(exists);
                 }
 
-                // Sync profile if this is the user's own COT
                 if (exists.is_self) {
                     const remarks = this.atlas.profile.profile_remarks?.value;
                     const callsign = this.atlas.profile.profile_callsign?.value;
@@ -758,19 +971,8 @@ export default class AtlasDatabase {
             } else {
                 // Don't add already-stale CoTs to the map
                 if (!feat.properties.archived) {
-                    const display_stale = (await ProfileConfig.get('display_stale'))?.value || 'Immediate';
                     const stale = new Date(feat.properties.stale).getTime();
-                    const now = Date.now();
-
-                    if (
-                        !['Never'].includes(display_stale)
-                        && (
-                            display_stale === 'Immediate'       && now > stale
-                            || display_stale === '10 Minutes'   && now > stale + 600000
-                            || display_stale === '30 Minutes'   && now > stale + 600000 * 3
-                            || display_stale === '1 Hour'       && now > stale + 600000 * 6
-                        )
-                    ) {
+                    if (AtlasDatabase.staleElapsed(this.displayStale(), stale, Date.now())) {
                         return;
                     }
                 }
@@ -783,17 +985,28 @@ export default class AtlasDatabase {
                 this.cots.set(exists.id, exists);
 
                 const created = exists;
-                await withDbRetry(() => db.feature.put({
-                    id: created.id,
-                    path: created.path,
-                    properties: created.properties,
-                    geometry: created.geometry
-                }));
+                if (opts.skipDatabase !== true) {
+                    // Backgrounded on native: keep it in memory, persist on resume
+                    if (isDatabaseSuspended()) {
+                        deferFeaturePersist(created.id);
+                    } else {
+                        await withDbRetry(() => db.feature.put({
+                            id: created.id,
+                            path: created.path,
+                            properties: created.properties,
+                            geometry: created.geometry
+                        }));
+                    }
+                }
 
                 if (opts.skipBroadcast !== true && exists.properties.archived) {
                     this.atlas.postMessage({
                         type: WorkerMessageType.Feature_Archived_Added,
                     });
+                }
+
+                if (opts.authored) {
+                    await this.syncCoreEventGeometry(exists);
                 }
             }
 
@@ -836,6 +1049,54 @@ export default class AtlasDatabase {
     }
 
     /**
+     * PATCH a locally moved Core Event marker back to the Event API - a
+     * failure is reverted on clients by the next Event rebroadcast
+     */
+    private async syncCoreEventGeometry(cot: COT): Promise<void> {
+        const link = (cot.properties.links || []).find((link) => {
+            return link.type === 'core-event' && link.event;
+        });
+
+        if (!link || !link.event) return;
+        if (cot.geometry.type !== 'Point') return;
+
+        try {
+            await std(`/api/core/event/${link.event}`, {
+                method: 'PATCH',
+                token: this.atlas.token,
+                body: {
+                    geometry: {
+                        type: 'Point',
+                        coordinates: cot.geometry.coordinates.slice(0, 2)
+                    }
+                }
+            });
+        } catch (err) {
+            console.error(`Failed to sync Core Event geometry for ${cot.id}:`, err);
+        }
+    }
+
+    /**
+     * Batch variant of add() for importing many features at once (eg. a GeoJSON
+     * or lasso import). Runs the entire loop inside the worker so the caller
+     * pays a single Comlink round-trip instead of one per feature, and returns
+     * nothing so no COTs are serialized back across the worker boundary.
+     */
+    async addAll(
+        features: InputFeature[],
+        opts?: {
+            skipSave?: boolean;
+            skipBroadcast?: boolean;
+            authored?: boolean;
+            render?: boolean;
+        }
+    ): Promise<void> {
+        for (const feature of features) {
+            await this.add(feature, opts);
+        }
+    }
+
+    /**
      * Return a CoT by ID if it exists
      *
      * @param id - ID of the CoT to return
@@ -854,31 +1115,32 @@ export default class AtlasDatabase {
 
         if (!opts) opts = {};
 
-        let cot = this.cots.get(id);
+        const cot = this.cots.get(id);
 
         if (cot) {
             return cot;
         } else if (opts.mission) {
-            for (const sub of await Subscription.localList({
-                subscribed: true
-            })) {
-                const store = await Subscription.from(sub.guid, this.atlas.token, {
-                    subscribed: true
-                });
+            // subscription_feature is keyed on the feature id, so resolve the
+            // owning mission with two indexed gets rather than iterating every
+            // subscribed mission's store
+            const feat = await db.subscription_feature.get(id);
 
-                if (!store) continue;
+            if (!feat || feat.deleted) return;
 
-                const feat = await store.feature.from(id);
+            const sub = await db.subscription.get(feat.mission);
 
-                if (!feat) continue;
+            if (!sub || !sub.subscribed) return;
 
-                cot = await COT.load(feat, {
-                    mode: OriginMode.MISSION,
-                    mode_id: sub.guid
-                });
-
-                return cot;
-            }
+            return await COT.load({
+                id: feat.id,
+                type: 'Feature',
+                path: feat.path,
+                properties: feat.properties,
+                geometry: feat.geometry,
+            }, {
+                mode: OriginMode.MISSION,
+                mode_id: feat.mission
+            });
         }
 
         return;
@@ -889,17 +1151,6 @@ export default class AtlasDatabase {
      */
     has(id: string): boolean {
         return this.cots.has(id);
-    }
-
-    groups(store?: Map<string, COT>): Array<string> {
-        if (!store) store = this.cots;
-
-        const groups: Set<string> = new Set();
-        for (const value of store.values()) {
-            if (value.properties.group) groups.add(value.properties.group.name);
-        }
-
-        return Array.from(groups);
     }
 
     pathFeatures(path?: string, store?: Map<string, COT>): Set<COT> {
@@ -918,55 +1169,5 @@ export default class AtlasDatabase {
         }
 
         return feats;
-    }
-
-    markers(store?: Map<string, COT>): Array<string> {
-        if (!store) store = this.cots;
-
-        const markers: Set<string> = new Set();
-        for (const value of store.values()) {
-            if (value.properties.group) continue;
-            if (value.properties.archived) continue;
-            markers.add(value.properties.type);
-        }
-
-        return Array.from(markers);
-    }
-
-    markerFeatures(marker: string, store?: Map<string, COT>): Set<COT> {
-        if (!store) store = this.cots;
-
-        const feats: Set<COT> = new Set();
-
-        for (const value of store.values()) {
-            if (value.properties.group) continue;
-            if (value.properties.archived) continue;
-
-            if (value.properties.type === marker) {
-                feats.add(value);
-            }
-        }
-
-        return feats;
-    }
-
-    contacts(group?: string, store?: Map<string, COT>): Set<COT> {
-        if (!store) store = this.cots;
-
-        const contacts: Set<COT> = new Set();
-        for (const value of store.values()) {
-            if (value.properties.group) contacts.add(value);
-        }
-
-        let list = Array.from(contacts);
-
-        if (group) {
-            list = list.filter((contact) => {
-                if (!contact.properties.group) return false;
-                return contact.properties.group.name === group;
-            })
-        }
-
-        return new Set(list);
     }
 }

@@ -17,7 +17,7 @@
             </template>
 
             <div class='mx-2 py-2'>
-                <div class='rounded cloudtak-accent px-2 py-2'>
+                <div class='rounded px-2 py-2'>
                     <div class='row g-2'>
                         <template v-if='geometry === "Point"'>
                             <div class='col-12'>
@@ -131,6 +131,7 @@
 
 <script setup lang='ts'>
 import { ref } from 'vue';
+import Type2525 from '@tak-ps/node-cot/2525';
 import SlideDownHeader from '../util/SlideDownHeader.vue';
 import { IconPaint } from '@tabler/icons-vue';
 import {
@@ -193,7 +194,10 @@ function updatePropertyIcon(event: string | null) {
         properties["marker-color"] = '#FFFFFF';
         emit('update:modelValue', properties);
     } else if (properties.icon && !event) {
-        if (properties.type && properties.type !== 'u-d-p') {
+        // A MIL-STD symbol renders from the type with no icon set at all
+        if (properties.type && Type2525.isNumericSIDCConvertable(String(properties.type))) {
+            properties.icon = undefined;
+        } else if (properties.type && properties.type !== 'u-d-p') {
             properties.icon = properties.type;
         } else {
             properties.icon = undefined;

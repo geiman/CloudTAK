@@ -1,5 +1,6 @@
 import { createApp } from 'vue'
-import { initServiceWorker } from '../../base/service-worker.ts';
+import { createHead } from '@unhead/vue/client';
+import { initServiceWorker } from '../../utils/service-worker.ts';
 import { initGlobalErrorReporting, vueErrorHandler } from '../../lib/reporting/index.ts';
 
 import App from './App.vue';
@@ -9,4 +10,5 @@ initGlobalErrorReporting();
 
 const app = createApp(App);
 app.config.errorHandler = vueErrorHandler;
+app.use(createHead());
 app.mount('#app');

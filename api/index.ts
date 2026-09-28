@@ -15,26 +15,48 @@ type CliArgs = {
     silent?: boolean;
     nocache?: boolean;
     noevents?: boolean;
-    nosinks?: boolean;
+    noetlevents?: boolean;
     nogeofence?: boolean;
+    noconnections?: boolean;
     postgres?: string;
     env?: string;
 };
 
-const { values: args } = parseArgs({
+const { values: parsedArgs } = parseArgs({
     args: process.argv.slice(2),
     options: {
-        silent: { type: 'boolean' }, // Turn off logging as much as possible
-        nocache: { type: 'boolean' }, // Ignore MemCached
-        noevents: { type: 'boolean' }, // Disable Initialization of Second Level Events
-        nosinks: { type: 'boolean' }, // Disable Push to Sinks
-        nogeofence: { type: 'boolean' }, // Disable Geofence Server Integration
-        postgres: { type: 'string' }, // Postgres Connection String
-        env: { type: 'string' }, // Load a non-default .env file --env local would read .env-local
+        'silent': { type: 'boolean' }, // Turn off logging as much as possible
+        'no-cache': { type: 'boolean' }, // Ignore MemCached
+        'no-events': { type: 'boolean' }, // Disable Initialization of Second Level Events
+        'no-etl-events': { type: 'boolean' }, // Disable delivery of Outgoing ETL Events
+        'no-geofence': { type: 'boolean' }, // Disable Geofence Server Integration
+        'no-connections': { type: 'boolean' }, // Disable Automatic Initialization of ETL Connections & CoreEvent Broadcast
+        'postgres': { type: 'string' }, // Postgres Connection String
+        'env': { type: 'string' }, // Load a non-default .env file --env local would read .env-local
     },
     allowPositionals: true,
     strict: false,
-}) as { values: CliArgs };
+}) as { values: {
+    'silent'?: boolean;
+    'no-cache'?: boolean;
+    'no-events'?: boolean;
+    'no-etl-events'?: boolean;
+    'no-geofence'?: boolean;
+    'no-connections'?: boolean;
+    'postgres'?: string;
+    'env'?: string;
+}; };
+
+const args: CliArgs = {
+    silent: parsedArgs.silent,
+    nocache: parsedArgs['no-cache'],
+    noevents: parsedArgs['no-events'],
+    noetlevents: parsedArgs['no-etl-events'],
+    nogeofence: parsedArgs['no-geofence'],
+    noconnections: parsedArgs['no-connections'],
+    postgres: parsedArgs.postgres,
+    env: parsedArgs.env,
+};
 
 const pkg = JSON.parse(String(fs.readFileSync(new URL('./package.json', import.meta.url))));
 
@@ -66,8 +88,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         silent: args.silent || false,
         noevents: args.noevents || false,
         postgres: process.env.POSTGRES || args.postgres || 'postgres://postgres@localhost:5432/tak_ps_etl',
-        nosinks: args.nosinks || false,
+        noetlevents: args.noetlevents || false,
         nogeofence: args.nogeofence || false,
+        noconnections: args.noconnections || false,
         nocache: args.nocache || false,
     };
 
@@ -98,6 +121,7 @@ export default async function server(configs: ServerConfigs): Promise<ServerMana
 
         if (!stateful.nogeofence) await stateful.geofence.init();
         await stateful.conns.init();
+        await stateful.groups.init();
 
         if (!stateful.noevents) await stateful.events.init(stateful.pg);
     }
@@ -155,6 +179,7 @@ export default async function server(configs: ServerConfigs): Promise<ServerMana
             if (stateful) {
                 await stateful.geofence.close();
                 await stateful.conns.close();
+                stateful.groups.close();
             }
         });
     });

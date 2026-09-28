@@ -10,6 +10,7 @@ import type { Geometry } from 'geojson';
 export type APIError = {
     status: number;
     message: string;
+    details?: string;
 };
 
 export type APIList<T> = {
@@ -21,8 +22,21 @@ export type APIList<T> = {
 
 export type COTTypeList = paths["/api/type/cot"]["get"]["responses"]["200"]["content"]["application/json"];
 export type COTType = paths["/api/type/cot/{:type}"]["get"]["responses"]["200"]["content"]["application/json"];
+export type COT2525EList = paths["/api/type/2525e"]["get"]["responses"]["200"]["content"]["application/json"];
+export type COT2525EType = COT2525EList["items"][number];
 
 export type Search = paths["/api/search"]["get"]["responses"]["200"]["content"]["application/json"];
+export type SearchProviderStatus = {
+    active: boolean;
+    default: boolean;
+    forward: boolean;
+    reverse: boolean;
+};
+export type RoutingProviderStatus = {
+    active: boolean;
+    default: boolean;
+    modes: number;
+};
 export type SearchSuggest = paths["/api/search/suggest"]["get"]["responses"]["200"]["content"]["application/json"];
 export type SearchForward = paths["/api/search/forward"]["get"]["responses"]["200"]["content"]["application/json"];
 
@@ -46,6 +60,29 @@ export type UserList = paths["/api/user"]["get"]["responses"]["200"]["content"][
 export type ErrorReport = paths["/api/error/{:errorid}"]["get"]["responses"]["200"]["content"]["application/json"];
 export type ErrorReportList = paths["/api/error"]["get"]["responses"]["200"]["content"]["application/json"];
 
+export type CoreDevice = paths["/api/core/device/{:device}"]["get"]["responses"]["200"]["content"]["application/json"];
+export type CoreDeviceList = paths["/api/core/device"]["get"]["responses"]["200"]["content"]["application/json"];
+export type CoreEvent = paths["/api/core/event/{:event}"]["get"]["responses"]["200"]["content"]["application/json"];
+export type CoreEventList = paths["/api/core/event"]["get"]["responses"]["200"]["content"]["application/json"];
+export type CoreEventLink = CoreEvent["links"][0];
+export type CoreEventStyle = CoreEvent["style"];
+export type CoreEventBoardSummary = CoreEvent["boards"][0];
+export type CoreEventBoardColumnSummary = CoreEventBoardSummary["columns"][0];
+
+export type CoreEventBoardList = paths["/api/board"]["get"]["responses"]["200"]["content"]["application/json"];
+export type CoreEventBoard = CoreEventBoardList["items"][0];
+export type CoreEventBoardColumnList = paths["/api/board/column"]["get"]["responses"]["200"]["content"]["application/json"];
+export type CoreEventBoardColumn = CoreEventBoardColumnList["items"][0];
+export type CoreEventBoardEventList = paths["/api/board/event"]["get"]["responses"]["200"]["content"]["application/json"];
+export type CoreEventBoardEvent = CoreEventBoardEventList["items"][0];
+
+export type CoreForm = paths["/api/core/form/{:form}"]["get"]["responses"]["200"]["content"]["application/json"];
+export type CoreFormList = paths["/api/core/form"]["get"]["responses"]["200"]["content"]["application/json"];
+export type CoreFormColumnList = paths["/api/board/column/{:column}/form"]["get"]["responses"]["200"]["content"]["application/json"];
+export type CoreFormColumn = CoreFormColumnList["items"][0];
+export type CoreEventFormResponseList = paths["/api/core/event/{:event}/response"]["get"]["responses"]["200"]["content"]["application/json"];
+export type CoreEventFormResponse = CoreEventFormResponseList["items"][0];
+
 export type Contact = paths["/api/marti/api/contacts/all"]["get"]["responses"]["200"]["content"]["application/json"][0];
 export type ContactList = paths["/api/marti/api/contacts/all"]["get"]["responses"]["200"]["content"]["application/json"];
 
@@ -56,25 +93,26 @@ export type VideoConnectionFeed = paths["/api/marti/video/{:uid}"]["get"]["respo
 export type VideoConnection_Create = paths["/api/marti/video"]["post"]["requestBody"]["content"]["application/json"];
 export type VideoConnectionList = paths["/api/marti/video"]["get"]["responses"]["200"]["content"]["application/json"];
 
-export type Mission = paths["/api/marti/missions/{:name}"]["get"]["responses"]["200"]["content"]["application/json"];
+export type Mission = paths["/api/marti/missions/{:guid}"]["get"]["responses"]["200"]["content"]["application/json"];
 export type Mission_Create = paths["/api/marti/mission"]["post"]["requestBody"]["content"]["application/json"]
 export type MissionList = paths["/api/marti/mission"]["get"]["responses"]["200"]["content"]["application/json"];
 export type MissionInvite = paths["/api/marti/mission"]["get"]["responses"]["200"]["content"]["application/json"]["invites"][0];
 
-export type MissionRole = paths["/api/marti/missions/{:name}/role"]["get"]["responses"]["200"]["content"]["application/json"];
+export type MissionRole = paths["/api/marti/missions/{:guid}/role"]["get"]["responses"]["200"]["content"]["application/json"];
+export type MissionRoleType = MissionRole["type"];
 
-export type MissionLog = paths["/api/marti/missions/{:name}/log/{:logid}"]["patch"]["responses"]["200"]["content"]["application/json"]["data"];
-export type MissionLogList = paths["/api/marti/missions/{:name}/log"]["get"]["responses"]["200"]["content"]["application/json"];
+export type MissionLog = paths["/api/marti/missions/{:guid}/log/{:logid}"]["patch"]["responses"]["200"]["content"]["application/json"]["data"];
+export type MissionLogList = paths["/api/marti/missions/{:guid}/log"]["get"]["responses"]["200"]["content"]["application/json"];
 
-export type MissionLayer = paths["/api/marti/missions/{:name}/layer/{:layerid}"]["get"]["responses"]["200"]["content"]["application/json"]["data"];
-export type MissionLayer_Create = paths["/api/marti/missions/{:name}/layer"]["post"]["requestBody"]["content"]["application/json"];
-export type MissionLayer_Update = paths["/api/marti/missions/{:name}/layer/{:uid}"]["patch"]["requestBody"]["content"]["application/json"];
-export type MissionLayerList = paths["/api/marti/missions/{:name}/layer"]["get"]["responses"]["200"]["content"]["application/json"];
+export type MissionLayer = paths["/api/marti/missions/{:guid}/layer/{:layerid}"]["get"]["responses"]["200"]["content"]["application/json"]["data"];
+export type MissionLayer_Create = paths["/api/marti/missions/{:guid}/layer"]["post"]["requestBody"]["content"]["application/json"];
+export type MissionLayer_Update = paths["/api/marti/missions/{:guid}/layer/{:uid}"]["patch"]["requestBody"]["content"]["application/json"];
+export type MissionLayerList = paths["/api/marti/missions/{:guid}/layer"]["get"]["responses"]["200"]["content"]["application/json"];
 
-export type MissionChanges = paths["/api/marti/missions/{:name}/changes"]["get"]["responses"]["200"]["content"]["application/json"];
+export type MissionChanges = paths["/api/marti/missions/{:guid}/changes"]["get"]["responses"]["200"]["content"]["application/json"];
 export type MissionChange = MissionChanges["data"][0];
 
-export type MissionSubscriptions = paths["/api/marti/missions/{:name}/subscriptions/roles"]["get"]["responses"]["200"]["content"]["application/json"]["data"];
+export type MissionSubscriptions = paths["/api/marti/missions/{:guid}/subscriptions/roles"]["get"]["responses"]["200"]["content"]["application/json"]["data"];
 
 export type Server_Update = paths["/api/server"]["patch"]["requestBody"]["content"]["application/json"]
 export type Server = paths["/api/server"]["get"]["responses"]["200"]["content"]["application/json"]
@@ -196,6 +234,7 @@ export type ProfileOverlay = paths["/api/profile/overlay/{:overlay}"]["get"]["re
 export type ProfileOverlayList = paths["/api/profile/overlay"]["get"]["responses"]["200"]["content"]["application/json"]
 export type ProfileOverlay_Create = paths["/api/profile/overlay"]["post"]["requestBody"]["content"]["application/json"]
 export type ProfileOverlay_Update = paths["/api/profile/overlay/{:overlay}"]["patch"]["requestBody"]["content"]["application/json"]
+export type OverlayTileJSON = NonNullable<ProfileOverlay["tilejson"]>
 
 export type ProfileTokenList = paths["/api/profile/token"]["get"]["responses"]["200"]["content"]["application/json"]
 export type ProfileToken = ProfileTokenList["items"][0]
@@ -223,6 +262,7 @@ export type ETLConnection = paths["/api/connection/{:connectionid}"]["get"]["res
 export type ETLConnectionVideoLeaseList = paths["/api/connection/{:connectionid}/video/lease"]["get"]["responses"]["200"]["content"]["application/json"];
 
 export type ETLConnectionToken = paths["/api/connection/{:connectionid}/token"]["get"]["responses"]["200"]["content"]["application/json"]["items"][0]
+export type ETLScopeList = paths["/api/scope"]["get"]["responses"]["200"]["content"]["application/json"]
 export type ETLConnectionTokenList = paths["/api/connection/{:connectionid}/token"]["get"]["responses"]["200"]["content"]["application/json"]
 
 export type ETLConnectionAssetList = paths["/api/connection/{:connectionid}/asset"]["get"]["responses"]["200"]["content"]["application/json"]
@@ -235,6 +275,10 @@ export type ETLLayerTask = paths["/api/connection/{:connectionid}/layer/{:layeri
 export type ETLLayerTaskCapabilities = paths["/api/connection/{:connectionid}/layer/{:layerid}/task/capabilities"]["get"]["responses"]["200"]["content"]["application/json"]
 export type ETLLayerIncoming = paths["/api/connection/{:connectionid}/layer/{:layerid}/incoming"]["post"]["responses"]["200"]["content"]["application/json"]
 export type ETLLayerOutgoing = paths["/api/connection/{:connectionid}/layer/{:layerid}/outgoing"]["post"]["responses"]["200"]["content"]["application/json"]
+export type ETLLayerMapping = paths["/api/connection/{:connectionid}/layer/{:layerid}/incoming/mapping/{:mappingid}"]["get"]["responses"]["200"]["content"]["application/json"]
+
+export type CoreSchemaList = paths["/api/core/schema"]["get"]["responses"]["200"]["content"]["application/json"]
+export type CoreSchema = paths["/api/core/schema/{:id}"]["get"]["responses"]["200"]["content"]["application/json"]
 
 export type ETLData = paths["/api/connection/{:connectionid}/data/{:dataid}"]["get"]["responses"]["200"]["content"]["application/json"]
 
@@ -252,7 +296,13 @@ export type ETLRawTaskList = {
     items: Record<string, string[]>
 }
 
-export type ETLTaskVersions = paths["/api/task/raw/{:task}"]["get"]["responses"]["200"]["content"]["application/json"]
+export type ETLTaskVersions = paths["/api/integration/raw/{:prefix}"]["get"]["responses"]["200"]["content"]["application/json"]
+
+export type ETLTaskVersion = paths["/api/integration/raw/{:prefix}/version/{:version}"]["get"]["responses"]["200"]["content"]["application/json"]
+
+export type ETLTaskCapabilities = Exclude<ETLTaskVersion["capabilities"], null>
+
+
 
 export type AdminLayerUpdate = {
     id: number;
@@ -262,7 +312,6 @@ export type AdminLayerUpdate = {
     latest_version: string | null;
     has_update: boolean;
     has_stack: boolean;
-    template: boolean;
     connection: number | null;
     parent_name: string | null;
 }

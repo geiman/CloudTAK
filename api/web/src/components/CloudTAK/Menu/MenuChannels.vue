@@ -33,6 +33,7 @@
                     v-model='paging.filter'
                     v-model:sort='sort'
                     :sort-options='sortOptions'
+                    :active-filters='activeFilterCount'
                     placeholder='Filter'
                 >
                     <template #sort-icon>
@@ -46,6 +47,44 @@
                             :size='20'
                             stroke='1'
                         />
+                    </template>
+                    <template #filters>
+                        <div class='d-flex flex-column'>
+                            <div class='d-flex align-items-center justify-content-between px-3 py-2'>
+                                <strong class='small text-uppercase text-white-50'>Filters</strong>
+                                <button
+                                    v-if='activeFilterCount > 0'
+                                    type='button'
+                                    class='btn btn-link btn-sm p-0'
+                                    @click='clearFilters'
+                                >
+                                    Clear
+                                </button>
+                            </div>
+                            <div class='px-3 pb-2 d-flex flex-column gap-2'>
+                                <div class='small text-uppercase text-white-50 mb-1'>
+                                    Status
+                                </div>
+                                <label class='form-check mb-1'>
+                                    <input
+                                        class='form-check-input'
+                                        type='checkbox'
+                                        :checked='filterActive === true'
+                                        @change='toggleStatusFilter(true)'
+                                    >
+                                    <span class='form-check-label'>Active</span>
+                                </label>
+                                <label class='form-check mb-1'>
+                                    <input
+                                        class='form-check-input'
+                                        type='checkbox'
+                                        :checked='filterActive === false'
+                                        @change='toggleStatusFilter(false)'
+                                    >
+                                    <span class='form-check-label'>Inactive</span>
+                                </label>
+                            </div>
+                        </div>
                     </template>
                 </SearchSortFilter>
             </div>
@@ -63,53 +102,12 @@
                 v-else
                 class='col-12 d-flex flex-column gap-2 py-3'
             >
-                <StandardItem
+                <StandardItemChannel
                     v-for='ch in processChannels'
                     :key='ch.name'
-                    class='d-flex align-items-center gap-3 p-2'
+                    :channel='ch'
                     @click='setStatus(ch, !ch.active)'
-                >
-                    <div
-                        class='d-flex align-items-center justify-content-center rounded-circle bg-black bg-opacity-25'
-                        style='width: 3rem; height: 3rem; min-width: 3rem;'
-                    >
-                        <component
-                            :is='ch.active ? IconEye : IconEyeOff'
-                            :size='24'
-                            stroke='1'
-                        />
-                    </div>
-
-                    <div class='d-flex flex-column'>
-                        <div class='fw-bold'>
-                            {{ ch.name }}
-                        </div>
-                        <div class='text-secondary small'>
-                            {{ ch.description || "No Description" }}
-                        </div>
-                    </div>
-
-                    <div class='ms-auto'>
-                        <IconLocation
-                            v-if='ch.direction.length === 2'
-                            v-tooltip='"Bi-Directional"'
-                            :size='32'
-                            stroke='1'
-                        />
-                        <IconLocation
-                            v-else-if='ch.direction.includes("IN")'
-                            v-tooltip='"Location Sharing"'
-                            :size='32'
-                            stroke='1'
-                        />
-                        <IconLocationOff
-                            v-else-if='ch.direction.includes("OUT")'
-                            v-tooltip='"No Location Sharing"'
-                            :size='32'
-                            stroke='1'
-                        />
-                    </div>
-                </StandardItem>
+                />
             </div>
         </template>
     </MenuTemplate>
@@ -129,15 +127,11 @@ import {
 } from '@tak-ps/vue-tabler';
 import MenuTemplate from '../util/MenuTemplate.vue';
 import SearchSortFilter from '../util/SearchSortFilter.vue';
-import StandardItem from '../util/StandardItem.vue';
+import StandardItemChannel from '../util/StandardItemChannel.vue';
 import EmptyInfo from '../util/EmptyInfo.vue';
 import {
-    IconLocation,
-    IconLocationOff,
-    IconEye,
     IconEyeX,
     IconEyePlus,
-    IconEyeOff,
     IconLetterCase,
     IconArrowUp,
     IconArrowDown,
@@ -155,8 +149,19 @@ const sortOptions = ['A → Z', 'Z → A'];
 const sortTypeIcon = computed(() => IconLetterCase);
 const sortDirectionIcon = computed(() => sort.value === 'A → Z' ? IconArrowUp : IconArrowDown);
 
+const filterActive = ref<boolean | null>(null);
+const activeFilterCount = computed(() => filterActive.value !== null ? 1 : 0);
+
+function toggleStatusFilter(value: boolean): void {
+    filterActive.value = filterActive.value === value ? null : value;
+}
+
+function clearFilters(): void {
+    filterActive.value = null;
+}
+
 const channels = useObservable(
-    from(GroupManager.live()),
+    from(GroupManager.liveList()),
     { initialValue: [] }
 ) as Ref<GroupChannel[]>;
 
@@ -176,7 +181,10 @@ const processChannels = computed<Record<string, GroupChannel>>(() => {
         })
 
     for (const key of Object.keys(filteredChannels)) {
+        const ch = filteredChannels[key];
         if (!key.toLowerCase().includes(paging.value.filter.toLowerCase())) {
+            delete filteredChannels[key];
+        } else if (filterActive.value !== null && ch.active !== filterActive.value) {
             delete filteredChannels[key];
         }
     }
@@ -194,8 +202,7 @@ async function refresh() {
 }
 
 async function setAllStatus(active=true) {
-    // Updating the API takes a perceptable amount of time so
-    // we update the UI state to provide immediate feedback
+    // Update UI state optimistically for immediate feedback while the API call is in flight
     const updates = channels.value.map((ch) => {
         const char = JSON.parse(JSON.stringify(ch));
         char.active = active;

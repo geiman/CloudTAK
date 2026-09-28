@@ -87,7 +87,6 @@
 <script setup lang='ts'>
 import { ref, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { liveQuery } from 'dexie';
 import {
     IconRoute,
     IconListDetails,
@@ -101,7 +100,7 @@ import {
 } from '@tak-ps/vue-tabler';
 import MenuTemplate from '../util/MenuTemplate.vue';
 import StandardItem from '../util/StandardItem.vue';
-import { db, type DBBreadcrumb } from '../../../database.ts';
+import { db, type DBBreadcrumb, liveQuery } from '../../../database.ts';
 import { useMapStore } from '../../../stores/map.ts';
 
 const mapStore = useMapStore();
@@ -118,7 +117,6 @@ const subscription = liveQuery(async () => {
     return all.filter((e) => e.id.endsWith('.track'));
 }).subscribe(async (rows) => {
     entries.value = rows;
-    // Sync live-enabled state from the worker whenever the Dexie table changes
     const enabledUids = await mapStore.worker.db.breadcrumb.listEnabled();
     liveEnabled.value = new Set(enabledUids);
 });
@@ -144,7 +142,6 @@ async function toggleLive(uid: string, enabled: boolean): Promise<void> {
 }
 
 async function clearTrail(entry: DBBreadcrumb): Promise<void> {
-    // Disable live recording if active
     if (liveEnabled.value.has(entry.uid)) {
         await mapStore.worker.db.breadcrumb.set(entry.uid, false);
     }

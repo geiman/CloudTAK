@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert';
 import Flight from './flight.js';
 import fs from 'fs';
-import CP from 'node:child_process';
 import Sinon from 'sinon';
 import S3 from '../common/aws/s3.js';
 
@@ -12,6 +11,7 @@ flight.init({ takserver: true });
 flight.takeoff();
 flight.user();
 flight.user({ username: 'user', admin: false });
+flight.integration('test-task');
 
 test('GET: api/connection - No Auth', async () => {
     try {
@@ -244,27 +244,7 @@ let enabledConnId: number = 0;
 
 test('Creating Enabled Connection', async () => {
     try {
-        CP.execSync(`
-            openssl req \
-                -newkey rsa:4096 \
-                -keyout /tmp/cloudtak-test-alice.key \
-                -out /tmp/cloudtak-test-alice.csr \
-                -nodes \
-                -subj "/CN=Alice" \
-                2> /dev/null
-        `);
-
-        CP.execSync(`
-           openssl x509 \
-                -req \
-                -in /tmp/cloudtak-test-alice.csr \
-                -CA ${flight.tak.keys.cert} \
-                -CAkey ${flight.tak.keys.key} \
-                -out /tmp/cloudtak-test-alice.cert \
-                -set_serial 01 \
-                -days 365 \
-                2> /dev/null
-        `);
+        flight.clientCert('alice', '/CN=Alice');
 
         const conn = await flight.fetch('/api/connection', {
             method: 'POST',
@@ -288,6 +268,30 @@ test('Creating Enabled Connection', async () => {
         enabledConnId = conn.body.id;
 
         await new Promise(resolve => setTimeout(resolve, 1000));
+    } catch (err) {
+        assert.ifError(err);
+    }
+});
+
+test('POST: api/connection - Duplicate name handled gracefully', async () => {
+    try {
+        const res = await flight.fetch('/api/connection', {
+            method: 'POST',
+            auth: {
+                bearer: flight.token.admin,
+            },
+            body: {
+                name: 'Test Connection',
+                description: 'Duplicate name connection',
+                auth: {
+                    key: String(fs.readFileSync('/tmp/cloudtak-test-alice.key')),
+                    cert: String(fs.readFileSync('/tmp/cloudtak-test-alice.cert')),
+                },
+            },
+        }, false);
+
+        assert.equal(res.status, 400);
+        assert.equal(res.body.message, 'A connection with this name already exists');
     } catch (err) {
         assert.ifError(err);
     }
@@ -434,6 +438,25 @@ test('PATCH: api/connection/:connectionid - Invalid X509 Certificate', async () 
 
         assert.equal(res.status, 400);
         assert.equal(res.body.message, 'Invalid X509 Certificate Provided');
+    } catch (err) {
+        assert.ifError(err);
+    }
+});
+
+test('PATCH: api/connection/:connectionid - Duplicate name handled gracefully', async () => {
+    try {
+        const res = await flight.fetch(`/api/connection/${enabledConnId}`, {
+            method: 'PATCH',
+            auth: {
+                bearer: flight.token.admin,
+            },
+            body: {
+                name: 'Readonly Connection',
+            },
+        }, false);
+
+        assert.equal(res.status, 400);
+        assert.equal(res.body.message, 'A connection with this name already exists');
     } catch (err) {
         assert.ifError(err);
     }
@@ -706,7 +729,8 @@ test('GET: api/connection/:connectionid/auth - Readonly truststore P12 with down
 test('DELETE: api/connection/:connectionid - Fails with active Layer', async () => {
     const layer = await flight.config!.models.Layer.generate({
         name: 'Guard Layer',
-        task: 'test-task',
+        task: 1,
+        version: '1.0.0',
         connection: enabledConnId,
     });
 

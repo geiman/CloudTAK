@@ -3,7 +3,7 @@ import { sql } from 'drizzle-orm';
 import { TAKRole, TAKGroup } from '@tak-ps/node-tak/lib/api/types';
 import type ConfigStateless from '../../config.js';
 import {
-    toEnum, Profile_Stale, Profile_Speed, Profile_Elevation, Profile_Distance, Profile_Text, Profile_Projection, Profile_Zoom, Profile_Style, Profile_Coordinate, Profile_Radiation_Dose,
+    toEnum, Profile_Stale, Profile_Speed, Profile_Elevation, Profile_Distance, Profile_Text, Profile_Projection, Profile_Zoom, Profile_Style, Profile_Coordinate, Profile_Radiation_Dose, Profile_Wake_Lock,
 } from '../../../common/enums.js';
 import { ProfileResponse } from '../../../common/types.js';
 
@@ -19,6 +19,7 @@ export const ProfileConfigDefaults = {
     'display::text': Profile_Text.Medium,
     'display::icon_rotation': true,
     'display::radiation_dose': Profile_Radiation_Dose.SIEVERTS,
+    'display::wakelock': Profile_Wake_Lock.CHARGING,
 
     'geometry::point::type': 'u-d-p',
     'geometry::point::color': '#ff0000',
@@ -114,26 +115,26 @@ export default class ProfileControl {
     }
 
     /**
-     * Resolve Mission subscription options (name + token) for a user
+     * Resolve Mission subscription options (guid + token) for a user
      */
-    async subscription(username: string, name: string): Promise<{
-        name: string;
+    async subscription(username: string, guid: string): Promise<{
+        guid: string;
         token?: string;
     }> {
         const missions = await this.config.models.ProfileOverlay.list({
             where: sql`
-                name = ${name}
+                mode_id = ${guid}
                 AND mode = 'mission'
                 AND username = ${username}
             `,
         });
 
         if (missions.items.length === 0) {
-            return { name };
+            return { guid };
         }
 
         return {
-            name: missions.items[0].name,
+            guid,
             token: missions.items[0].token || undefined,
         };
     }

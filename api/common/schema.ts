@@ -1,7 +1,9 @@
 import { sql } from 'drizzle-orm';
 import { primaryKey } from 'drizzle-orm/pg-core';
 import { Static } from '@sinclair/typebox';
+import type { ProfileVideoPosition } from './types.js';
 import type { StyleContainer } from './style.js';
+import { CoreEventLink, CoreEventStyle } from './types.js';
 import type { FilterContainer } from './filter.js';
 import type { PaletteFeatureStyle } from '../stateless/lib/palette.js';
 import { Polygon, Point } from 'geojson';
@@ -15,9 +17,9 @@ import {
     BasemapTerrain_Encoding,
     ProfilePaging_Type,
     Basemap_Type, Basemap_Format, Basemap_Scheme, VideoLease_SourceType, BasicGeometryType, Basemap_Protocol,
-    ProfileChatStatus,
+    ProfileChatStatus, CoreEvent_Priority, CoreEventBoardColumn_Type, CoreEventEffect_Status, LayerMapping_Destination,
 } from './enums.js';
-import { bigint, boolean, uuid, numeric, integer, timestamp, pgTable, serial, varchar, text, unique, index } from 'drizzle-orm/pg-core';
+import { bigint, boolean, uuid, numeric, integer, doublePrecision, timestamp, pgTable, serial, varchar, text, unique, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 /** Internal Tables for Postgis for use with drizzle-kit push:pg */
@@ -29,17 +31,219 @@ export const SpatialRefSys = pgTable('spatial_ref_sys', {
     proj4text: varchar({ length: 2048 }),
 });
 
-export const CoreIncident = pgTable('core_incident', {
-    id: serial().primaryKey(),
-    name: text().notNull(),
-    external_id: text(),
-    status: text().notNull().default('Active'),
-    description: text().notNull().default(''),
+export const CoreEvent = pgTable('core_event', {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    mission_guid: uuid(),
     created: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
     updated: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
-    bounds: geometry({ type: GeometryType.Polygon, srid: 4326 }).$type<Polygon>(),
-    center: geometry({ type: GeometryType.Point, srid: 4326 }).$type<Point>(),
-    metadata: jsonb().notNull().default({}),
+    started: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
+    ended: timestamp({ withTimezone: true, mode: 'string' }), // A future time keeps the Event active until then
+    username: text().references(() => Profile.username),
+    connection: integer().references(() => Connection.id, { onDelete: 'set null' }),
+    priority: text().$type<CoreEvent_Priority>().notNull().default(CoreEvent_Priority.NONE),
+    type: text().notNull(), // MIL-STD-2525E Symbol ID
+    name: text().notNull(),
+    external_id: text().notNull().default(''),
+    editable: boolean().notNull().default(true), // Can users other than the creator edit the Event
+    location: text().notNull().default(''), // Human readable location - ie: an address
+    remarks: text().notNull().default(''),
+    metadata: jsonb().$type<Record<string, unknown>>().notNull().default({}),
+    links: jsonb().$type<Array<Static<typeof CoreEventLink>>>().notNull().default([]),
+    style: jsonb().$type<Static<typeof CoreEventStyle>>().notNull().default({}),
+    geometry: geometry({ type: GeometryType.Point, srid: 4326 }).$type<Point>().notNull(),
+}, (table) => {
+    return {
+        external_idx: uniqueIndex('core_event_connection_external_id_idx').on(table.connection, table.external_id).where(sql`external_id <> ''`),
+    };
+});
+
+export const CoreEventChannel = pgTable('core_event_channel', {
+    event: uuid().notNull().references(() => CoreEvent.id, { onDelete: 'cascade' }),
+    channel: bigint({ mode: 'bigint' }).notNull(),
+}, table => ({
+    pk: primaryKey({
+        columns: [table.event, table.channel],
+    }),
+}));
+
+/** A KanBan Board of Core Events - each Board belongs to a single TAK Channel */
+export const CoreEventBoard = pgTable('core_event_board', {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    created: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
+    updated: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
+    channel: bigint({ mode: 'bigint' }).notNull(),
+    name: text().notNull(),
+    description: text().notNull().default(''),
+}, (table) => {
+    return {
+        channel_idx: index('core_event_board_channel_idx').on(table.channel),
+    };
+});
+
+/** KanBan style columns of a single Board */
+export const CoreEventBoardColumn = pgTable('core_event_board_column', {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    created: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
+    updated: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
+    board: uuid().notNull().references(() => CoreEventBoard.id, { onDelete: 'cascade' }),
+    name: text().notNull(),
+    description: text().notNull().default(''),
+    color: text().notNull().default(''), // Hex colour the Column is rendered with - ie: #ff0000
+    type: text().$type<CoreEventBoardColumn_Type>().notNull().default(CoreEventBoardColumn_Type.CUSTOM),
+    position: integer().notNull().default(0),
+}, (table) => {
+    return {
+        board_idx: index('core_event_board_column_board_idx').on(table.board),
+    };
+});
+
+/** Placement of a Core Event in a Column - an Event can only sit in one Column per Board */
+export const CoreEventBoardEvent = pgTable('core_event_board_event', {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    created: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
+    updated: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
+    board: uuid().notNull().references(() => CoreEventBoard.id, { onDelete: 'cascade' }),
+    column: uuid().notNull().references(() => CoreEventBoardColumn.id, { onDelete: 'cascade' }),
+    event: uuid().notNull().references(() => CoreEvent.id, { onDelete: 'cascade' }),
+    position: integer().notNull().default(0),
+}, table => ({
+    board_event_idx: unique().on(table.board, table.event),
+}));
+
+/** A person assigned to manage a Core Event in some capacity - ie: IC, JAG */
+export const CoreEventAssignment = pgTable('core_event_assignment', {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    created: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
+    updated: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
+    event: uuid().notNull().references(() => CoreEvent.id, { onDelete: 'cascade' }),
+    uid: text().references(() => Profile.username, { onDelete: 'set null' }), // Set when the person has a Profile
+    name: text().notNull(),
+    role: text().notNull().default(''),
+    remarks: text().notNull().default(''),
+}, (table) => {
+    return {
+        event_uid_idx: uniqueIndex('core_event_assignment_event_uid_idx').on(table.event, table.uid).where(sql`uid IS NOT NULL`),
+    };
+});
+
+/** A Device acting on a Core Event - ie: navigate to, loiter around */
+export const CoreEventEffect = pgTable('core_event_effect', {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    created: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
+    updated: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
+    started: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
+    ended: timestamp({ withTimezone: true, mode: 'string' }),
+    event: uuid().notNull().references(() => CoreEvent.id, { onDelete: 'cascade' }),
+    device: uuid().notNull().references((): AnyPgColumn => CoreDevice.id, { onDelete: 'cascade' }),
+    action: text().notNull(),
+    status: text().$type<CoreEventEffect_Status>().notNull().default(CoreEventEffect_Status.TASKED),
+    metadata: jsonb().$type<Record<string, unknown>>().notNull().default({}), // Action specific parameters - ie: loiter radius
+});
+
+/** A user defined Form - schema holds the JSON Schema the Form input is generated & validated from */
+export const CoreForm = pgTable('core_form', {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    created: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
+    updated: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
+    username: text().references(() => Profile.username), // Author of the Form
+    name: text().notNull(),
+    description: text().notNull().default(''),
+    schema: jsonb().$type<Record<string, unknown>>().notNull(),
+});
+
+export const CoreFormChannel = pgTable('core_form_channel', {
+    form: uuid().notNull().references(() => CoreForm.id, { onDelete: 'cascade' }),
+    channel: bigint({ mode: 'bigint' }).notNull(),
+}, table => ({
+    pk: primaryKey({
+        columns: [table.form, table.channel],
+    }),
+}));
+
+/** Forms attached to a KanBan Board Column - a Form can be attached to a Column once */
+export const CoreFormColumn = pgTable('core_form_column', {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    created: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
+    updated: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
+    form: uuid().notNull().references(() => CoreForm.id, { onDelete: 'cascade' }),
+    column: uuid().notNull().references(() => CoreEventBoardColumn.id, { onDelete: 'cascade' }),
+    required: boolean().notNull().default(false), // Must the Form be completed for Events in the Column
+}, table => ({
+    column_form_idx: unique().on(table.column, table.form),
+}));
+
+/** A submitted response to a Core Form - response holds the data validated against the Form's schema */
+export const CoreFormResponse = pgTable('core_form_response', {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    created: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
+    updated: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
+    form: uuid().notNull().references(() => CoreForm.id, { onDelete: 'cascade' }),
+    username: text().references(() => Profile.username), // User that submitted the Response
+    response: jsonb().$type<Record<string, unknown>>().notNull().default({}),
+}, (table) => {
+    return {
+        form_idx: index('core_form_response_form_idx').on(table.form),
+    };
+});
+
+/** Links a Core Event to a given Form Response */
+export const CoreEventResponse = pgTable('core_event_response', {
+    event: uuid().notNull().references(() => CoreEvent.id, { onDelete: 'cascade' }),
+    response: uuid().notNull().references(() => CoreFormResponse.id, { onDelete: 'cascade' }),
+}, table => ({
+    pk: primaryKey({
+        columns: [table.event, table.response],
+    }),
+}));
+
+/**
+ * A durable physical asset (sensor, drone, vehicle, radio, etc.) tracked independently
+ * of any single Core Event. Device identity fields (manufacturer, model, serial, etc.)
+ * are modelled on the CBRN (RadCoT/ChemCoT) sensor_data attributes but are intentionally
+ * generic so a device from any manufacturer can be described
+ */
+export const CoreDevice = pgTable('core_device', {
+    id: uuid().primaryKey().default(sql`gen_random_uuid()`),
+    created: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
+    updated: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
+    username: text().references(() => Profile.username),
+    connection: integer().references(() => Connection.id, { onDelete: 'set null' }),
+    event: uuid().references(() => CoreEvent.id, { onDelete: 'set null' }), // Current primary Event assignment - CoreEventEffect holds the full record
+    type: text().notNull(), // MIL-STD-2525E Symbol ID
+    name: text().notNull(), // Human readable name/callsign of the Device
+    manufacturer: text().notNull().default(''), // ie: Ortec, Nucsafe, DJI
+    model: text().notNull().default(''), // ie: Micro Detective, IdentiFINDER 2
+    serial: text().notNull().default(''), // Manufacturer assigned Serial Number
+    firmware: text().notNull().default(''), // Firmware/Software revision reported by the Device
+    status: text().notNull().default(''), // General Device health status - ie: Full, Reduced, Unknown
+    battery: doublePrecision(), // Battery level as a percentage (0-100) at last report
+    simulated: boolean().notNull().default(false), // Is the Device a simulated data source
+    external_id: text().notNull().default(''),
+    remarks: text().notNull().default(''),
+    metadata: jsonb().$type<Record<string, unknown>>().notNull().default({}),
+}, (table) => {
+    return {
+        external_idx: uniqueIndex('core_device_connection_external_id_idx').on(table.connection, table.external_id).where(sql`external_id <> ''`),
+    };
+});
+
+export const CoreDeviceChannel = pgTable('core_device_channel', {
+    device: uuid().notNull().references(() => CoreDevice.id, { onDelete: 'cascade' }),
+    channel: bigint({ mode: 'bigint' }).notNull(),
+}, table => ({
+    pk: primaryKey({
+        columns: [table.device, table.channel],
+    }),
+}));
+
+/** TAK Server Groups, periodically synced via the Admin Certificate */
+export const Channel = pgTable('channel', {
+    bitpos: integer().primaryKey(),
+    created: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
+    updated: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
+    name: text().notNull(),
+    type: text().notNull().default(''),
+    description: text().notNull().default(''),
 });
 
 export const PaletteFeature = pgTable('palette_feature', {
@@ -82,12 +286,13 @@ export const Profile = pgTable('profile', {
     id: integer(),
     name: text().default('Unknown'),
     username: text().primaryKey(),
-    last_login: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
-    auth: jsonb().$type<Static<typeof ConnectionAuth>>().notNull(),
+    last_login: timestamp({ withTimezone: true, mode: 'string' }).default(sql`Now()`),
+    auth: jsonb().$type<Static<typeof ConnectionAuth>>(),
     created: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
     updated: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
     system_admin: boolean().notNull().default(false),
     agency_admin: jsonb().notNull().$type<Array<number>>().default([]),
+    disabled: boolean().notNull().default(false),
 });
 
 export const ProfileSetting = pgTable('profile_settings',
@@ -109,6 +314,7 @@ export const ProfileFile = pgTable('profile_files', {
     created: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
     updated: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
     username: text().notNull().references(() => Profile.username),
+    parent: uuid().references((): AnyPgColumn => ProfileFile.id, { onDelete: 'cascade' }),
     path: text().notNull().default('/'),
     name: text().notNull(),
     iconset: text().references(() => Iconset.uid),
@@ -199,6 +405,8 @@ export const ProfileVideo = pgTable('profile_videos', {
     updated: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
     lease: integer().notNull().references(() => VideoLease.id),
     username: text().notNull().references(() => Profile.username),
+
+    position: jsonb().$type<Static<typeof ProfileVideoPosition>>().notNull().default({ x: 0, y: 0, w: 4, h: 6 }),
 }, (table) => {
     return {
         username_idx: index('profile_videos_username_idx').on(table.username),
@@ -242,7 +450,8 @@ export const Basemap = pgTable('basemaps', {
     protocol: text().notNull().default(Basemap_Protocol.ZXY),
 
     bounds: geometry({ type: GeometryType.Polygon, srid: 4326 }).$type<Polygon>(),
-    center: geometry({ type: GeometryType.Point, srid: 4326 }).$type<Point>(),
+    // TileJSON 3.0.0 center: [longitude, latitude, zoom]
+    center: doublePrecision().array(),
     minzoom: integer().notNull().default(0),
     maxzoom: integer().notNull().default(16),
     format: text().$type<Basemap_Format>().notNull().default(Basemap_Format.PNG),
@@ -328,7 +537,7 @@ export const ImportResult = pgTable('import_result', {
     type_id: text().notNull(),
 });
 
-export const Task = pgTable('tasks', {
+export const Integration = pgTable('integrations', {
     id: serial().primaryKey(),
     prefix: text().notNull(),
     favorite: boolean().notNull().default(false),
@@ -388,7 +597,7 @@ export const Connection = pgTable('connections', {
     created: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
     updated: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
     username: text().references(() => Profile.username),
-    name: text().notNull(),
+    name: text().notNull().unique(),
     description: text().notNull().default(''),
     enabled: boolean().notNull().default(true),
     features: boolean().notNull().default(false),
@@ -424,6 +633,7 @@ export const Data = pgTable('data', {
     mission_diff: boolean().notNull().default(false),
     mission_role: text().notNull().default('MISSION_SUBSCRIBER'),
     mission_token: text(),
+    mission_guid: text(),
     mission_groups: text().array().notNull().default([]),
     assets: jsonb().$type<Array<string>>().notNull().default(['*']),
     connection: integer().notNull().references(() => Connection.id),
@@ -440,12 +650,14 @@ export const Layer = pgTable('layers', {
     protected: boolean().notNull().default(false),
     description: text().notNull().default(''),
     priority: text().$type<Layer_Priority>().notNull().default(Layer_Priority.OFF),
-    template: boolean().notNull().default(false),
     connection: integer().references(() => Connection.id),
     logging: boolean().notNull().default(true),
-    task: text().notNull(),
+    task: bigint({ mode: 'number' }).notNull().references(() => Integration.id),
+    version: text().notNull(),
     memory: integer().notNull().default(256),
     timeout: integer().notNull().default(120),
+
+    permissions: text().array().notNull().default([]),
 
     alarm_period: integer().notNull().default(30),
     alarm_evals: integer().notNull().default(5),
@@ -460,6 +672,7 @@ export const LayerOutgoing = pgTable('layers_outgoing', {
     updated: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
 
     filters: jsonb().$type<Static<typeof FilterContainer>>().notNull().default({}),
+    subscriptions: text().array().notNull().default([]),
 
     environment: jsonb().notNull().default({}),
     ephemeral: jsonb().$type<Record<string, any>>().notNull().default({}),
@@ -481,6 +694,24 @@ export const LayerIncoming = pgTable('layers_incoming', {
 
     // Data Destinations
     data: integer().references(() => Data.id),
+});
+
+export const LayerMapping = pgTable('layer_mapping', {
+    id: serial().primaryKey(),
+    created: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
+    updated: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
+
+    layer: integer().notNull().references(() => Layer.id, { onDelete: 'cascade' }),
+    schema: text().notNull(),
+    name: text().notNull().default(''),
+    destination: text().$type<LayerMapping_Destination>().notNull().default(LayerMapping_Destination.COREFEATURE),
+    query: text(),
+    mapping: jsonb().$type<Record<string, unknown>>().notNull().default({}),
+}, (table) => {
+    return {
+        layer_idx: index('layer_mapping_layer_idx').on(table.layer),
+        default_idx: uniqueIndex('layer_mapping_default_idx').on(table.layer, table.schema, table.destination).where(sql`query IS NULL`),
+    };
 });
 
 export const Setting = pgTable('settings', {
@@ -507,6 +738,8 @@ export const ConnectionToken = pgTable('connection_tokens', {
     id: serial().notNull(),
     connection: integer().notNull().references(() => Connection.id),
     name: text().notNull(),
+    username: text(),
+    permissions: text().array().notNull().default([]),
     token: text().primaryKey(),
     created: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
     updated: timestamp({ withTimezone: true, mode: 'string' }).notNull().default(sql`Now()`),
@@ -564,6 +797,10 @@ export const ProfileSession = pgTable('profile_sessions', {
     browser: text().notNull().default('Unknown'),
     os: text().notNull().default('Unknown'),
     user_agent: text().notNull().default(''),
+    refresh_hash: text().unique(),
+    refresh_previous_hash: text(),
+    refresh_expires: timestamp({ withTimezone: true, mode: 'string' }),
+    last_refreshed: timestamp({ withTimezone: true, mode: 'string' }),
 });
 
 export const ProfilePasskey = pgTable('profile_passkeys', {
@@ -599,7 +836,6 @@ export const ProfileOverlay = pgTable('profile_overlays', {
     visible: boolean().notNull().default(true),
     token: text(),
     styles: jsonb().$type<Array<unknown>>().notNull().default([]),
-    coordinates: jsonb().$type<Array<[number, number]>>(),
     mode: text().notNull(),
     mode_id: text(), // Used for Data not for Profile
     url: text().notNull(),

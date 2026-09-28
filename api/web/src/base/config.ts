@@ -1,8 +1,8 @@
-import { db } from '../database.ts'
+import { db, liveQuery } from '../database.ts'
 import type { DBConfig } from '../database.ts';
 import { server } from '../std.ts';
-import { withTimeout } from './async.ts';
-import { liveQuery, type Subscription } from 'dexie';
+import { withTimeout } from '../utils/async.ts';
+import type { Subscription } from 'dexie';
 import type { paths } from '@cloudtak/api-types';
 
 export type FullConfig = paths['/api/config']['get']['responses']['200']['content']['application/json'];
@@ -11,6 +11,9 @@ export type FullConfig = paths['/api/config']['get']['responses']['200']['conten
 // cache read falls through to the network; a stalled cache write is dropped.
 const CACHE_TIMEOUT_MS = 2000;
 const FETCH_TIMEOUT_MS = 10000;
+
+const SYNC_CACHE_KEY = 'config';
+const SYNC_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 export default class Config<K extends keyof FullConfig = keyof FullConfig> {
     key: K;
@@ -100,6 +103,33 @@ export default class Config<K extends keyof FullConfig = keyof FullConfig> {
         }
 
         return result;
+    }
+
+    /**
+     * Re-fetch every cached config value if the last sweep is more than
+     * 24 hours old. Failures are swallowed so a stale cache never surfaces
+     * an error - the timestamp is not advanced, so the next full sync retries.
+     */
+    static async sync(): Promise<void> {
+        try {
+            const last = await withTimeout(db.cache.get(SYNC_CACHE_KEY), CACHE_TIMEOUT_MS, 'Config sync cache read');
+            if (last && Date.now() - last.updated < SYNC_MAX_AGE_MS) return;
+
+            // Server config keys are `::` namespaced - skip session values
+            // like `token` that share the table
+            const keys = (await withTimeout(db.config.toCollection().primaryKeys(), CACHE_TIMEOUT_MS, 'Config sync key read'))
+                .map((key) => String(key))
+                .filter((key) => key.includes('::')) as (keyof FullConfig)[];
+
+            await this.refresh(keys);
+
+            await withTimeout(db.cache.put({
+                key: SYNC_CACHE_KEY,
+                updated: Date.now()
+            }), CACHE_TIMEOUT_MS, 'Config sync cache write');
+        } catch (err) {
+            console.warn('Config stale-sweep failed, keeping cached values', err);
+        }
     }
 
     static async refresh(keys: (keyof FullConfig)[]): Promise<Partial<FullConfig>> {

@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert';
+import { eq } from 'drizzle-orm';
+import { ProfileVideo } from '../common/schema.js';
 import Flight from './flight.js';
 import { MockAgent, setGlobalDispatcher, getGlobalDispatcher } from 'undici';
 
@@ -40,6 +42,13 @@ test('Mock Media Server Start', async () => {
     setGlobalDispatcher(agent);
 
     const mediaClient = agent.get('http://media-server:9997');
+
+    // Lease creation checks for an existing MediaMTX path before creating one
+    mediaClient.intercept({
+        path: /^\/path\/[0-9a-f-]+$/,
+        method: 'GET',
+    }).reply(404, { error: 'path not found' });
+
     mediaClient.intercept({
         path: '/path',
         method: 'POST',
@@ -66,10 +75,10 @@ test('Mock Media Server Start', async () => {
         rtmpsAddress: '',
         hls: true,
         hlsAddress: ':8888',
-        webrtc: false,
-        webrtcAddress: '',
-        srt: false,
-        srtAddress: '',
+        webrtc: true,
+        webrtcAddress: ':8889',
+        srt: true,
+        srtAddress: ':8890',
     }).persist();
 
     mediaClient.intercept({
@@ -109,6 +118,24 @@ test('POST: api/video/lease - Create Lease', async () => {
         assert.equal(res.body.name, 'Test Lease', 'Name matches');
         leaseId = res.body.id;
         leasePath = res.body.path;
+    } catch (err) {
+        assert.ifError(err);
+    }
+});
+
+test('GET: api/video/lease - Active reported from MediaServer', async () => {
+    try {
+        const res = await flight.fetch('/api/video/lease?impersonate=true&ephemeral=all', {
+            method: 'GET',
+            auth: {
+                bearer: flight.token.admin,
+            },
+        }, true);
+
+        assert.equal(res.status, 200, 'Status 200');
+        assert.equal(res.body.total, 1);
+        assert.equal(res.body.items[0].id, leaseId);
+        assert.equal(res.body.items[0].active, false, 'Path not reported ready by MediaServer');
     } catch (err) {
         assert.ifError(err);
     }
@@ -174,6 +201,8 @@ test('PATCH: api/video/lease/:lease - Update Lease', async () => {
         method: 'PATCH',
     }).reply(200, {});
 
+    flight.tak.martiRequests.length = 0;
+
     try {
         const res = await flight.fetch(`/api/video/lease/${leaseId}`, {
             method: 'PATCH',
@@ -190,6 +219,171 @@ test('PATCH: api/video/lease/:lease - Update Lease', async () => {
         assert.equal(res.status, 200, 'Status 200');
         assert.equal(res.body.id, leaseId, 'Lease ID matches');
         assert.equal(res.body.name, 'Updated Lease Name', 'Name updated');
+
+        // Fork: TAK Server feeds are only removed when the lease was previously published
+        assert.ok(
+            !flight.tak.martiRequests.some(r => r.startsWith('DELETE /Marti/api/video')),
+            'Never published lease has no TAK Server video connection to remove',
+        );
+        assert.ok(
+            !flight.tak.martiRequests.some(r => r.startsWith('POST /Marti/api/video')),
+            'Unpublished lease is not pushed to TAK Server',
+        );
+    } catch (err) {
+        assert.ifError(err);
+    }
+});
+
+test('PATCH: api/video/lease/:lease - Publish pushes to TAK Server', async () => {
+    const mediaClient = agent.get('http://media-server:9997');
+
+    mediaClient.intercept({
+        path: `/path/${leasePath}`,
+        method: 'GET',
+    }).reply(200, {
+        name: leasePath,
+        confName: leasePath,
+        source: null,
+        ready: true,
+        readyTime: null,
+        tracks: [],
+        bytesReceived: 0,
+        bytesSent: 0,
+        readers: [],
+    });
+
+    mediaClient.intercept({
+        path: `/path/${leasePath}`,
+        method: 'PATCH',
+    }).reply(200, {});
+
+    let pushed: { videoConnections: Array<{ feeds: Array<{ url: string }> }> } | undefined;
+    flight.tak.mockMarti.unshift(async (request, response) => {
+        if (request.method === 'POST' && request.url && request.url.startsWith('/Marti/api/video')) {
+            let body = '';
+            for await (const chunk of request) body += chunk;
+            pushed = JSON.parse(body);
+
+            response.setHeader('Content-Type', 'application/json');
+            response.write(JSON.stringify({}));
+            response.end();
+            return true;
+        }
+        return false;
+    });
+
+    flight.tak.martiRequests.length = 0;
+
+    try {
+        const res = await flight.fetch(`/api/video/lease/${leaseId}`, {
+            method: 'PATCH',
+            auth: {
+                bearer: flight.token.admin,
+            },
+            body: {
+                publish: true,
+                channel: 'Test Channel',
+            },
+        }, true);
+
+        assert.equal(res.status, 200, 'Status 200');
+        assert.equal(res.body.publish, true, 'Publish enabled');
+        assert.equal(res.body.channel, 'Test Channel', 'Channel set');
+
+        assert.ok(
+            flight.tak.martiRequests.includes('POST /Marti/api/video?group=Test+Channel'),
+            'Published lease pushed to TAK Server in the lease channel',
+        );
+        // Fork: the default lease publish_protocol is HLS
+        assert.equal(
+            pushed?.videoConnections[0].feeds[0].url,
+            `http://media-server/stream/${leasePath}/index.m3u8`,
+            'HLS feed pushed to TAK Server',
+        );
+    } catch (err) {
+        assert.ifError(err);
+    }
+});
+
+test('GET: api/video/active - SRT feed resolves to hosted lease', async () => {
+    const mediaClient = agent.get('http://media-server:9997');
+
+    mediaClient.intercept({
+        path: `/path/${leasePath}`,
+        method: 'GET',
+    }).reply(200, {
+        name: leasePath,
+        confName: leasePath,
+        source: null,
+        ready: true,
+        readyTime: null,
+        tracks: [],
+        bytesReceived: 0,
+        bytesSent: 0,
+        readers: [],
+    });
+
+    try {
+        const url = `srt://media-server:8890?streamid=read:${leasePath}`;
+        const res = await flight.fetch(`/api/video/active?url=${encodeURIComponent(url)}`, {
+            method: 'GET',
+            auth: {
+                bearer: flight.token.admin,
+            },
+        }, true);
+
+        assert.equal(res.status, 200, 'Status 200');
+        assert.equal(res.body.leasable, false, 'Stream is already hosted');
+        assert.equal(res.body.metadata.name, 'Updated Lease Name');
+        assert.equal(res.body.metadata.active, true);
+        assert.ok(res.body.metadata.protocols.webrtc, 'WebRTC playback available');
+        assert.ok(res.body.metadata.protocols.hls, 'HLS playback available');
+    } catch (err) {
+        assert.ifError(err);
+    }
+});
+
+test('DELETE: api/video/lease/:lease - lease saved as a Profile Video', async () => {
+    if (!flight.config) throw new Error('Flight config not initialized');
+
+    // A user has saved this lease as a Profile Video (non-nullable FK)
+    await flight.config.models.ProfileVideo.generate({
+        lease: leaseId,
+        username: 'admin@example.com',
+    });
+
+    flight.tak.mockMarti.push(async (request, response) => {
+        if (request.method === 'DELETE' && request.url && request.url.startsWith('/Marti/api/video/')) {
+            response.setHeader('Content-Type', 'application/json');
+            response.write(JSON.stringify({}));
+            response.end();
+            return true;
+        }
+        return false;
+    });
+
+    const mediaClient = agent.get('http://media-server:9997');
+
+    mediaClient.intercept({
+        path: `/path/${leasePath}`,
+        method: 'DELETE',
+    }).reply(200, {});
+
+    try {
+        const res = await flight.fetch(`/api/video/lease/${leaseId}`, {
+            method: 'DELETE',
+            auth: {
+                bearer: flight.token.admin,
+            },
+        }, true);
+
+        assert.equal(res.status, 200, 'Status 200');
+        assert.equal(res.body.message, 'Video Lease Deleted');
+
+        // The saved Profile Video should be removed along with the lease
+        const videos = await flight.config.pg
+            .select().from(ProfileVideo).where(eq(ProfileVideo.lease, leaseId));
+        assert.equal(videos.length, 0);
     } catch (err) {
         assert.ifError(err);
     }
