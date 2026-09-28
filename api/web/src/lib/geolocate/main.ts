@@ -1,5 +1,6 @@
 import { Marker, LngLat } from 'maplibre-gl';
 import type { Map as MapLibreMap, IControl, ControlPosition } from 'maplibre-gl';
+import { TEAM_COLORS, strokeColorFor } from '../../utils/team-colors.ts';
 
 export type GeolocateControlOptions = {
     /**
@@ -39,25 +40,6 @@ const defaultOptions: ResolvedOptions = {
 const STYLE_ELEMENT_ID = 'cloudtak-geolocate-styles';
 
 const DEFAULT_PUCK_COLOR = '#1da1f2';
-
-// Mirrors the team -> marker-color mapping used for rendered CoT markers in
-// base/cot.ts so the self puck matches the previous self-location marker.
-const TEAM_COLORS: Record<string, string> = {
-    Yellow: '#f59f00',
-    Orange: '#f76707',
-    Magenta: '#ea4c89',
-    Red: '#d63939',
-    Maroon: '#bd081c',
-    Purple: '#ae3ec9',
-    'Dark Blue': '#0054a6',
-    Blue: '#4299e1',
-    Cyan: '#17a2b8',
-    Teal: '#0ca678',
-    Green: '#74b816',
-    'Dark Green': '#2fb344',
-    Brown: '#dc4e41',
-    White: '#ffffff'
-};
 
 /**
  * A MapLibre {@link IControl} that renders a live user-location puck (dot,
@@ -239,7 +221,17 @@ export class GeolocateControl implements IControl {
         if (!this.map || !this.lastLngLat) return;
 
         if (this.dotMarker) this.dotMarker.setLngLat(this.lastLngLat).addTo(this.map);
-        if (this.accuracyMarker) this.accuracyMarker.setLngLat(this.lastLngLat).addTo(this.map);
+
+        // No (or zero) accuracy - e.g. a manually set location - means the
+        // position is exact, so hide the accuracy circle entirely rather
+        // than leaving it at its last rendered size.
+        if (this.accuracyMarker) {
+            if (this.accuracy > 0) {
+                this.accuracyMarker.setLngLat(this.lastLngLat).addTo(this.map);
+            } else {
+                this.accuracyMarker.remove();
+            }
+        }
 
         this.updateCircleRadius();
         this.updateHeadingRotation();
@@ -280,7 +272,10 @@ export class GeolocateControl implements IControl {
     };
 
     private applyColor(): void {
-        if (this.dotElement) this.dotElement.style.backgroundColor = this.color;
+        if (this.dotElement) {
+            this.dotElement.style.backgroundColor = this.color;
+            this.dotElement.style.borderColor = strokeColorFor(this.color);
+        }
         if (this.headingElement) {
             const c = GeolocateControl.rgba(this.color, 0.55);
             const ct = GeolocateControl.rgba(this.color, 0.0);

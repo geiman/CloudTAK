@@ -3,6 +3,14 @@
         v-model='isOpen'
         label='Login Page'
     >
+        <template #icon>
+            <IconLogin2
+                :size='18'
+                stroke='1'
+                color='#6b7990'
+                class='ms-2 me-1'
+            />
+        </template>
         <template #right>
             <TablerIconButton
                 v-if='!edit && isOpen'
@@ -33,7 +41,7 @@
                 </TablerIconButton>
             </div>
         </template>
-        <div class='col-lg-12 py-2 px-2 border rounded'>
+        <div class='col-lg-12 py-2 px-2'>
             <TablerLoading v-if='loading' />
             <template v-else>
                 <TablerAlert
@@ -175,6 +183,25 @@
                             label='Enable Passkey Authentication'
                             :disabled='!edit'
                         />
+
+                        <TablerInput
+                            v-model='config["login::token::expiry"]'
+                            class='mt-3'
+                            type='number'
+                            :min='1'
+                            label='Login Token Lifetime (hours)'
+                            desc='How long a login token is valid before the client must refresh it - default 192 (8 days)'
+                            :disabled='!edit'
+                        />
+
+                        <TablerInput
+                            v-model='config["login::refresh::expiry"]'
+                            type='number'
+                            :min='1'
+                            label='Session Inactivity Timeout (hours)'
+                            desc='A session expires after this long without a refresh - each refresh extends it by this much - default 720 (30 days)'
+                            :disabled='!edit'
+                        />
                     </div>
                 </div>
             </template>
@@ -186,7 +213,7 @@
 import SlideDownHeader from '../../CloudTAK/util/SlideDownHeader.vue';
 import { ref, watch, onMounted } from 'vue';
 import { server } from '../../../std.ts';
-import { validateURL } from '../../../base/validators.ts';
+import { validateURL } from '../../../utils/validators.ts';
 import {
     TablerLoading,
     TablerInput,
@@ -200,7 +227,8 @@ import {
 import {
     IconPencil,
     IconDeviceFloppy,
-    IconX
+    IconX,
+    IconLogin2
 } from '@tabler/icons-vue';
 
 interface LoginConfig {
@@ -223,6 +251,8 @@ interface LoginConfig {
     'oidc::scopes': string;
     'oidc::logo': string;
     'passkey::enabled': boolean;
+    'login::token::expiry': number;
+    'login::refresh::expiry': number;
 }
 
 const isOpen = ref<boolean>(false);
@@ -250,10 +280,11 @@ const config = ref<LoginConfig>({
     'oidc::scopes': '',
     'oidc::logo': '',
     'passkey::enabled': true,
+    'login::token::expiry': 192,
+    'login::refresh::expiry': 720,
 });
 
 onMounted(() => {
-    // Optional: fetch on mount if we want to preload, or fetch on open
      if (isOpen.value) void fetch();
 });
 
@@ -294,6 +325,8 @@ async function fetch(): Promise<void> {
             'oidc::scopes': data['oidc::scopes'] ?? '',
             'oidc::logo': data['oidc::logo'] ?? '',
             'passkey::enabled': data['passkey::enabled'] ?? true,
+            'login::token::expiry': data['login::token::expiry'] ?? 192,
+            'login::refresh::expiry': data['login::refresh::expiry'] ?? 720,
         };
     } catch (error) {
         err.value = error instanceof Error ? error : new Error(String(error));
@@ -306,7 +339,11 @@ async function save(): Promise<void> {
     err.value = null;
     try {
         const { error } = await server.PUT('/api/config', {
-            body: config.value
+            body: {
+                ...config.value,
+                'login::token::expiry': Number(config.value['login::token::expiry']),
+                'login::refresh::expiry': Number(config.value['login::refresh::expiry']),
+            }
         });
         if (error) throw new Error(error.message);
 

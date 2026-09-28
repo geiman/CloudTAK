@@ -33,69 +33,18 @@
             />
             <div
                 v-else
-                class='table-responsive'
+                class='row row-cards px-2'
             >
-                <table class='table card-table table-hover table-vcenter'>
-                    <thead>
-                        <tr>
-                            <th>Group Name</th>
-                            <th>Description</th>
-                            <th>Attributes</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr
-                            v-for='group in processChannels'
-                            :key='group.name'
-                        >
-                            <td>
-                                <div class='d-flex align-items-center'>
-                                    <IconEye
-                                        v-if='group.active'
-                                        v-tooltip='"Disable"'
-                                        :size='32'
-                                        stroke='1'
-                                        class='cursor-pointer'
-                                        @click='setStatus(group, false)'
-                                    />
-                                    <IconEyeOff
-                                        v-else
-                                        v-tooltip='"Enable"'
-                                        :size='32'
-                                        stroke='1'
-                                        class='cursor-pointer'
-                                        @click='setStatus(group, true)'
-                                    />
-                                    <span
-                                        class='mx-2'
-                                        v-text='group.name'
-                                    />
-                                </div>
-                            </td>
-                            <td v-text='group.description' />
-                            <td>
-                                <IconLocation
-                                    v-if='group.direction.length === 2'
-                                    v-tooltip='"Bi-Directional"'
-                                    :size='32'
-                                    stroke='1'
-                                />
-                                <IconLocation
-                                    v-else-if='group.direction.includes("IN")'
-                                    v-tooltip='"Location Sharing"'
-                                    :size='32'
-                                    stroke='1'
-                                />
-                                <IconLocationOff
-                                    v-else-if='group.direction.includes("OUT")'
-                                    v-tooltip='"No Location Sharing"'
-                                    :size='32'
-                                    stroke='1'
-                                />
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+                <div
+                    v-for='group in processChannels'
+                    :key='group.name'
+                    class='col-12 col-md-6'
+                >
+                    <StandardItemChannel
+                        :channel='group'
+                        @click='setStatus(group, !group.active)'
+                    />
+                </div>
             </div>
         </div>
     </div>
@@ -108,18 +57,13 @@ import { server } from '../../../std.ts';
 import GroupManager from '../../../base/group.ts';
 import type { Group, GroupChannel } from '../../../types.ts';
 import {
-    IconEye,
-    IconEyeOff,
-    IconLocation,
-    IconLocationOff,
-} from '@tabler/icons-vue';
-import {
     TablerNone,
     TablerInput,
     TablerAlert,
     TablerLoading,
     TablerRefreshButton,
 } from '@tak-ps/vue-tabler';
+import StandardItemChannel from '../../CloudTAK/util/StandardItemChannel.vue';
 
 const route = useRoute();
 
@@ -165,10 +109,11 @@ async function fetch() {
     error.value = undefined;
 
     try {
-        const { data, error: reqError } = await server.GET('/api/connection/{:connectionid}/channel', {
+        const { data, error: reqError } = await server.GET('/api/marti/group', {
             params: {
-                path: {
-                    ':connectionid': Number(route.params.connectionid)
+                query: {
+                    connection: Number(route.params.connectionid),
+                    useCache: true
                 }
             }
         });

@@ -1,4 +1,6 @@
-import type { TAKAPI } from '@tak-ps/node-tak';
+import { TAKAPI, APIAuthCertificate } from '@tak-ps/node-tak';
+import type Config from '../../common/config.js';
+import { authenticatedProfile } from '../../common/control/profile.js';
 
 /**
  * Resolve the active channel bitpos set for a given Profile or Connection
@@ -14,4 +16,32 @@ export default async function activeChannels(api: TAKAPI): Promise<Set<number>> 
             .filter(group => group.active)
             .map(group => group.bitpos),
     );
+}
+
+/**
+ * Resolve the active channel bitpos set of a user by email, going through
+ * the user's own certificate so the TAK Server applies their channel
+ * selection rather than the Admin cert's
+ */
+export async function userChannels(config: Config, email: string): Promise<Set<number>> {
+    const profile = await authenticatedProfile(config, email);
+
+    const api = await TAKAPI.init(
+        new URL(String(config.server.api)),
+        new APIAuthCertificate(profile.auth.cert, profile.auth.key),
+    );
+
+    return await activeChannels(api);
+}
+
+/**
+ * Resolve the active channel bitpos set of a Connection through its own certificate
+ */
+export async function connectionChannels(config: Config, connection: { auth: { cert: string; key: string } }): Promise<Set<number>> {
+    const api = await TAKAPI.init(
+        new URL(String(config.server.api)),
+        new APIAuthCertificate(connection.auth.cert, connection.auth.key),
+    );
+
+    return await activeChannels(api);
 }

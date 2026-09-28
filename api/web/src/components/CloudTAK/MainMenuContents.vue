@@ -78,6 +78,26 @@
                                     />
                                     <span class='ps-2'>Video Wall</span>
                                 </div>
+                                <div
+                                    class='col-12 py-1 px-2 cloudtak-hover cursor-pointer user-select-none'
+                                    @click.stop='external("/board")'
+                                >
+                                    <IconLayoutKanban
+                                        :size='25'
+                                        stroke='1'
+                                    />
+                                    <span class='ps-2'>Event Board</span>
+                                </div>
+                                <div
+                                    class='col-12 py-1 px-2 cloudtak-hover cursor-pointer user-select-none'
+                                    @click.stop='external("/forms")'
+                                >
+                                    <IconForms
+                                        :size='25'
+                                        stroke='1'
+                                    />
+                                    <span class='ps-2'>Forms</span>
+                                </div>
                             </div>
                         </div>
                     </template>
@@ -99,11 +119,16 @@
     >
         <template #buttons>
             <TablerIconButton
-                v-if='preferredLayout !== "list"'
-                title='List View'
-                @click='mapStore.menu.setLayout("list")'
+                :title='preferredLayout === "list" ? "Tile View" : "List View"'
+                @click='mapStore.menu.setLayout(preferredLayout === "list" ? "tiles" : "list")'
             >
+                <IconLayoutGrid
+                    v-if='preferredLayout === "list"'
+                    :size='32'
+                    stroke='1'
+                />
                 <IconLayoutList
+                    v-else
                     :size='32'
                     stroke='1'
                 />
@@ -125,16 +150,6 @@
                     stroke='1'
                 />
             </TablerIconButton>
-            <TablerIconButton
-                v-if='preferredLayout !== "tiles"'
-                title='Tile View'
-                @click='mapStore.menu.setLayout("tiles")'
-            >
-                <IconLayoutGrid
-                    :size='32'
-                    stroke='1'
-                />
-            </TablerIconButton>
         </template>
 
         <div
@@ -143,7 +158,7 @@
             <TablerInput
                 v-model='menuFilter'
                 placeholder='Search...'
-                :autofocus='!appStore.isMobileDetected'
+                :autofocus='searchAutofocus'
                 icon='search'
                 class='mb-0'
             />
@@ -218,7 +233,7 @@
 
         <template #footer>
             <div
-                class='main-menu-footer flex-shrink-0 cloudtak-bg border-top border-white'
+                class='main-menu-footer flex-shrink-0 cloudtak-header border-top'
             >
                 <div
                     class='row g-0 align-items-center'
@@ -253,13 +268,12 @@
                         role='button'
                         style='width: 40px;'
                         class='py-2 px-2 ms-auto d-flex cloudtak-hover cursor-pointer'
+                        title='Logout'
                         @click.stop.prevent='logout'
                         @keyup.enter='logout'
                     >
                         <IconLogout
-                            v-tooltip='"Logout"'
                             tabindex='0'
-                            title='Logout'
                             :size='32'
                             stroke='1'
                         />
@@ -278,6 +292,8 @@ import {
     IconGridDots,
     IconWorld,
     IconDeviceTv,
+    IconLayoutKanban,
+    IconForms,
     IconLayoutGrid,
     IconLayoutList,
     IconPencil, 
@@ -294,7 +310,7 @@ import {
     TablerInput,
     TablerNone,
 } from '@tak-ps/vue-tabler';
-import { openSecondaryView } from '../../base/capacitor.ts';
+import { openSecondaryView, isNativePlatform } from '../../utils/capacitor.ts';
 import { version } from '../../../package.json';
 import { useMapStore } from '../../stores/map.ts';
 import { useAppStore } from '../../stores/app.ts';
@@ -310,6 +326,8 @@ const router = useRouter();
 
 const mapStore = useMapStore();
 const appStore = useAppStore();
+
+const searchAutofocus = computed(() => !isNativePlatform() && !appStore.isMobileDetected);
 
 type AppSwitcherApplication = {
     name: string;
@@ -494,10 +512,6 @@ function normalizeApplications(applications: unknown): AppSwitcherApplication[] 
     display: grid;
     gap: 1rem;
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-}
-
-.cursor-move {
-    cursor: move !important;
 }
 
 .app-switcher-logo {

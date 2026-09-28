@@ -3,6 +3,8 @@ import assert from 'node:assert';
 import fs from 'node:fs';
 import cp from 'node:child_process';
 import sharp from 'sharp';
+import { eq } from 'drizzle-orm';
+import { ProfileFile, ProfileOverlay, Basemap, BasemapVector } from '../common/schema.js';
 import Flight from './flight.js';
 
 const flight = new Flight();
@@ -10,6 +12,7 @@ const flight = new Flight();
 flight.init({ takserver: true });
 flight.takeoff();
 flight.user();
+flight.user({ username: 'user', admin: false });
 
 test('GET: /api/iconset', async () => {
     try {
@@ -417,6 +420,172 @@ test('GET: /api/iconset/:iconset/icon/:icon - path lookup with seeded leaf-only 
         assert.equal(res.body.id, seeded.id);
         assert.equal(res.body.name, 'open-diamond');
         assert.equal(res.body.path, 'test-iconset/Shapes/open-diamond.png');
+    } catch (err) {
+        assert.ifError(err);
+    }
+});
+
+test('DELETE: /api/iconset/:iconset - iconset referenced by other resources', async () => {
+    try {
+        if (!flight.config) throw new Error('Flight config not initialized');
+
+        const username = 'admin@example.com';
+
+        // Resources that reference the iconset via a nullable FK
+        const file = await flight.config.models.ProfileFile.generate({
+            username,
+            name: 'iconset-ref.png',
+            iconset: 'test-iconset',
+            size: 1,
+        });
+
+        const overlay = await flight.config.models.ProfileOverlay.generate({
+            name: 'Iconset Overlay',
+            username,
+            iconset: 'test-iconset',
+            mode: 'vector',
+            url: '/iconset-ref-overlay',
+        });
+
+        const [basemap] = await flight.config.pg
+            .insert(Basemap)
+            .values({ name: 'Iconset Basemap', url: 'https://example.com/{z}/{x}/{y}.png' })
+            .returning();
+
+        const [vector] = await flight.config.pg
+            .insert(BasemapVector)
+            .values({ basemap: basemap.id, iconset: 'test-iconset' })
+            .returning();
+
+        const res = await flight.fetch('/api/iconset/test-iconset', {
+            method: 'DELETE',
+            auth: {
+                bearer: flight.token.admin,
+            },
+        }, true);
+
+        assert.deepEqual(res.body, {
+            status: 200,
+            message: 'Iconset Deleted',
+        });
+
+        // References should be detached (nulled) rather than blocking the delete
+        const files = await flight.config.pg
+            .select().from(ProfileFile).where(eq(ProfileFile.id, file.id));
+        assert.equal(files[0].iconset, null);
+
+        const overlays = await flight.config.pg
+            .select().from(ProfileOverlay).where(eq(ProfileOverlay.id, overlay.id));
+        assert.equal(overlays[0].iconset, null);
+
+        const vectors = await flight.config.pg
+            .select().from(BasemapVector).where(eq(BasemapVector.id, vector.id));
+        assert.equal(vectors[0].iconset, null);
+    } catch (err) {
+        assert.ifError(err);
+    }
+});
+
+test('POST: /api/iconset - user scoped', async () => {
+    try {
+        const res = await flight.fetch('/api/iconset', {
+            method: 'POST',
+            auth: {
+                bearer: flight.token.user,
+            },
+            body: {
+                uid: 'user-iconset',
+                version: 1,
+                name: 'User Iconset',
+            },
+        }, true);
+
+        assert.equal(res.body.uid, 'user-iconset');
+        assert.equal(res.body.username, 'user@example.com');
+    } catch (err) {
+        assert.ifError(err);
+    }
+});
+
+test('PATCH: /api/iconset/:iconset - public rejected for non-admin', async () => {
+    try {
+        const res = await flight.fetch('/api/iconset/user-iconset', {
+            method: 'PATCH',
+            auth: {
+                bearer: flight.token.user,
+            },
+            body: {
+                public: true,
+            },
+        }, false);
+
+        assert.equal(res.status, 400);
+        assert.equal(res.body.message, 'Only System Admins can change Iconset visibility');
+    } catch (err) {
+        assert.ifError(err);
+    }
+});
+
+test('PATCH: /api/iconset/:iconset - public: false keeps existing owner', async () => {
+    try {
+        const res = await flight.fetch('/api/iconset/user-iconset', {
+            method: 'PATCH',
+            auth: {
+                bearer: flight.token.admin,
+            },
+            body: {
+                public: false,
+                default_group: 'grp',
+            },
+        }, true);
+
+        assert.equal(res.body.username, 'user@example.com');
+        assert.equal(res.body.default_group, 'grp');
+    } catch (err) {
+        assert.ifError(err);
+    }
+});
+
+test('PATCH: /api/iconset/:iconset - public: true', async () => {
+    try {
+        const res = await flight.fetch('/api/iconset/user-iconset', {
+            method: 'PATCH',
+            auth: {
+                bearer: flight.token.admin,
+            },
+            body: {
+                public: true,
+            },
+        }, true);
+
+        assert.equal(res.body.username, null);
+
+        const get = await flight.fetch('/api/iconset/user-iconset', {
+            method: 'GET',
+            auth: {
+                bearer: flight.token.admin,
+            },
+        }, true);
+
+        assert.equal(get.body.username, null);
+    } catch (err) {
+        assert.ifError(err);
+    }
+});
+
+test('PATCH: /api/iconset/:iconset - public: false', async () => {
+    try {
+        const res = await flight.fetch('/api/iconset/user-iconset', {
+            method: 'PATCH',
+            auth: {
+                bearer: flight.token.admin,
+            },
+            body: {
+                public: false,
+            },
+        }, true);
+
+        assert.equal(res.body.username, 'admin@example.com');
     } catch (err) {
         assert.ifError(err);
     }

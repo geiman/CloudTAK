@@ -1,14 +1,13 @@
 <template>
     <MenuTemplate
         :name='subscription ? subscription.meta.name : "Data Sync"'
-        :error='error'
         :loading='(!subscription && !error) || loading'
         :scroll='false'
     >
         <template #buttons>
             <TablerDelete
-                v-if='!loading && subscription && subscription.role.permissions.includes("MISSION_WRITE")'
-                v-tooltip='"Delete"'
+                v-if='!loading && subscription && subscription.subscribed && subscription.role.permissions.includes("MISSION_DELETE")'
+                title='Delete'
                 :label='"Delete " + (subscription.meta.name || "Data Sync")'
                 displaytype='icon'
                 match='Delete Data Sync'
@@ -73,7 +72,7 @@
             </TablerDropdown>
             <TablerRefreshButton
                 :loading='(!subscription && !error) || loading'
-                @click='fetchMission'
+                @click='fetchMission(true)'
             />
         </template>
         <template #default>
@@ -94,12 +93,13 @@
                     @update:model-value='navigateMissionTab'
                 >
                     <template #option='{ option }'>
-                        <component
-                            :is='missionTabIcons[option.value]'
-                            v-tooltip='option.label'
-                            :size='32'
-                            stroke='1'
-                        />
+                        <span :title='option.label'>
+                            <component
+                                :is='missionTabIcons[option.value]'
+                                :size='32'
+                                stroke='1'
+                            />
+                        </span>
                     </template>
                 </TablerPillGroup>
 
@@ -107,7 +107,7 @@
                     <router-view
                         v-if='subscription'
                         :subscription='subscription'
-                        @refresh='fetchMission(true)'
+                        @subscribed='subscribedChanged'
                     />
 
                     <template #fallback>
@@ -127,8 +127,7 @@
 </template>
 
 <script setup lang='ts'>
-import { ref, onMounted } from 'vue';
-import { Preferences } from '@capacitor/preferences';
+import { ref, triggerRef, onMounted, onBeforeUnmount, watch } from 'vue';
 import { std } from '../../../std.ts';
 import type { Feature } from '../../../types.ts';
 import type { Component } from 'vue';
@@ -205,9 +204,37 @@ const shareToPackage = ref<{
 const loadingInline = ref<string | undefined>(undefined);
 const subscription = ref<Subscription | undefined>(undefined)
 
+// Bumped per load and on unmount so a late response is closed, not adopted
+let fetchSeq = 0;
+
 onMounted(async () => {
     await fetchMission();
 })
+
+onBeforeUnmount(() => {
+    fetchSeq++;
+    setSubscription(undefined);
+});
+
+// The route is reused when moving between missions
+watch(() => route.params.mission, async (guid, previous) => {
+    if (!guid || guid === previous) return;
+
+    setSubscription(undefined);
+    token.value = route.query.token ? String(route.query.token) : undefined;
+
+    await fetchMission();
+});
+
+function setSubscription(next: Subscription | undefined): void {
+    const previous = subscription.value;
+    subscription.value = next;
+    if (previous && previous !== next) previous.close();
+}
+
+function subscribedChanged(): void {
+    triggerRef(subscription);
+}
 
 async function shareToPackageSetup(): Promise<void> {
     if (!subscription.value) return;
@@ -216,49 +243,73 @@ async function shareToPackageSetup(): Promise<void> {
 }
 
 async function deleteMission() {
-    loading.value = true;
-
     if (!subscription.value) return;
 
-    if (mapStore.mission && mapStore.mission.guid === subscription.value.guid) {
-        await mapStore.makeActiveMission(undefined);
+    loading.value = true;
+    error.value = undefined;
+
+    try {
+        if (mapStore.mission && mapStore.mission.guid === subscription.value.guid) {
+            await mapStore.makeActiveMission(undefined);
+        }
+
+        await subscription.value.delete();
+
+        const overlay = OverlayManager.loadedByMode('mission', String(route.params.mission));
+        if (overlay) {
+            await OverlayManager.deleteLoaded(overlay);
+        }
+
+        router.replace('/menu/missions');
+    } catch (err) {
+        error.value = err instanceof Error ? err : new Error(String(err));
+    } finally {
+        loading.value = false;
     }
-
-    await subscription.value.delete();
-
-    const overlay = OverlayManager.loadedByMode('mission', String(route.params.mission));
-    if (overlay) {
-        await OverlayManager.deleteLoaded(overlay);
-    }
-
-    router.replace('/menu/missions');
 }
 
 async function exportToPackage(format: string): Promise<void> {
     if (!subscription.value) return;
 
     loadingInline.value = 'Generating Archive'
-    await std(`/api/marti/missions/${encodeURIComponent(subscription.value.guid)}/archive?download=true&format=${format}`, {
-        download: true
-    })
-    loadingInline.value = undefined;
+
+    try {
+        await std(`/api/marti/missions/${encodeURIComponent(subscription.value.guid)}/archive?download=true&format=${format}`, {
+            download: true
+        })
+    } catch (err) {
+        error.value = err instanceof Error ? err : new Error(String(err));
+    } finally {
+        loadingInline.value = undefined;
+    }
 }
 
 async function fetchMission(reload = false): Promise<void> {
+    const seq = ++fetchSeq;
+    const guid = String(route.params.mission);
+
     loading.value = true;
+    error.value = undefined;
 
     try {
-        const { value: storedToken } = await Preferences.get({ key: 'token' });
-        subscription.value = await Subscription.load(String(route.params.mission), {
+        const sub = await Subscription.load(guid, {
             reload,
-            token: String(storedToken || ''),
             missiontoken: token.value,
+            live: true,
         });
 
-        loading.value = false;
+        if (seq !== fetchSeq) {
+            sub.close();
+            return;
+        }
+
+        setSubscription(sub);
     } catch (err) {
+        if (seq !== fetchSeq) return;
+
         error.value = err instanceof Error ? err : new Error(String(err));
-        loading.value = false;
+    } finally {
+        if (seq === fetchSeq) loading.value = false;
     }
 }
 </script>

@@ -7,6 +7,7 @@ import { type InferSelectModel } from 'drizzle-orm';
 import Models from './models.js';
 import process from 'node:process';
 import * as pgtypes from './schema.js';
+import ETLEvents from './etl-events.js';
 import { FullConfig } from './types.js';
 
 const ConfigEnvKeyMap = new Map(
@@ -21,8 +22,9 @@ export interface ConfigArgs {
     silent: boolean;
     postgres: string;
     noevents: boolean;
-    nosinks: boolean;
+    noetlevents: boolean;
     nogeofence?: boolean;
+    noconnections?: boolean;
     nocache: boolean;
     mode?: ServerMode;
     hubUrl?: string;
@@ -31,13 +33,15 @@ export interface ConfigArgs {
 export interface ConfigInit {
     silent: boolean;
     noevents: boolean;
-    nosinks: boolean;
+    noetlevents: boolean;
     nogeofence: boolean;
+    noconnections: boolean;
     nocache: boolean;
     models: Models;
     StackName: string;
     API_URL: string;
     PMTILES_URL: string;
+    WEBHOOKS_URL: string;
     SigningSecret: string;
     pg: Pool<typeof pgtypes>;
     server: InferSelectModel<typeof Server>;
@@ -64,35 +68,41 @@ let envInitOnce = false;
 export default class Config {
     silent: boolean;
     noevents: boolean;
-    nosinks: boolean;
+    noetlevents: boolean;
     nogeofence: boolean;
+    noconnections: boolean;
     nocache: boolean;
     models: Models;
     StackName: string;
     SigningSecret: string;
     API_URL: string;
     PMTILES_URL: string;
+    WEBHOOKS_URL: string;
     Bucket?: string;
     pg: Pool<typeof pgtypes>;
     server: InferSelectModel<typeof Server>;
     mode: ServerMode;
     arnPrefix?: string;
+    etlEvents: ETLEvents;
 
     constructor(init: ConfigInit) {
         this.silent = init.silent;
         this.noevents = init.noevents;
-        this.nosinks = init.nosinks;
+        this.noetlevents = init.noetlevents;
         this.nogeofence = init.nogeofence;
+        this.noconnections = init.noconnections;
         this.nocache = init.nocache;
         this.models = init.models;
         this.StackName = init.StackName;
         this.SigningSecret = init.SigningSecret;
         this.API_URL = init.API_URL;
         this.PMTILES_URL = init.PMTILES_URL;
+        this.WEBHOOKS_URL = init.WEBHOOKS_URL;
         this.pg = init.pg;
         this.Bucket = init.Bucket;
         this.server = init.server;
         this.mode = init.mode;
+        this.etlEvents = new ETLEvents(this);
     }
 
     serverCert(): {
@@ -135,7 +145,7 @@ export default class Config {
             throw new Error('CLOUDTAK_Hub_URL must be set when CLOUDTAK_Server_Mode is api');
         }
 
-        let SigningSecret, API_URL, PMTILES_URL, Bucket;
+        let SigningSecret, API_URL, PMTILES_URL, WEBHOOKS_URL, Bucket;
         if (!process.env.StackName || process.env.StackName === 'test') {
             process.env.StackName = 'test';
 
@@ -143,6 +153,7 @@ export default class Config {
             Bucket = process.env.ASSET_BUCKET;
             API_URL = process.env.API_URL || 'http://localhost:5001';
             PMTILES_URL = process.env.PMTILES_URL || 'http://localhost:5001';
+            WEBHOOKS_URL = process.env.WEBHOOKS_URL || 'http://localhost:5001';
         } else {
             if (!process.env.StackName) throw new Error('StackName env must be set');
             if (!process.env.API_URL) throw new Error('API_URL env must be set');
@@ -153,9 +164,14 @@ export default class Config {
             const apiUrl = new URL(process.env.API_URL);
             if (apiUrl.hostname === 'localhost') {
                 PMTILES_URL = process.env.PMTILES_URL || 'http://localhost:5001';
+                WEBHOOKS_URL = process.env.WEBHOOKS_URL || 'http://localhost:5001';
             } else {
                 const url = new URL(process.env.API_URL);
                 PMTILES_URL = process.env.PMTILES_URL || `https://tiles.${url.host}`;
+
+                // The Webhooks API Gateway is a sibling of the map subdomain
+                // (webhooks.example.com) - see cloudformation/webhooks.template.js
+                WEBHOOKS_URL = process.env.WEBHOOKS_URL || `https://webhooks.${url.host.replace(/^map\./, '')}`;
             }
 
             Bucket = process.env.ASSET_BUCKET;
@@ -212,11 +228,12 @@ export default class Config {
         return {
             silent: (args.silent || false),
             noevents: (args.noevents || false),
-            nosinks: (args.nosinks || false),
+            noetlevents: (args.noetlevents || false),
             nogeofence: (args.nogeofence || false),
+            noconnections: (args.noconnections || false),
             nocache: (args.nocache || false),
             StackName: process.env.StackName,
-            server, SigningSecret, API_URL, Bucket, pg, models, PMTILES_URL,
+            server, SigningSecret, API_URL, Bucket, pg, models, PMTILES_URL, WEBHOOKS_URL,
             mode, hubUrl,
         };
     }

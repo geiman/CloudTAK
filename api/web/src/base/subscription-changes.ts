@@ -11,17 +11,14 @@ import type {
 export default class SubscriptionChanges {
     guid: string;
 
-    token: string;
     missiontoken?: string;
 
     constructor(
         guid: string,
         opts: {
-            token: string,
             missiontoken?: string,
         }
     ) {
-        this.token = opts.token;
         this.missiontoken = opts.missiontoken;
 
         this.guid = guid;
@@ -34,8 +31,8 @@ export default class SubscriptionChanges {
     }
 
     async refresh(): Promise<void> {
-        const { data, error } = await server.GET('/api/marti/missions/{:name}/changes', {
-            params: { path: { ':name': this.guid } },
+        const { data, error } = await server.GET('/api/marti/missions/{:guid}/changes', {
+            params: { path: { ':guid': this.guid } },
             headers: this.headers()
         });
 

@@ -22,8 +22,8 @@
 
         <template v-else>
             <div
-                class='sticky-top pb-2 border-bottom'
-                style='background-color: var(--tblr-modal-bg, var(--tblr-bg-surface, var(--tblr-body-bg))); z-index: 1;'
+                class='sticky-top pb-2 border-bottom cloudtak-header'
+                style='z-index: 1;'
             >
                 <TablerInput
                     v-model='filter'
@@ -155,11 +155,12 @@ async function fetch() {
     loading.value = true;
 
     let list: Group[];
-    if (props.connection) {
-        const res = await server.GET('/api/connection/{:connectionid}/channel', {
+    if (props.connection !== undefined) {
+        const res = await server.GET('/api/marti/group', {
             params: {
-                path: {
-                    ':connectionid': Number(props.connection)
+                query: {
+                    connection: Number(props.connection),
+                    useCache: true
                 }
             }
         });

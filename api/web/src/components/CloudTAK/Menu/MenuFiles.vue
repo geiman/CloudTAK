@@ -1,109 +1,130 @@
 <template>
-    <MenuTemplate name='Uploaded Files'>
+    <MenuTemplate name='Files'>
         <template #buttons>
-            <TablerIconButton
-                v-if='!loading && !upload'
-                title='File Upload'
-                @click='upload = true'
-            >
-                <IconUpload
-                    :size='32'
-                    stroke='1'
-                />
-            </TablerIconButton>
-
-            <TablerRefreshButton
-                :loading='loading'
-                @click='fetchList'
-            />
-        </template>
-        <template #default>
-            <div
-                v-if='upload'
-                class='py-2'
-            >
-                <Upload
-                    :url='stdurl(`/api/import`)'
-                    method='PUT'
-                    size-warning
-                    @cancel='upload = false'
-                    @done='uploadComplete($event)'
-                />
-            </div>
-
-            <div class='col-12 pt-2'>
-                <TablerInput
-                    v-model='paging.filter'
-                    icon='search'
-                    placeholder='Filter'
-                />
-            </div>
-
-            <div class='col-12 pt-2 d-flex align-items-center justify-content-between'>
-                <PathBreadcrumb v-model:collection='collectionPath' />
+            <template v-if='tab === "online" && !isOffline'>
                 <TablerIconButton
-                    title='Create Folder'
-                    @click='folderModal.shown = true'
+                    v-if='!loading && !upload'
+                    title='File Upload'
+                    @click='upload = true'
                 >
-                    <IconFolderPlus
-                        :size='20'
+                    <IconUpload
+                        :size='32'
                         stroke='1'
                     />
                 </TablerIconButton>
-            </div>
 
-            <TablerLoading
-                v-if='loading'
-            />
-            <TablerAlert
-                v-else-if='error'
-                :err='error'
-            />
-            <TablerNone
-                v-else-if='!currentFolders.length && !currentFiles.length'
-                :label='currentPath === "/" ? "No Uploaded Files" : "Folder is empty"'
-                :create='false'
-            />
-            <template v-else>
-                <PathBrowser
-                    v-if='currentFolders.length'
-                    :nodes='currentFolders'
-                    @navigate='navigateToFolder'
-                    @delete='deletePath'
-                    @rename='openEditModal'
+                <TablerRefreshButton
+                    :loading='loading'
+                    @click='fetchList'
                 />
+            </template>
+        </template>
+        <template #default>
+            <TablerPillGroup
+                v-model='tab'
+                class='pt-2'
+                :options='[
+                    { value: "online", label: "Online" },
+                    { value: "offline", label: "Offline" },
+                ]'
+            />
 
-                <div class='mt-2 d-flex flex-column gap-2'>
-                    <FileRow
-                        v-for='asset in currentFiles'
-                        :key='asset.id'
-                        :asset='asset'
-                        :current-username='currentUsername'
-                        :overlay-urls='overlayUrls'
-                        :rename='rename'
-                        @create-overlay='createOverlay'
-                        @download='downloadAsset'
-                        @share-mission='shareToMission = $event'
-                        @share-package='shareToPackage = $event'
-                        @share-channel='shareToChannel = $event'
-                        @rename='rename = { id: $event.id, name: $event.name, loading: false }'
-                        @rename-change='rename && (rename.name = $event)'
-                        @rename-submit='renameAsset'
-                        @rename-cancel='rename = undefined'
-                        @delete='deleteAsset'
-                        @move='openMoveModal($event)'
+            <MenuFilesOffline
+                v-if='tab === "offline"'
+                :overlay-urls='overlayUrls'
+                :is-offline='isOffline'
+                @create-overlay='createOverlay'
+            />
+            <Offline v-else-if='isOffline' />
+            <template v-else>
+                <div
+                    v-if='upload'
+                    class='py-2'
+                >
+                    <Upload
+                        :url='stdurl(`/api/import`)'
+                        method='PUT'
+                        size-warning
+                        @cancel='upload = false'
+                        @done='uploadComplete($event)'
                     />
                 </div>
 
-                <div class='col-12 d-flex justify-content-center pt-3'>
-                    <TablerPager
-                        v-if='list.total > paging.limit'
-                        :page='paging.page'
-                        :total='list.total'
-                        :limit='paging.limit'
-                        @page='paging.page = $event'
+                <div class='col-12 pt-2'>
+                    <TablerInput
+                        v-model='paging.filter'
+                        icon='search'
+                        placeholder='Filter'
                     />
                 </div>
+
+                <div class='col-12 pt-2 d-flex align-items-center justify-content-between'>
+                    <PathBreadcrumb v-model:collection='collectionPath' />
+                    <TablerIconButton
+                        title='Create Folder'
+                        @click='folderModal.shown = true'
+                    >
+                        <IconFolderPlus
+                            :size='20'
+                            stroke='1'
+                        />
+                    </TablerIconButton>
+                </div>
+
+                <TablerLoading
+                    v-if='loading'
+                />
+                <TablerAlert
+                    v-else-if='error'
+                    :err='error'
+                />
+                <TablerNone
+                    v-else-if='!currentFolders.length && !currentFiles.length'
+                    :label='currentPath === "/" ? "No Files" : "Folder is empty"'
+                    :create='false'
+                />
+                <template v-else>
+                    <PathBrowser
+                        v-if='currentFolders.length'
+                        :nodes='currentFolders'
+                        @navigate='navigateToFolder'
+                        @delete='deletePath'
+                        @rename='openEditModal'
+                    />
+
+                    <div class='mt-2 d-flex flex-column gap-2'>
+                        <FileRow
+                            v-for='asset in currentFiles'
+                            :key='asset.id'
+                            :asset='asset'
+                            :current-username='currentUsername'
+                            :overlay-urls='overlayUrls'
+                            :offline-ids='mapStore.offlineTiles'
+                            :rename='rename'
+                            @create-overlay='createOverlay'
+                            @download='downloadAsset'
+                            @share-mission='shareToMission = $event'
+                            @share-package='shareToPackage = $event'
+                            @share-channel='shareToChannel = $event'
+                            @rename='rename = { id: $event.id, name: $event.name, loading: false }'
+                            @rename-change='rename && (rename.name = $event)'
+                            @rename-submit='renameAsset'
+                            @rename-cancel='rename = undefined'
+                            @delete='deleteAsset'
+                            @move='openMoveModal($event)'
+                        />
+                    </div>
+
+                    <div class='col-12 d-flex justify-content-center pt-3'>
+                        <TablerPager
+                            v-if='list.total > paging.limit'
+                            :page='paging.page'
+                            :total='list.total'
+                            :limit='paging.limit'
+                            @page='paging.page = $event'
+                        />
+                    </div>
+                </template>
             </template>
         </template>
     </MenuTemplate>
@@ -219,10 +240,10 @@ import { useRouter } from 'vue-router';
 import { ref, watch, onMounted, onUnmounted, computed } from 'vue';
 import { Preferences } from '@capacitor/preferences';
 import type { ProfileFile, ProfileFileList } from '../../../types.ts';
-import PathManager from '../../../base/path-manager.ts';
-import type { PathNode } from '../../../base/path-manager.ts';
+import PathManager from '../../../utils/path-manager.ts';
+import type { PathNode } from '../../../utils/path-manager.ts';
 import ProfileConfig from '../../../base/profile.ts';
-import { std, stdurl, server } from '../../../std.ts';
+import { stdurl, server } from '../../../std.ts';
 import {
     TablerIconButton,
     TablerRefreshButton,
@@ -232,7 +253,8 @@ import {
     TablerNone,
     TablerLoading,
     TablerModal,
-    TablerButton
+    TablerButton,
+    TablerPillGroup
 } from '@tak-ps/vue-tabler';
 import {
     IconUpload,
@@ -245,38 +267,58 @@ import ShareToMission from '../util/ShareToMission.vue';
 import GroupSelectModal from '../../util/GroupSelectModal.vue';
 import PathBrowser from '../util/PathBrowser.vue';
 import FileRow from './MenuFilesRow.vue';
+import MenuFilesOffline from './MenuFilesOffline.vue';
 import MenuTemplate from '../util/MenuTemplate.vue';
+import Offline from '../../util/Offline.vue';
 import OverlayManager from '../../../base/overlay.ts';
+import ProfileFileManager from '../../../base/profile-file.ts';
+import { useMapStore } from '../../../stores/map.ts';
+import { useDeviceStore } from '../../../stores/device.ts';
 import type { Subscription } from 'dexie';
 import Upload from '../../util/Upload.vue';
 
+const mapStore = useMapStore();
+const deviceStore = useDeviceStore();
+
+const tab = ref<'online' | 'offline'>('online');
+const isOffline = ref(!deviceStore.network.isOnline);
 const overlayUrls = ref<Set<string>>(new Set());
 let overlaySubscription: Subscription | undefined;
 
-type GroundOverlayManifest = {
-    overlays: Array<{
-        name: string;
-        opacity?: number;
-        coordinates: [[number, number], [number, number], [number, number], [number, number]];
-    }>;
-};
+function setOnline() { isOffline.value = false; }
+function setOffline() { isOffline.value = true; }
 
 onMounted(() => {
+    window.addEventListener('online', setOnline);
+    window.addEventListener('offline', setOffline);
+
     overlaySubscription = OverlayManager.liveList().subscribe({
         next: (items) => {
-            const identifiers = new Set<string>();
-            for (const overlay of items) {
-                if (overlay.mode !== 'profile') continue;
-                if (overlay.url) identifiers.add(String(overlay.url));
-                if (overlay.mode_id) identifiers.add(`asset:${overlay.mode_id}`);
-            }
-            overlayUrls.value = identifiers;
+            overlayUrls.value = new Set(
+                items
+                    .filter((overlay) => overlay.mode === 'profile' && overlay.url)
+                    .map((overlay) => String(overlay.url))
+            );
         }
     });
 });
 
 onUnmounted(() => {
+    window.removeEventListener('online', setOnline);
+    window.removeEventListener('offline', setOffline);
     overlaySubscription?.unsubscribe();
+});
+
+watch(isOffline, async (offline) => {
+    if (offline) {
+        if (tab.value === 'online') tab.value = 'offline';
+    } else if (tab.value === 'online') {
+        await fetchList();
+    }
+});
+
+watch(tab, async (current) => {
+    if (current === 'online' && !isOffline.value) await fetchList();
 });
 
 const router = useRouter();
@@ -356,7 +398,12 @@ type ProfileAssetTileJSON = {
 
 onMounted(async () => {
     currentUsername.value = (await ProfileConfig.get('username'))?.value || '';
-    await fetchList();
+
+    if (isOffline.value) {
+        tab.value = 'offline';
+    } else {
+        await fetchList();
+    }
 });
 
 watch(paging.value, async () => {
@@ -379,14 +426,12 @@ function buildPathTree() {
     const flatPaths = Array.from(pathCounts.entries()).map(([path, count]) => ({ path, count }));
     paths.value = PathManager.buildTree<ProfileFile>(flatPaths);
 
-    // Populate items into opened nodes
     const populateItems = (nodes: PathNode<ProfileFile>[]) => {
         for (const node of nodes) {
             const items = pathItems.get(node.fullPath);
             if (items) {
                 node.items = new Set(items);
             }
-            // For intermediate nodes that have no direct items but have the path match
             if (node.children.length) {
                 populateItems(node.children);
             }
@@ -460,7 +505,6 @@ async function renameFolder() {
         return;
     }
 
-    // Update all files in this folder and descendants
     const allNodePaths = PathManager.flatPaths([node]);
 
     for (const oldP of allNodePaths) {
@@ -545,69 +589,44 @@ async function deletePath(node: PathNode<ProfileFile>) {
 }
 
 async function createOverlay(asset: ProfileFile) {
-    const extensions = new Set(asset.artifacts.map((artifact) => artifact.ext));
-    if (!extensions.has('.pmtiles') && !extensions.has('.groundoverlays.json')) {
-        throw new Error('Cannot add an Overlay for an unsupported asset');
-    }
+    if (!asset.artifacts.map(a => a.ext).includes(".pmtiles")) throw new Error('Cannot add an Overlay for an asset that is not Cloud Optimized');
 
     loading.value = true;
 
     try {
-        if (extensions.has('.groundoverlays.json')) {
-            const manifest = await std(
-                `/api/profile/asset/${encodeURIComponent(asset.id)}/groundoverlays`
-            ) as GroundOverlayManifest;
-
-            for (const [index, overlay] of manifest.overlays.entries()) {
-                await OverlayManager.createLoaded({
-                    url: stdurl(
-                        `/api/profile/asset/${encodeURIComponent(asset.id)}/groundoverlay/${index}`
-                    ).toString(),
-                    name: overlay.name || asset.name,
-                    mode: 'profile',
-                    mode_id: asset.id,
-                    type: 'image',
-                    opacity: overlay.opacity ?? 1,
-                    coordinates: overlay.coordinates
-                });
+        const { data, error } = await server.GET('/api/profile/asset/{:asset}.pmtiles/tile', {
+            params: {
+                path: {
+                    ':asset': asset.id
+                }
             }
+        });
+
+        if (error) throw new Error(error.message);
+        const metadata = data as unknown;
+
+        if (!isProfileAssetTileJSON(metadata) || !metadata.tiles.length) {
+            throw new Error('Malformed PMTiles metadata response');
         }
 
-        if (extensions.has('.pmtiles')) {
-            const { data, error } = await server.GET('/api/profile/asset/{:asset}.pmtiles/tile', {
-                params: {
-                    path: {
-                        ':asset': asset.id
-                    }
-                }
+        if (new URL(metadata.tiles[0]).pathname.endsWith('.mvt')) {
+            await OverlayManager.createLoaded({
+                url: stdurl(`/api/profile/asset/${encodeURIComponent(asset.id)}.pmtiles/tile`).toString(),
+                name: asset.name,
+                mode: 'profile',
+                mode_id: asset.name,
+                iconset: asset.iconset,
+                type: 'vector',
             });
-
-            if (error) throw new Error(error.message);
-            const metadata = data as unknown;
-
-            if (!isProfileAssetTileJSON(metadata) || !metadata.tiles.length) {
-                throw new Error('Malformed PMTiles metadata response');
-            }
-
-            if (new URL(metadata.tiles[0]).pathname.endsWith('.mvt')) {
-                await OverlayManager.createLoaded({
-                    url: stdurl(`/api/profile/asset/${encodeURIComponent(asset.id)}.pmtiles/tile`).toString(),
-                    name: asset.name,
-                    mode: 'profile',
-                    mode_id: asset.id,
-                    iconset: asset.iconset,
-                    type: 'vector',
-                });
-            } else {
-                await OverlayManager.createLoaded({
-                    url: stdurl(`/api/profile/asset/${encodeURIComponent(asset.id)}.pmtiles/tile`).toString(),
-                    name: asset.name,
-                    mode: 'profile',
-                    mode_id: asset.id,
-                    iconset: asset.iconset,
-                    type: 'raster',
-                });
-            }
+        } else {
+            await OverlayManager.createLoaded({
+                url: stdurl(`/api/profile/asset/${encodeURIComponent(asset.id)}.pmtiles/tile`).toString(),
+                name: asset.name,
+                mode: 'profile',
+                mode_id: asset.name,
+                iconset: asset.iconset,
+                type: 'raster',
+            });
         }
 
         loading.value = false;
@@ -690,6 +709,10 @@ async function fetchList() {
         });
 
         if (res.error) throw new Error(res.error.message);
+
+        await ProfileFileManager.bulkPut(
+            res.data.items.filter((item) => mapStore.offlineTiles.has(item.id))
+        );
 
         list.value = res.data;
         buildPathTree();

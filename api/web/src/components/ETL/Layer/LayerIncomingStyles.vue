@@ -1,8 +1,8 @@
 <template>
     <div>
-        <div class='card-header sticky-top cloudtak-bg'>
+        <div class='card-header sticky-top cloudtak-header'>
             <h3 class='card-title'>
-                Style Overrides
+                Legacy Style Overrides
             </h3>
             <div class='ms-auto btn-list'>
                 <TablerIconButton
@@ -24,10 +24,10 @@
 
                         <button
                             class='btn btn-primary btn-icon px-2'
+                            title='Save Style'
                             @click='saveLayer'
                         >
                             <IconDeviceFloppy
-                                v-tooltip='"Save Style"'
                                 :size='32'
                                 stroke='1'
                             />
@@ -38,7 +38,7 @@
         </div>
 
         <TablerInlineAlert
-            v-if='!props.capabilities || !props.capabilities.incoming?.schema?.output'
+            v-if='!outputSchema'
             severity='danger'
             class='px-2 my-2'
             title='Data Schema Error'
@@ -65,9 +65,9 @@
         />
         <template v-else>
             <div class='card-body'>
-                <StyleSingle
+                <CoreFeature
                     v-model='style'
-                    :schema='(capabilities.incoming?.schema?.output ?? { properties: {} }) as Record<string, unknown>'
+                    :schema='outputSchema ?? { properties: {} }'
                     :disabled='disabled'
                     :disable-marti='!!props.layer.incoming?.data'
                     :connection='Number(route.params.connectionid)'
@@ -81,10 +81,10 @@
                 <div class='ms-auto btn-list'>
                     <button
                         class='btn'
+                        title='JSONata Help'
                         @click='help("query")'
                     >
                         <IconHelp
-                            v-tooltip='"JSONata Help"'
                             :size='32'
                             stroke='1'
                         />
@@ -92,10 +92,10 @@
                     <button
                         v-if='query !== null'
                         class='btn'
+                        title='Return to list'
                         @click='query = null'
                     >
                         <IconX
-                            v-tooltip='"Return to list"'
                             :size='32'
                             stroke='1'
                         />
@@ -104,10 +104,10 @@
                         <button
                             v-if='query === null'
                             class='btn'
+                            title='New Query'
                             @click='newQuery'
                         >
                             <IconPlus
-                                v-tooltip='"New Query"'
                                 :size='32'
                                 stroke='1'
                             />
@@ -213,9 +213,9 @@
                         />
                     </template>
                     <template v-else>
-                        <StyleSingle
+                        <CoreFeature
                             v-model='queries[query!].styles'
-                            :schema='(capabilities.incoming?.schema?.output ?? {}) as Record<string, unknown>'
+                            :schema='outputSchema ?? {}'
                             :disabled='disabled'
                             :disable-marti='!!props.layer.incoming?.data'
                             :connection='Number(route.params.connectionid)'
@@ -228,8 +228,8 @@
 </template>
 
 <script setup lang='ts'>
-import { ref, onMounted } from 'vue';
-import { openExternalUrl } from '../../../base/capacitor.ts';
+import { ref, computed, onMounted } from 'vue';
+import { openExternalUrl } from '../../../utils/capacitor.ts';
 import { useRoute } from 'vue-router'
 import { server } from '../../../std.ts';
 import type { ETLLayer, ETLLayerTaskCapabilities } from '../../../types.ts';
@@ -250,7 +250,8 @@ import {
     TablerIconButton,
     TablerPillGroup
 } from '@tak-ps/vue-tabler';
-import StyleSingle from './utils/StyleSingle.vue';
+import CoreFeature from './Mapping/CoreFeature.vue';
+import { defaultOutputSchema } from './utils/namedSchemas.ts';
 import QueryInput from './utils/QueryInput.vue';
 
 interface StyleQuery {
@@ -269,6 +270,8 @@ const emit = defineEmits<{
 }>();
 
 const route = useRoute();
+
+const outputSchema = computed(() => defaultOutputSchema(props.capabilities));
 
 const disabled = ref(true);
 const loading = ref({

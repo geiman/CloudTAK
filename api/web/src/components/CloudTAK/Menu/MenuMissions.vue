@@ -138,22 +138,24 @@
                         :err='error'
                     />
                     <template v-else>
-                        <TablerNone
-                            v-if='!loading && !filteredList.length'
-                            :create='false'
-                            label='No data syncs match your filter'
-                        />
                         <TablerLoading v-if='loading' />
-                        <div
-                            v-if='filteredList.length && !loading'
-                            class='d-flex flex-column gap-3'
-                        >
+                        <template v-else>
                             <PendingInvites
                                 v-model:invites='invites'
                                 @open-mission='openMission($event, false)'
                                 @error='error = $event'
                             />
 
+                            <TablerNone
+                                v-if='!filteredList.length'
+                                :create='false'
+                                label='No data syncs match your filter'
+                            />
+                        </template>
+                        <div
+                            v-if='filteredList.length && !loading'
+                            class='d-flex flex-column gap-3'
+                        >
                             <StandardItem
                                 v-for='(mission, mission_it) in filteredList'
                                 :key='mission_it'
@@ -220,13 +222,16 @@
                                 </div>
 
                                 <div class='d-flex align-items-center gap-2 pe-2'>
-                                    <IconAccessPoint
+                                    <span
                                         v-if='subscribed.has(mission.guid)'
-                                        v-tooltip='"Subscribed"'
-                                        class='text-success'
-                                        :size='32'
-                                        stroke='1'
-                                    />
+                                        title='Subscribed'
+                                    >
+                                        <IconAccessPoint
+                                            class='text-success'
+                                            :size='32'
+                                            stroke='1'
+                                        />
+                                    </span>
                                 </div>
                             </StandardItem>
                         </div>
@@ -275,9 +280,11 @@
                                     </div>
                                 </div>
 
-                                <div class='d-flex align-items-center gap-2 pe-2'>
+                                <div
+                                    class='d-flex align-items-center gap-2 pe-2'
+                                    title='Subscribed'
+                                >
                                     <IconAccessPoint
-                                        v-tooltip='"Subscribed"'
                                         class='text-success'
                                         :size='32'
                                         stroke='1'
@@ -327,6 +334,7 @@ import {
     TablerModal,
     TablerLoading,
     TablerPillGroup,
+    TablerInput,
 } from '@tak-ps/vue-tabler';
 import type { Mission, MissionInvite } from '../../../types.ts';
 import { server } from '../../../std.ts';
@@ -530,10 +538,10 @@ async function openMission(mission: Mission, usePassword: boolean) {
 }
 
 async function fetchMission(mission: Mission, password?: string): Promise<Mission> {
-    const { data, error } = await server.GET('/api/marti/missions/{:name}', {
+    const { data, error } = await server.GET('/api/marti/missions/{:guid}', {
         params: {
             path: {
-                ':name': mission.guid
+                ':guid': mission.guid
             },
             query: {
                 password,
@@ -621,30 +629,5 @@ async function fetchMissions() {
     z-index: 1;
     background: var(--tabler-dropdown-bg, rgba(20, 20, 25, 0.96));
     border-bottom: 1px solid var(--tabler-dropdown-border-color, rgba(255, 255, 255, 0.1));
-}
-
-.icon-wrapper {
-    width: 3rem;
-    height: 3rem;
-    min-width: 3rem;
-    min-height: 3rem;
-    flex-shrink: 0;
-}
-
-.menu-overlays-fade-enter-active,
-.menu-overlays-fade-leave-active {
-    transition: all 0.2s ease-out;
-    max-height: 500px;
-    opacity: 1;
-    overflow: hidden;
-}
-
-.menu-overlays-fade-enter-from,
-.menu-overlays-fade-leave-to {
-    max-height: 0;
-    opacity: 0;
-    margin-top: 0 !important;
-    padding-top: 0 !important;
-    padding-bottom: 0 !important;
 }
 </style>

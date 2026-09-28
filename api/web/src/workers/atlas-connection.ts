@@ -8,12 +8,16 @@ import { version } from '../../package.json'
 import Chatroom from '../base/chatroom.ts';
 import { db, ChatStatusRank, ChatStatus } from '../database.ts';
 import TAKNotification, { NotificationType } from '../base/notification.ts';
-import { WorkerMessageType } from '../base/events.ts';
+import { OriginMode } from '../base/cot.ts';
+import { WorkerMessageType } from '../utils/events.ts';
+import type { SyncTriggerReason, SyncTriggerBody } from '../utils/events.ts';
 import type { SyncEvent } from './atlas-sync.ts';
 import type { Feature, Import, Chat } from '../types.ts';
 
 const RECONNECT_BACKOFF_STEP_MS = 5000;
 const RECONNECT_BACKOFF_MAX_MS = 30000;
+// Mobile devices flap between interfaces on resume - coalesce the burst
+const SYNC_TRIGGER_DEBOUNCE_MS = 1000;
 
 export default class AtlasConnection {
     atlas: Atlas;
@@ -21,6 +25,10 @@ export default class AtlasConnection {
     isDestroyed: boolean;
     isOpen: boolean;
     hasConnected: boolean;
+
+    // Device network status: forwarded from the main thread on native, the
+    // worker's own online/offline events on the web
+    isOnline: boolean;
 
     // Halts reconnection until the user logs in again
     authFailure: boolean;
@@ -31,6 +39,11 @@ export default class AtlasConnection {
     version: string;
 
     private reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+
+    private connection: string | undefined;
+    private syncTimer: ReturnType<typeof setTimeout> | undefined;
+    private syncReason: SyncTriggerReason | undefined;
+    private syncListeners: Set<(reason: SyncTriggerReason) => void>;
 
     constructor(atlas: Atlas) {
         this.atlas = atlas;
@@ -45,21 +58,89 @@ export default class AtlasConnection {
         this.version = version;
 
         this.reconnectTimer = undefined;
+
+        this.isOnline = typeof navigator === 'undefined' || navigator.onLine !== false;
+        this.connection = undefined;
+        this.syncTimer = undefined;
+        this.syncReason = undefined;
+        this.syncListeners = new Set();
+
+        self.addEventListener('online', () => this.setOnline(true));
+        self.addEventListener('offline', () => this.setOnline(false));
     }
 
-    reconnect(connection: string) {
-        console.log('Forcing WebSocket reconnection...');
-        this.reconnectAttempts = 0;  // Reset counter
-        if (this.ws) {
-            this.ws.close();
+    /**
+     * Apply a device network status change. Coming back online skips the
+     * remaining reconnect backoff and fires a sync trigger.
+     */
+    setOnline(online: boolean): void {
+        if (this.isOnline === online) return;
+        this.isOnline = online;
+
+        if (!online) return;
+
+        if (this.reconnectTimer !== undefined && this.connection && !this.isDestroyed && !this.authFailure) {
+            this.clearReconnectTimer();
+            this.connect(this.connection);
         }
-        this.connect(connection);
+
+        this.triggerSync('network');
+    }
+
+    /**
+     * Subscribe within the worker to sync triggers. The BroadcastChannel does
+     * not deliver a message to the context that posted it, so worker-side
+     * consumers register here instead.
+     */
+    onSync(listener: (reason: SyncTriggerReason) => void): () => void {
+        this.syncListeners.add(listener);
+        return () => {
+            this.syncListeners.delete(listener);
+        };
+    }
+
+    private triggerSync(reason: SyncTriggerReason): void {
+        // A socket open is the stronger signal and wins inside the window
+        if (this.syncReason !== 'connection') this.syncReason = reason;
+
+        if (this.syncTimer !== undefined) return;
+
+        this.syncTimer = setTimeout(() => {
+            this.syncTimer = undefined;
+
+            const fired = this.syncReason ?? reason;
+            this.syncReason = undefined;
+
+            if (this.isDestroyed) return;
+
+            this.atlas.postMessage({
+                type: WorkerMessageType.Sync_Trigger,
+                body: { reason: fired } satisfies SyncTriggerBody
+            });
+
+            for (const listener of this.syncListeners) {
+                try {
+                    listener(fired);
+                } catch (err) {
+                    console.error('Sync trigger listener failed', err);
+                }
+            }
+        }, SYNC_TRIGGER_DEBOUNCE_MS);
+    }
+
+    private clearSyncTimer(): void {
+        if (this.syncTimer !== undefined) {
+            clearTimeout(this.syncTimer);
+            this.syncTimer = undefined;
+        }
+        this.syncReason = undefined;
     }
 
     // COTs are submitted to pending and picked up by the partial update code every .5s
     connect(connection: string) {
         this.isDestroyed = false;
         this.authFailure = false;
+        this.connection = connection;
         this.clearReconnectTimer();
 
         const url = stdurl('/api');
@@ -73,8 +154,12 @@ export default class AtlasConnection {
             url.protocol = 'wss:';
         }
 
+        // Any socket still open is superseded - its close handler sees it is
+        // no longer this.ws and stays quiet
+        const previous = this.ws;
         const ws = new WebSocket(url);
         this.ws = ws;
+        if (previous) previous.close();
 
         // A socket that closes without ever opening was rejected during the
         // HTTP upgrade (401) or never reached the server
@@ -88,6 +173,7 @@ export default class AtlasConnection {
 
             this.atlas.postMessage({ type: WorkerMessageType.Connection_Open });
             this.isOpen = true;
+            this.triggerSync('connection');
 
             // Sync events broadcast while this client was disconnected are
             // lost (there is no replay), so any reconnect must trigger a full
@@ -106,7 +192,7 @@ export default class AtlasConnection {
         });
 
         ws.addEventListener('close', () => {
-            // A socket superseded by reconnect() must not touch state or
+            // A socket superseded by a newer connect() must not touch state or
             // spawn another connection - that's how reconnect loops multiply
             if (ws !== this.ws) return;
 
@@ -138,6 +224,9 @@ export default class AtlasConnection {
 
                 console.warn('Warning: Validation Error: received Error from WebSocket:', JSON.stringify(body));
                 throw new Error(err.properties.message);
+            } else if (body.type === 'logout') {
+                this.handleRevoked((body as unknown as { properties?: { message?: string } }).properties?.message || 'Session revoked');
+                return;
             } else if (body.type === 'import') {
                 const imp = (body as unknown as {
                     properties: Import
@@ -221,8 +310,32 @@ export default class AtlasConnection {
                     // Mission Change Tasking
                     await this.atlas.db.subChange(task);
                 } else if (task.properties.type === 't-x-d-d') {
-                    // CoT Delete Tasking
-                    console.error('DELETE', task.properties);
+                    const forcedelete = task.properties.forcedelete === true;
+
+                    for (const link of task.properties.links || []) {
+                        if (!link.uid) continue;
+
+                        const cot = await this.atlas.db.get(link.uid);
+
+                        if (!cot) continue;
+
+                        // Don't allow remote access to a Data Sync Mission (Priv. Escalation)
+                        if (cot.origin.mode === OriginMode.MISSION) {
+                            console.warn(`Ignoring t-x-d-d for ${link.uid} as it originates from a Mission`);
+                            continue;
+                        }
+
+                        if (forcedelete) {
+                            await this.atlas.db.remove(link.uid);
+                        } else {
+                            await cot.update({
+                                properties: {
+                                    ...cot.properties,
+                                    stale: new Date().toISOString()
+                                }
+                            });
+                        }
+                    }
                 } else if (task.properties.type === 't-x-m-n' && task.properties.mission) {
                     await TAKNotification.create(
                         NotificationType.Mission,
@@ -416,6 +529,23 @@ export default class AtlasConnection {
         });
     }
 
+    /**
+     * The server terminated this login session - the main thread must log out
+     */
+    private handleRevoked(message: string): void {
+        if (this.authFailure) return;
+        this.authFailure = true;
+
+        console.warn(`WebSocket session revoked: ${message}`);
+
+        this.clearReconnectTimer();
+
+        this.atlas.postMessage({
+            type: WorkerMessageType.Connection_Revoked,
+            body: { message }
+        });
+    }
+
     private clearReconnectTimer(): void {
         if (this.reconnectTimer !== undefined) {
             clearTimeout(this.reconnectTimer);
@@ -427,6 +557,7 @@ export default class AtlasConnection {
         this.isDestroyed = true;
 
         this.clearReconnectTimer();
+        this.clearSyncTimer();
 
         if (this.ws) {
             this.ws.close();

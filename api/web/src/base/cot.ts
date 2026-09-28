@@ -1,11 +1,12 @@
 import { v4 as randomUUID } from 'uuid';
+import Type2525 from '@tak-ps/node-cot/2525';
 import { std } from '../std.ts';
-import { db, withDbRetry } from '../database.ts';
-import { liveQuery } from 'dexie';
+import { db, withDbRetry, isDatabaseSuspended, deferFeaturePersist, liveQuery } from '../database.ts';
 import { bbox } from '@turf/bbox'
 import { length } from '@turf/length'
 import { isEqual } from '@ver0/deep-equal';
-import { WorkerMessageType } from'./events.ts'
+import { WorkerMessageType } from '../utils/events.ts'
+import { TEAM_COLORS, strokeColorFor } from '../utils/team-colors.ts';
 import pointOnFeature from '@turf/point-on-feature';
 import { applyEllipseMutation } from './cot/ellipse.ts';
 import type { COTMutation, COTUpdate } from './cot/types.ts';
@@ -41,12 +42,97 @@ export const RENDERED_PROPERTIES = [
     'stroke-style',
     'stroke-width',
     'marker-color',
+    'marker-stroke-color',
     'marker-radius',
     'marker-opacity',
     'circle-color',
     'circle-radius',
     'circle-opacity'
 ]
+
+/**
+ * MIL-STD symbols render from an icon id of the form `2525<Variant>:<SIDC>` - a
+ * key into the Icon Manager's generated symbols
+ *
+ * It is a CloudTAK rendering detail, not TAK data: no client can resolve one as
+ * an Iconset path, and an unresolvable `usericon` detail takes precedence over
+ * (and so suppresses) the 2525 symbol the receiving client would otherwise
+ * render from the SIDC. It is therefore never stored on a Feature - see
+ * {@link renderedIcon}
+ */
+export const MILSYM_ICON = /^2525[bcde]:/i;
+
+/** CoT Types with no icon in the built-in spritesheet - these render as a plain marker */
+const TYPES_WITHOUT_ICON = ['u-d-p', 'b-m-p-s-m'];
+
+/**
+ * The SIDC a Feature's MIL-STD symbol should be generated from, if it has one
+ *
+ * `milicon` is authoritative - `type` only carries the SIDC on paths that ran
+ * node-cot's `normalize2525` (mission sync & CoT query deliver `a-f-G` instead)
+ */
+// Features from vector overlays (KML, imported files) carry arbitrary
+// properties - `type` may be absent entirely and nested objects like `milicon`
+// arrive flattened to JSON strings, so validate shapes before conversion
+function milsymSIDC(properties: Feature["properties"]): string | undefined {
+    if (
+        properties.milicon
+        && typeof properties.milicon === 'object'
+        && typeof properties.milicon.id === 'string'
+        && Type2525.isNumericSIDCConvertable(properties.milicon.id)
+    ) {
+        return properties.milicon.id;
+    } else if (
+        typeof properties.type === 'string'
+        && Type2525.isNumericSIDCConvertable(properties.type)
+    ) {
+        return properties.type;
+    } else {
+        return undefined;
+    }
+}
+
+/**
+ * The icon id a Feature renders with, on the map and in list views alike
+ *
+ * `properties.icon` holds only an icon the user picked or a TAK client sent, so
+ * it wins. Everything else is derived here rather than stored: a MIL-STD symbol
+ * is a pure function of the Feature's SIDC, and persisting the derived key both
+ * staled it against later type edits and leaked it onto the wire as a junk
+ * `usericon` iconsetpath
+ */
+export function renderedIcon(properties: Feature["properties"]): string | undefined {
+    if (properties.icon) return properties.icon;
+
+    // A Contact renders as its team coloured skittle. The skittle and icon map
+    // layers filter on `group` and `icon` independently and neither excludes the
+    // other, so deriving an icon here would draw a symbol on top of the skittle
+    if (properties.group) return undefined;
+
+    const sidc = milsymSIDC(properties);
+    if (sidc) return `2525E:${sidc}`;
+
+    // Everything else keys the built-in spritesheet off the CoT Type
+    if (properties.type && !TYPES_WITHOUT_ICON.includes(properties.type)) {
+        return properties.type;
+    }
+
+    return undefined;
+}
+
+/**
+ * The style image id the map's icon layer requests for a Feature. Must agree
+ * with the `icon-image` expression in utils/styles.ts (cot-icon.spec.ts asserts it).
+ */
+export function renderedIconImage(properties: Feature["properties"]): string | undefined {
+    const icon = renderedIcon(properties);
+    if (!icon) return undefined;
+
+    const color = properties['marker-color'];
+    if (typeof color !== 'string' || icon.startsWith('2525')) return icon;
+
+    return `${icon}-colored-${color.slice(1)}`;
+}
 
 const COT_MUTATIONS: COTMutation[] = [
     applyEllipseMutation
@@ -115,6 +201,8 @@ export default class COT {
         this._properties = feat["properties"] || {};
         this._geometry = feat["geometry"];
 
+        if (this.is_skittle) this._properties.archived = false;
+
         this._remote = !!(opts && opts.remote === true)
         this._liveQuerySubscription = null;
 
@@ -175,6 +263,8 @@ export default class COT {
         update: COTUpdate,
         opts?: {
             skipSave?: boolean;
+            /** Called once the in-memory COT is current, before it is persisted */
+            onApplied?: (visuallyChanged: boolean) => void;
         }
     ): Promise<boolean> {
         update = applyCOTMutations(this.as_feature(), update);
@@ -219,6 +309,8 @@ export default class COT {
                 if (isEqual(this.properties, update.properties)) {
                     delete update.properties
                 } else {
+                    const renderedBefore = renderedIcon(this._properties);
+
                     for (const prop of RENDERED_PROPERTIES) {
                         if (this._properties[prop] !== update.properties[prop]) {
                             visuallyChanged = true;
@@ -226,7 +318,26 @@ export default class COT {
                         }
                     }
 
+                    // Object.assign cannot remove a key - a type change must drop
+                    // the type-derived milicon & icon or they outrank the new type
+                    // in renderedIcon and the old symbol stays on the map
+                    if (update.properties.type && update.properties.type !== this._properties.type) {
+                        delete this._properties.milicon;
+
+                        if (this._properties.icon && !this._properties.icon.includes(':')) {
+                            delete this._properties.icon;
+                        }
+                    }
+
                     Object.assign(this._properties, update.properties);
+
+                    if (this.is_skittle) this._properties.archived = false;
+
+                    // The rendered icon derives from type/milicon which are not
+                    // RENDERED_PROPERTIES themselves
+                    if (renderedIcon(this._properties) !== renderedBefore) {
+                        visuallyChanged = true;
+                    }
                 }
             }
 
@@ -245,13 +356,20 @@ export default class COT {
                 }
             }
 
+            if (opts && opts.onApplied) opts.onApplied(visuallyChanged);
+
             if (this.origin.mode === OriginMode.CONNECTION) {
-                await withDbRetry(() => db.feature.put({
-                    id: this.id,
-                    path: this._path,
-                    properties: this._properties,
-                    geometry: this._geometry
-                }));
+                // Backgrounded on native: keep the in-memory update, persist on resume
+                if (isDatabaseSuspended()) {
+                    deferFeaturePersist(this.id);
+                } else {
+                    await withDbRetry(() => db.feature.put({
+                        id: this.id,
+                        path: this._path,
+                        properties: this._properties,
+                        geometry: this._geometry
+                    }));
+                }
             }
 
             // skipSave: true is passed when applying server state locally
@@ -273,6 +391,7 @@ export default class COT {
         if (
             !this._remote
             && !this.is_self
+            && !this.is_skittle
             && this.properties.archived
             && this.origin.mode === OriginMode.CONNECTION
         ) {
@@ -304,11 +423,25 @@ export default class COT {
     }
 
     /**
+     * A machine generated feature this client didn't author (eg a Core Event
+     * CoT, reposted every cycle so local edits are silently overwritten).
+     * Excludes locally created features (creator entry) and Routes
+     */
+    get is_machine_generated(): boolean {
+        return this._properties.how === 'm-g'
+            && !this._properties.creator
+            && !this.is_route;
+    }
+
+    /**
      * Determines if the COT type allows editing
      * But does not determine if a COT is part of a Misison Sync, if the mission allows editing
      */
     get is_editable(): boolean {
-        return this.properties.archived || this.is_self || false;
+        if (this.is_self) return true;
+        if (this.is_machine_generated) return false;
+
+        return this.properties.archived || false;
     }
 
     /**
@@ -434,6 +567,11 @@ export default class COT {
                 feat.properties[prop] = input.properties[prop];
             }
         }
+
+        // The style has no access to the SIDC - it keys `icon-image` off `icon`
+        // alone, so a MIL-STD symbol's generated key is supplied here
+        const icon = renderedIcon(input.properties);
+        if (icon !== undefined) feat.properties.icon = icon;
 
         return feat;
     }
@@ -566,6 +704,9 @@ export default class COT {
                 && (
                     properties.icon.startsWith('COT_MAPPING_2525C')
                     || properties.icon.startsWith('COT_MAPPING_2525B')
+                    // Features stored before the MIL-STD render key stopped being
+                    // persisted still carry one - drop it so it re-derives
+                    || MILSYM_ICON.test(properties.icon)
                 )
             ) {
                 delete properties.icon;
@@ -574,35 +715,9 @@ export default class COT {
             if (properties.group) {
                 properties['icon-opacity'] = 0;
 
-                if (properties.group.name === 'Yellow') {
-                    properties["marker-color"] = '#f59f00';
-                } else if (properties.group.name === 'Orange') {
-                    properties["marker-color"] = '#f76707';
-                } else if (properties.group.name === 'Magenta') {
-                    properties["marker-color"] = '#ea4c89';
-                } else if (properties.group.name === 'Red') {
-                    properties["marker-color"] = '#d63939';
-                } else if (properties.group.name === 'Maroon') {
-                    properties["marker-color"] = '#bd081c';
-                } else if (properties.group.name === 'Purple') {
-                    properties["marker-color"] = '#ae3ec9';
-                } else if (properties.group.name === 'Dark Blue') {
-                    properties["marker-color"] = '#0054a6';
-                } else if (properties.group.name === 'Blue') {
-                    properties["marker-color"] = '#4299e1';
-                } else if (properties.group.name === 'Cyan') {
-                    properties["marker-color"] = '#17a2b8';
-                } else if (properties.group.name === 'Teal') {
-                    properties["marker-color"] = '#0ca678';
-                } else if (properties.group.name === 'Green') {
-                    properties["marker-color"] = '#74b816';
-                } else if (properties.group.name === 'Dark Green') {
-                    properties["marker-color"] = '#2fb344';
-                } else if (properties.group.name === 'Brown') {
-                    properties["marker-color"] = '#dc4e41';
-                } else {
-                    properties["marker-color"] = '#ffffff';
-                }
+                const markerColor = TEAM_COLORS[properties.group.name] ?? '#FFFFFF';
+                properties['marker-color'] = markerColor;
+                properties['marker-stroke-color'] = strokeColorFor(markerColor);
             } else if (properties.icon) {
                 // Format of icon needs to change for spritesheet
                 if (!properties.icon.includes(':')) {
@@ -612,11 +727,12 @@ export default class COT {
                 if (properties.icon.endsWith('.png')) {
                     properties.icon = properties.icon.replace(/.png$/, '');
                 }
-            } else if (properties.milsym && !isNaN(Number(properties.milsym.id))) {
-                properties.icon = `2525D:${properties.milsym.id}`;
-            } else {
+            } else if (!milsymSIDC(properties)) {
+                // A MIL-STD symbol needs no icon - renderedIcon derives its key
+                // from the milicon/type at render time
+
                 // TODO Only add icon if one actually exists in the spritejson
-                if (!['u-d-p', 'b-m-p-s-m'].includes(properties.type)) {
+                if (!TYPES_WITHOUT_ICON.includes(properties.type)) {
                     properties.icon = `${properties.type}`;
                 }
             }

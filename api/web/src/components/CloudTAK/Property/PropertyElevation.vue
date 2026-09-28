@@ -20,24 +20,24 @@
                 role='menu'
             >
                 <span
-                    v-tooltip='"Feet"'
                     class='my-1 px-2 user-select-none'
                     :class='{
                         "cloudtak-accent rounded-bottom text-blue": mode === "feet",
                         "cursor-pointer": mode !== "feet",
                     }'
+                    title='Feet'
                     role='menuitem'
                     tabindex='0'
                     @keyup.enter='mode = "feet"'
                     @click='mode = "feet"'
                 >Feet</span>
                 <span
-                    v-tooltip='"Meters"'
                     class='my-1 px-2 user-select-none'
                     :class='{
                         "cloudtak-accent rounded-bottom text-blue": mode === "meter",
                         "cursor-pointer": mode !== "meter",
                     }'
+                    title='Meters'
                     role='menuitem'
                     tabindex='0'
                     @keyup.enter='mode = "meter"'
@@ -83,8 +83,12 @@ watch(mode, async (val) => {
     await config.commit(val as 'feet' | 'meter');
 });
 
+const UNKNOWN_ALTITUDE = 9999999;
+
 const inMode = computed(() => {
-    if (mode.value === 'feet') {
+    if (!Number.isFinite(props.elevation) || props.elevation === UNKNOWN_ALTITUDE) {
+        return '--';
+    } else if (mode.value === 'feet') {
         return Math.round(props.elevation * 3.28084 * 100) / 100;
     } else if (mode.value === 'meter') {
         return Math.round(props.elevation * 100) / 100;

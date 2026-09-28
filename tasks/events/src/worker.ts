@@ -16,6 +16,8 @@ import { CoTParser, DataPackage, Iconset, Basemap } from '@tak-ps/node-cot';
 import { createImportResult } from './api.ts';
 import { fetch } from '@tak-ps/node-safeurl';
 
+const SHAPEFILE_SIDECAR_EXTENSIONS = new Set(['.dbf', '.prj', '.qix', '.sbn', '.sbx', '.shx']);
+
 export default class Worker extends EventEmitter {
     msg: Message;
 
@@ -100,10 +102,6 @@ export default class Worker extends EventEmitter {
             return await this.processFile(local);
         }
 
-        // We disable cleanup in the parser just in case we choose to
-        // treat it as a single file upload above
-        fs.unlinkSync(local.raw);
-
         const s3 = s3client();
 
         const cots = await pkg.cots();
@@ -158,18 +156,64 @@ export default class Worker extends EventEmitter {
             }
         }
 
-        const files = await pkg.files();
+        const files = Array.from(await pkg.files());
         const indexes = [];
+        const isRootGeodatabase = files.some(file => file === 'gdb')
+            && files.some(file => !file.includes('/') && path.extname(file).toLowerCase() === '.gdbtable');
+        const geodatabaseRoots = new Set<string>();
+        for (const file of files) {
+            const parts = file.split('/');
+            const rootIndex = parts.findIndex(part => path.extname(part).toLowerCase() === '.gdb');
+            if (rootIndex !== -1) geodatabaseRoots.add(parts.slice(0, rootIndex + 1).join('/'));
+        }
+
+        if (isRootGeodatabase) {
+            const geodatabaseName = `${path.parse(local.name).name}.gdb`;
+            const geodatabasePath = path.resolve(pkg.path, geodatabaseName);
+            fs.symlinkSync(path.resolve(pkg.path, './raw/'), geodatabasePath, 'dir');
+
+            await this.processFile(local, {
+                id: randomUUID(),
+                tmpdir: pkg.path,
+                ext: '.gdb',
+                name: geodatabaseName,
+                raw: geodatabasePath,
+            });
+        }
+
+        for (const root of geodatabaseRoots) {
+            await this.processFile(local, {
+                id: randomUUID(),
+                tmpdir: pkg.path,
+                ext: '.gdb',
+                name: path.basename(root),
+                raw: path.resolve(pkg.path, './raw/', root),
+            });
+        }
+
+        const shapefileBases = new Set(
+            files
+                .filter(file => path.parse(file).ext.toLowerCase() === '.shp')
+                .map((file) => {
+                    const parsed = path.parse(file);
+                    return parsed.dir ? path.join(parsed.dir, parsed.name) : parsed.name;
+                }),
+        );
 
         for (const file of files) {
-            const { ext, base } = path.parse(file);
+            if (isRootGeodatabase) continue;
+            if (Array.from(geodatabaseRoots).some(root => file === root || file.startsWith(`${root}/`))) continue;
+
+            const { dir, ext, base, name } = path.parse(file);
             const extLower = ext.toLowerCase();
+            const fileBase = dir ? path.join(dir, name) : name;
 
             if (base !== 'MANIFEST.xml' && extLower === '.xml') {
                 indexes.push(file);
             } else {
                 if (base === 'MANIFEST.xml') continue;
                 if (['.png', '.xml'].includes(extLower)) continue;
+                if (SHAPEFILE_SIDECAR_EXTENSIONS.has(extLower) && shapefileBases.has(fileBase)) continue;
 
                 const raw = path.resolve(pkg.path, './raw/', file);
 
@@ -193,6 +237,9 @@ export default class Worker extends EventEmitter {
             }
         }
 
+        // We disable parser cleanup until now so a .gdb conversion can retain
+        // the original archive as its source profile asset.
+        fs.unlinkSync(local.raw);
         await pkg.destroy();
     }
 
@@ -203,6 +250,7 @@ export default class Worker extends EventEmitter {
      */
     async processFile(
         local: LocalMessage,
+        transformLocal: LocalMessage = local,
     ): Promise<void> {
         if (local.ext.toLowerCase() === '.xml') {
             try {
@@ -261,7 +309,7 @@ export default class Worker extends EventEmitter {
 
         const transformer = new DataTransform(
             this.msg,
-            local,
+            transformLocal,
             asset,
         );
 

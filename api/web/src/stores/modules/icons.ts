@@ -8,26 +8,25 @@
  * actually requests them.
  *
  * Supported id shapes:
- *  - `2525D:<sidc>`          - milsymbol-generated military symbols
+ *  - `2525C:<sidc>` / `2525D:<sidc>` / `2525E:<sidc>`
+ *                            - milsymbol-generated military symbols
  *  - `<base>-colored-<hex>`  - runtime-recolored variant of another image
  *  - `<iconsetUid>:<path>`   - iconset icons served from Dexie with a network
  *                              fallback for icons that haven't synced locally
  *
  * Bulk hydration of the Dexie icon cache is owned by the Atlas worker (see
- * workers/atlas-sync.ts). Hydration exists to prime the offline cache, not
- * to invalidate the map: only iconsets whose content actually changed
- * (version bump, removal, explicit mutation) purge their MapLibre images;
- * iconsets cached for the first time merely retry fallback placeholders,
- * since successfully resolved icons are identical to the cached rows.
+ * workers/atlas-sync.ts) and primes the offline cache; only iconsets whose
+ * content changed purge their MapLibre images, while first-time cached
+ * iconsets merely retry fallback placeholders.
  */
 import { Preferences } from '@capacitor/preferences';
-import ms from 'milsymbol'
 import * as mapgl from 'maplibre-gl'
 import Icon from '../../base/icon.ts'
 import IconsetManager from '../../base/iconset.ts';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import { stdurl } from '../../std.ts';
 import { db, type DBSprite } from '../../database.ts';
+import { isMilsymIcon, symbolCanvas } from '../../utils/milsymbol.ts';
 
 /** Target render width (px) used when rasterizing SVG iconset icons; height preserves the source aspect ratio. */
 const SVG_RENDER_WIDTH = 32;
@@ -106,16 +105,10 @@ export default class IconManager {
         spriteProtocolRegistered = true;
 
         mapgl.addProtocol(SPRITE_PROTOCOL, async (params) => {
-            // MapLibre normalizes the declared sprite URL through `new URL()`
-            // before appending the `.json`/`.png` (and `@2x`) suffixes, so the
-            // handler sees URLs in two shapes:
-            //   cloudtak-sprite://<id>.json          (no path separator)
-            //   cloudtak-sprite://<id>/.json         (URL-normalized form)
-            //   cloudtak-sprite://<id>@2x.png        (HiDPI, no separator)
-            //   cloudtak-sprite://<id>/@2x.png       (HiDPI, normalized)
-            // `@` must be excluded from the id class so the optional
-            // pixel-ratio suffix is matched by its dedicated group instead of
-            // being swallowed into the id.
+            // MapLibre appends `.json`/`.png` (and `@2x`) suffixes after
+            // normalizing via `new URL()`, so ids may appear with or without a
+            // trailing slash. `@` is excluded from the id class so the optional
+            // pixel-ratio suffix matches its own group instead of the id.
             const match = /^cloudtak-sprite:\/\/([^/.@]+)\/?(?:@\dx)?\.(json|png)$/.exec(params.url);
             if (!match) throw new Error(`Unsupported sprite URL: ${params.url}`);
 
@@ -163,14 +156,25 @@ export default class IconManager {
         return work;
     }
 
+    /**
+     * Whether an image id is one this manager generates on demand, as opposed
+     * to a built-in spritesheet icon the style loads up front
+     */
+    resolvable(id: string): boolean {
+        return isMilsymIcon(id) || id.includes('-colored-') || id.includes(':');
+    }
+
     private async resolveImage(id: string): Promise<void> {
         if (this.map.hasImage(id)) return;
 
-        if (id.startsWith('2525D:')) {
-            const sidc = id.replace('2525D:', '');
-            const symbol = new ms.Symbol(sidc, { size: 24 }).asCanvas();
-
-            this.addImage(id, await createImageBitmap(symbol));
+        if (!this.resolvable(id)) {
+            this.logWarnOnce(
+                `unhandled:${id}`,
+                'Unhandled missing style image',
+                { imageId: id }
+            );
+        } else if (isMilsymIcon(id)) {
+            this.addImage(id, await createImageBitmap(symbolCanvas(id)));
         } else if (id.includes('-colored-')) {
             const separator = id.lastIndexOf('-colored-');
             const baseId = id.slice(0, separator);
@@ -181,14 +185,8 @@ export default class IconManager {
             if (!this.map.hasImage(baseId)) await this.resolve(baseId);
 
             this.addColoredImage(id, baseId, color);
-        } else if (id.includes(':')) {
-            await this.loadIconsetImage(id);
         } else {
-            this.logWarnOnce(
-                `unhandled:${id}`,
-                'Unhandled missing style image',
-                { imageId: id }
-            );
+            await this.loadIconsetImage(id);
         }
     }
 
@@ -427,15 +425,12 @@ export default class IconManager {
         for (let i = 0; i < data.length; i += 4) {
             const alpha = data[i + 3];
 
-            // Skip transparent pixels
             if (alpha === 0) continue;
 
-            // Check if pixel is white or light colored
             if (this.isWhitePixel(data[i], data[i + 1], data[i + 2])) {
-                data[i] = r;     // Red
-                data[i + 1] = g; // Green
-                data[i + 2] = b; // Blue
-                // Keep original alpha
+                data[i] = r;
+                data[i + 1] = g;
+                data[i + 2] = b;
             }
         }
     }
@@ -444,7 +439,6 @@ export default class IconManager {
      * Check if a pixel is considered "white" (should be recolored)
      */
     private isWhitePixel(r: number, g: number, b: number): boolean {
-        // Consider pixels white if they are very light (above 200 in all channels)
         return r > 200 && g > 200 && b > 200;
     }
 

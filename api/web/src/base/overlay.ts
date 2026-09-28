@@ -1,8 +1,7 @@
-import { liveQuery, type Observable } from 'dexie';
+import type { Observable } from 'dexie';
 import { shallowReactive } from 'vue';
-import { db, type DBOverlay } from '../database.ts';
+import { db, type DBOverlay, liveQuery } from '../database.ts';
 import type { paths } from '@cloudtak/api-types';
-import type { ProfileOverlay } from '../types.ts';
 import { server } from '../std.ts';
 import BaseInterface from './interface.ts';
 import Overlay from './overlay-class.ts';
@@ -61,14 +60,7 @@ export default class OverlayManager extends BaseInterface {
     }
 
     private static loadedBeforeId(): string | undefined {
-        if (this.loaded.length > 1 && this.loaded[1].styles.length > 0) {
-            // Background layers are never added to the map so they cannot
-            // anchor an insert - use the first renderable layer
-            const anchor = this.loaded[1].styles.find((l) => l.type !== 'background');
-            if (anchor) return String(anchor.id);
-        }
-
-        return undefined;
+        return this.loadedAnchorFrom(1);
     }
 
     static appendLoaded(...overlays: Overlay[]): void {
@@ -104,22 +96,93 @@ export default class OverlayManager extends BaseInterface {
         const overlay = this.loadedFrom(overlayId);
         if (!overlay) throw new Error('Could not find Overlay');
 
-        const movedIndex = orderedIds.indexOf(overlayId);
-        if (movedIndex === -1) throw new Error('Could not find Overlay in order');
+        if (this.isPinned(overlay)) throw new Error('Overlay position is fixed');
+        if (!orderedIds.includes(overlayId)) throw new Error('Could not find Overlay in order');
 
-        const postId = orderedIds[movedIndex + 1];
-        const post = postId === undefined ? undefined : this.loadedFrom(postId);
-        overlay.moveBefore(post);
+        // Pinned overlays keep their sentinel `pos` - only ordinary overlays
+        // take part in drag order bookkeeping
+        const changed = this.loaded.filter((current) => {
+            if (this.isPinned(current)) return false;
 
-        for (const current of this.loaded) {
-            await current.update({
-                pos: orderedIds.indexOf(current.id)
-            });
+            const pos = orderedIds.indexOf(current.id);
+            if (pos === -1 || pos === current.pos) return false;
+            current.pos = pos;
+            return true;
+        });
+
+        this.loaded.sort(OverlayManager.compareStack);
+
+        // Anchor against the resolved stack rather than the dragged list so a
+        // drop beyond a pinned overlay cannot leave the map out of step
+        overlay.moveBefore(this.loaded[this.loaded.indexOf(overlay) + 1]);
+
+        const results = await Promise.allSettled(changed.map((current) => current.save()));
+        const failed = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+        if (failed) throw failed.reason;
+    }
+
+    /**
+     * Basemaps are pinned to the bottom of the stack and internal overlays
+     * (e.g. "Map Features") to the top - their `pos` is a sentinel and is
+     * never driven by drag order
+     */
+    static isPinned(overlay: { mode: string; _internal?: boolean }): boolean {
+        return this.stackRank(overlay) !== 0;
+    }
+
+    /**
+     * Stack comparator (bottom first) - pinned placement is decided from the
+     * overlay itself so a stale or corrupted `pos` cannot misplace it
+     */
+    static compareStack(
+        this: void,
+        a: { mode: string; pos: number; name: string; _internal?: boolean },
+        b: { mode: string; pos: number; name: string; _internal?: boolean }
+    ): number {
+        return OverlayManager.stackRank(a) - OverlayManager.stackRank(b)
+            || a.pos - b.pos
+            || a.name.localeCompare(b.name);
+    }
+
+    private static stackRank(overlay: { mode: string; _internal?: boolean }): number {
+        if (overlay._internal || overlay.mode === 'internal') return 1;
+        if (overlay.mode === 'basemap') return -1;
+        return 0;
+    }
+
+    /**
+     * Move every loaded overlay's map layers so their stacking matches the
+     * `loaded` order (index 0 at the bottom)
+     */
+    static applyLoadedOrder(): void {
+        for (let i = this.loaded.length - 1; i >= 0; i--) {
+            this.loaded[i].moveBefore(this.loaded[i + 1]);
+        }
+    }
+
+    /**
+     * First renderable layer id of the overlay stacked directly above the
+     * given one - used to re-insert its layers at the same position
+     */
+    static loadedBeforeOverlay(overlay: Overlay): string | undefined {
+        const idx = this.loaded.indexOf(overlay);
+        if (idx === -1) return undefined;
+
+        return this.loadedAnchorFrom(idx + 1);
+    }
+
+    /**
+     * First renderable layer id present on the map, searching `loaded`
+     * upward from the given index - overlays that failed to load or are
+     * still initializing have no layers and are skipped
+     */
+    static loadedAnchorFrom(idx: number): string | undefined {
+        for (let i = idx; i < this.loaded.length; i++) {
+            const anchor = this.loaded[i].anchorLayerId();
+            if (anchor) return anchor;
         }
 
-        this.loaded.sort((a, b) => {
-            return a.pos - b.pos;
-        });
+        return undefined;
     }
 
     static async deleteLoaded(idOrOverlay: string | number | Overlay): Promise<void> {
@@ -134,7 +197,11 @@ export default class OverlayManager extends BaseInterface {
 
     static queryableOverlayNames(): string[] {
         return this.loaded
-            .filter((overlay) => overlay.actions.feature.includes('query') || overlay.id === -1)
+            .filter((overlay) => {
+                return overlay.id === -1
+                    || (overlay.mode === 'mission' && overlay.mode_id)
+                    || overlay.actions.feature.includes('query');
+            })
             .map((overlay) => overlay.name);
     }
 
@@ -228,7 +295,7 @@ export default class OverlayManager extends BaseInterface {
         });
     }
 
-    static async get(id: string | number): Promise<ProfileOverlay> {
+    static async get(id: string | number): Promise<DBOverlay> {
         const overlayId = this.overlayId(id);
         const res = await server.GET('/api/profile/overlay/{:overlay}', {
             params: {
@@ -243,12 +310,12 @@ export default class OverlayManager extends BaseInterface {
 
         await db.overlay.put(res.data as DBOverlay);
 
-        return res.data;
+        return res.data as DBOverlay;
     }
 
-    static async create(
+    static async generate(
         body: paths['/api/profile/overlay']['post']['requestBody']['content']['application/json']
-    ): Promise<ProfileOverlay> {
+    ): Promise<DBOverlay> {
         const res = await server.POST('/api/profile/overlay', {
             body
         });
@@ -258,7 +325,7 @@ export default class OverlayManager extends BaseInterface {
 
         await db.overlay.put(res.data as DBOverlay);
 
-        return res.data;
+        return res.data as DBOverlay;
     }
 
     static async update(
@@ -333,7 +400,7 @@ export default class OverlayManager extends BaseInterface {
             });
         }
 
-        return overlays.sort((first, second) => first.pos - second.pos || first.name.localeCompare(second.name));
+        return overlays.sort(OverlayManager.compareStack);
     }
 
     private static overlayId(id: string | number): number {

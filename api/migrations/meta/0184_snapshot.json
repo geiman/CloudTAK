@@ -1,5 +1,5 @@
 {
-  "id": "93dcb444-d597-4336-aaca-abd2d2124120",
+  "id": "1304fb99-246d-4cd6-a22a-8fd0df864d59",
   "prevId": "c945f036-c78f-47b6-a4c1-27c59c9b29a5",
   "version": "7",
   "dialect": "postgresql",
@@ -744,6 +744,166 @@
         }
       },
       "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.core_event": {
+      "name": "core_event",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "created": {
+          "name": "created",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "Now()"
+        },
+        "updated": {
+          "name": "updated",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "Now()"
+        },
+        "ended": {
+          "name": "ended",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "username": {
+          "name": "username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "priority": {
+          "name": "priority",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'none'"
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "external_id": {
+          "name": "external_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "editable": {
+          "name": "editable",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "location": {
+          "name": "location",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "remarks": {
+          "name": "remarks",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "geometry": {
+          "name": "geometry",
+          "type": "GEOMETRY(POINT, 4326)",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "core_event_username_profile_username_fk": {
+          "name": "core_event_username_profile_username_fk",
+          "tableFrom": "core_event",
+          "tableTo": "profile",
+          "columnsFrom": [
+            "username"
+          ],
+          "columnsTo": [
+            "username"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.core_event_channel": {
+      "name": "core_event_channel",
+      "schema": "",
+      "columns": {
+        "event": {
+          "name": "event",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "channel": {
+          "name": "channel",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "core_event_channel_event_core_event_id_fk": {
+          "name": "core_event_channel_event_core_event_id_fk",
+          "tableFrom": "core_event_channel",
+          "tableTo": "core_event",
+          "columnsFrom": [
+            "event"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "core_event_channel_event_channel_pk": {
+          "name": "core_event_channel_event_channel_pk",
+          "columns": [
+            "event",
+            "channel"
+          ]
+        }
+      },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -2738,12 +2898,6 @@
           "notNull": true,
           "default": "'[]'::jsonb"
         },
-        "coordinates": {
-          "name": "coordinates",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
         "mode": {
           "name": "mode",
           "type": "text",
@@ -3608,13 +3762,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
-        },
-        "publish_protocol": {
-          "name": "publish_protocol",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'hls'"
         },
         "recording": {
           "name": "recording",

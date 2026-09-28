@@ -49,31 +49,34 @@
                     </h1>
 
                     <div class='ms-auto btn-list mx-3'>
-                        <IconRefresh
-                            v-if='!disabled && !err && !loading.main'
-                            v-tooltip='"Refresh"'
+                        <TablerRefreshButton
+                            v-if='!disabled && !err'
+                            title='Refresh'
                             :size='32'
-                            stroke='1'
-                            class='cursor-pointer'
+                            :loading='loading.main'
                             @click='generateToken'
                         />
 
-                        <IconPlus
+                        <TablerIconButton
                             v-if='!readonly && !disabled && !err && !loading.main'
-                            v-tooltip='"Create Hosted Service"'
-                            :size='32'
-                            stroke='1'
-                            class='cursor-pointer'
+                            title='Create Hosted Service'
                             @click='createModal = true'
-                        />
-                        <IconX
+                        >
+                            <IconPlus
+                                :size='32'
+                                stroke='1'
+                            />
+                        </TablerIconButton>
+                        <TablerIconButton
                             v-if='pane && !disabled'
-                            v-tooltip='"Close Explorer"'
-                            :size='32'
-                            stroke='1'
-                            class='cursor-pointer'
+                            title='Close Explorer'
                             @click='$emit("close")'
-                        />
+                        >
+                            <IconX
+                                :size='32'
+                                stroke='1'
+                            />
+                        </TablerIconButton>
                     </div>
                 </div>
 
@@ -233,12 +236,13 @@ import {
     TablerNone,
     TablerLoading,
     TablerInput,
+    TablerIconButton,
+    TablerRefreshButton,
 } from '@tak-ps/vue-tabler';
 import {
     IconX,
     IconPlus,
     IconMap,
-    IconRefresh,
 } from '@tabler/icons-vue';
 import EsriServer from './EsriServer.vue';
 import EsriPortalCreate from './EsriPortalCreate.vue';

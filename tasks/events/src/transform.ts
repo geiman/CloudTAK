@@ -2,14 +2,13 @@ import fs from 'node:fs';
 import readline from 'node:readline';
 import jwt from 'jsonwebtoken';
 import { randomUUID } from 'node:crypto';
-import type { Message, LocalMessage, Asset } from './types.ts';
+import type { Message, LocalMessage, Asset, AssetNode } from './types.ts';
 import s3client from './s3.ts';
 import { Upload } from '@aws-sdk/lib-storage';
 import path from 'node:path';
-import cp from 'node:child_process';
 
 import Tippecanoe from './tippecanoe.ts';
-import { countFeatures } from './utils.ts';
+import { countFeatures, run } from './utils.ts';
 import { isPMTiles } from './sniff.ts';
 
 // Formats
@@ -17,10 +16,12 @@ import KML from './transforms/kml.ts';
 import Translate from './transforms/translate.ts';
 import GeoJSON from './transforms/geojson.ts';
 import MBTiles from './transforms/mbtiles.ts';
+import Shapefile from './transforms/shapefile.ts';
+import Geodatabase from './transforms/geodatabase.ts';
 import { createImportResult } from './api.ts';
 import { fetch } from '@tak-ps/node-safeurl';
 
-const FORMATS = [KML, Translate, GeoJSON, MBTiles];
+const FORMATS = [KML, Translate, GeoJSON, MBTiles, Shapefile, Geodatabase];
 const formats = new Map();
 
 // TODO load all conversion files from a directory
@@ -57,71 +58,45 @@ export default class DataTransform {
         const convert = new (formats.get(this.local.ext))(this.msg, this.local);
 
         const conversion = await convert.convert();
-
         const artifacts: Array<{ ext: string }> = this.asset.artifacts.map((a: { ext: string }) => ({ ext: a.ext }));
-        const persistArtifacts = async (): Promise<void> => {
-            const res = await fetch(new URL(`/api/profile/asset/${this.asset.id}`, this.msg.api), {
+
+        const createAssetTree = async (parentId: string, node: AssetNode): Promise<void> => {
+            const childId = randomUUID();
+            const uploader = new Upload({
+                client: s3,
+                params: {
+                    Bucket: this.msg.bucket,
+                    Key: `profile/${this.msg.job.username}/${childId}${node.ext}`,
+                    Body: fs.createReadStream(node.path),
+                },
+            });
+
+            await uploader.done();
+
+            const res = await fetch(new URL(`/api/profile/asset`, this.msg.api), {
                 safeUrlAllow: [this.msg.api],
-                method: 'PATCH',
+                method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${jwt.sign({ access: 'user', email: this.msg.job.username }, this.msg.secret)}`,
                 },
-                body: JSON.stringify({ artifacts }),
+                body: JSON.stringify({
+                    id: childId,
+                    name: `${path.parse(node.name).name}${node.ext}`,
+                    parent: parentId,
+                    path: '/',
+                    artifacts: [{ ext: node.ext }],
+                }),
             });
 
             if (!res.ok) {
-                throw new Error(`Failed to update asset: ${await res.text()}`);
-            } else {
-                this.asset = await res.json() as Asset;
+                throw new Error(`Failed to create child asset: ${await res.text()}`);
+            }
+
+            for (const child of node.children ?? []) {
+                await createAssetTree(childId, child);
             }
         };
-
-        if (conversion.groundOverlays && conversion.groundOverlays.length) {
-            const manifest = {
-                overlays: conversion.groundOverlays.map((overlay: NonNullable<typeof conversion.groundOverlays>[number], index: number) => {
-                    const ext = `.groundoverlay-${index}${overlay.ext}`;
-                    return {
-                        name: overlay.name,
-                        mime: overlay.mime,
-                        ext,
-                        opacity: overlay.opacity,
-                        coordinates: overlay.coordinates,
-                    };
-                }),
-            };
-
-            for (const [index, overlay] of conversion.groundOverlays.entries()) {
-                const ext = `.groundoverlay-${index}${overlay.ext}`;
-                const uploader = new Upload({
-                    client: s3,
-                    params: {
-                        Bucket: this.msg.bucket,
-                        Key: `profile/${this.msg.job.username}/${this.asset.id}${ext}`,
-                        Body: fs.createReadStream(overlay.path),
-                    },
-                });
-
-                await uploader.done();
-                artifacts.push({ ext });
-            }
-
-            const manifestPath = path.resolve(this.local.tmpdir, `${this.asset.id}.groundoverlays.json`);
-            fs.writeFileSync(manifestPath, JSON.stringify(manifest));
-
-            const manifestUpload = new Upload({
-                client: s3,
-                params: {
-                    Bucket: this.msg.bucket,
-                    Key: `profile/${this.msg.job.username}/${this.asset.id}.groundoverlays.json`,
-                    Body: fs.createReadStream(manifestPath),
-                },
-            });
-
-            await manifestUpload.done();
-            artifacts.push({ ext: '.groundoverlays.json' });
-            await persistArtifacts();
-        }
 
         if (conversion.icons && conversion.icons.size > 0) {
             console.error('ok - Creating Iconset');
@@ -225,7 +200,7 @@ export default class DataTransform {
 
             // Iterate over features and prefix with Iconset UID
             // Do it as a stream to ensure memory efficiency
-            if (conversion.asset && path.parse(conversion.asset).ext === '.geojsonld') {
+            if (path.parse(conversion.asset).ext === '.geojsonld') {
                 const tmpAsset = path.resolve(this.local.tmpdir, randomUUID() + '.geojsonld');
                 const readStream = fs.createReadStream(conversion.asset);
                 const writeStream = fs.createWriteStream(tmpAsset);
@@ -258,10 +233,6 @@ export default class DataTransform {
             }
         }
 
-        if (!conversion.asset) {
-            return;
-        }
-
         if (path.parse(conversion.asset).ext === '.geojsonld') {
             const geouploader = new Upload({
                 client: s3,
@@ -274,18 +245,27 @@ export default class DataTransform {
             await geouploader.done();
 
             artifacts.push({ ext: '.geojsonld' });
-            await persistArtifacts();
+            const res = await fetch(new URL(`/api/profile/asset/${this.asset.id}`, this.msg.api), {
+                safeUrlAllow: [this.msg.api],
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${jwt.sign({ access: 'user', email: this.msg.job.username }, this.msg.secret)}`,
+                },
+                body: JSON.stringify({ artifacts }),
+            });
+
+            if (!res.ok) {
+                throw new Error(`Failed to update asset: ${await res.text()}`);
+            } else {
+                this.asset = await res.json() as Asset;
+            }
 
             const tp = new Tippecanoe();
 
             // Check for zero features before tiling
             const featureCount = await countFeatures(conversion.asset);
             if (featureCount === 0) {
-                if (conversion.groundOverlays?.length) {
-                    console.log('No vector features found; GroundOverlay artifacts were imported without a tileset');
-                    return;
-                }
-
                 throw new Error(`No features found in ${conversion.asset}. Cannot create tileset.`);
             }
             console.log(`Found ${featureCount} features to tile`);
@@ -313,10 +293,14 @@ export default class DataTransform {
             );
         } else {
             console.log(`ok - converting ${conversion.asset}`);
-            const pmout = cp.execFileSync('pmtiles', ['convert', conversion.asset, path.resolve(this.local.tmpdir, path.parse(conversion.asset).name + '.pmtiles')], { maxBuffer: 100 * 1024 * 1024 });
-            console.log(String(pmout));
+            const pmout = run('pmtiles', ['convert', conversion.asset, path.resolve(this.local.tmpdir, path.parse(conversion.asset).name + '.pmtiles')]);
+            console.log(pmout);
 
             console.log(`ok - converted: ${path.resolve(this.local.tmpdir, path.parse(conversion.asset).name + '.pmtiles')}`);
+        }
+
+        for (const childNode of conversion.children ?? []) {
+            await createAssetTree(this.asset.id, childNode);
         }
 
         // Validate PMTiles format before uploading
@@ -338,6 +322,20 @@ export default class DataTransform {
         await pmuploader.done();
 
         artifacts.push({ ext: '.pmtiles' });
-        await persistArtifacts();
+        const res = await fetch(new URL(`/api/profile/asset/${this.asset.id}`, this.msg.api), {
+            safeUrlAllow: [this.msg.api],
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${jwt.sign({ access: 'user', email: this.msg.job.username }, this.msg.secret)}`,
+            },
+            body: JSON.stringify({ artifacts }),
+        });
+
+        if (!res.ok) {
+            throw new Error(`Failed to update asset: ${await res.text()}`);
+        } else {
+            this.asset = await res.json() as Asset;
+        }
     }
 }

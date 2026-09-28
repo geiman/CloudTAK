@@ -3,6 +3,14 @@
         v-model='isOpen'
         label='Plugin Proxy'
     >
+        <template #icon>
+            <IconPlug
+                :size='18'
+                stroke='1'
+                color='#6b7990'
+                class='ms-2 me-1'
+            />
+        </template>
         <template #right>
             <TablerIconButton
                 v-if='!edit && isOpen'
@@ -33,7 +41,7 @@
                 </TablerIconButton>
             </div>
         </template>
-        <div class='col-lg-12 py-2 px-2 border rounded'>
+        <div class='col-lg-12 py-2 px-2'>
             <TablerLoading v-if='loading' />
             <template v-else>
                 <TablerAlert
@@ -51,7 +59,7 @@
 
                         <template v-if='config["proxy::enabled"]'>
                             <p class='text-secondary mt-2 mb-2'>
-                                Allow plugins to make outbound requests through CloudTAK. Configure the whitelist as an array of allowed origin URLs.
+                                Allow plugins to make outbound requests through CloudTAK. Configure the whitelist as an array of allowed origin URLs. While enabled, whitelisted origins may also be private for the image proxy, which otherwise allows any public origin.
                             </p>
 
                             <div class='d-flex align-items-center justify-content-between mb-2'>
@@ -127,7 +135,8 @@ import {
     IconDeviceFloppy,
     IconPlus,
     IconTrash,
-    IconX
+    IconX,
+    IconPlug
 } from '@tabler/icons-vue';
 
 type ProxyConfig = {

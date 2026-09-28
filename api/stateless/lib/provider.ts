@@ -3,8 +3,16 @@ import { InferSelectModel } from 'drizzle-orm';
 import Err from '@openaddresses/batch-error';
 import type { Profile } from '../../common/schema.js';
 import { X509Certificate } from 'crypto';
+import type { Static } from '@sinclair/typebox';
+import type { CertificateResponse } from '../../common/types.js';
 import { TAKAPI, APIAuthPassword, APIAuthCertificate } from '@tak-ps/node-tak';
+import type { CertificateValidation } from '@tak-ps/node-tak/lib/api/certificate';
 import UserControl from './control/user.js';
+
+/**
+ * Certificates expiring within this window are treated as requiring renewal
+ */
+export const CERT_RENEWAL_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 export enum AuthProviderAccess {
     ADMIN = 'admin',
@@ -19,6 +27,38 @@ export default class AuthProvider {
     constructor(config: Config) {
         this.config = config;
         this.userControl = new UserControl(config);
+    }
+
+    /**
+     * Public metadata for a PEM certificate or undefined if the certificate cannot be parsed
+     */
+    static certificate(cert: unknown): Static<typeof CertificateResponse> | undefined {
+        if (typeof cert !== 'string' || !cert.length) return undefined;
+
+        try {
+            const { subject, validFrom, validTo } = new X509Certificate(cert);
+            return { subject, validFrom, validTo };
+        } catch {
+            return undefined;
+        }
+    }
+
+    /**
+     * True if the certificate cannot be parsed or has already expired
+     */
+    static certificateExpired(cert: unknown, now = Date.now()): boolean {
+        const info = AuthProvider.certificate(cert);
+        if (!info) return true;
+
+        const expiry = Date.parse(info.validTo);
+        return Number.isNaN(expiry) || expiry < now;
+    }
+
+    /**
+     * True if the certificate cannot be parsed, has expired, or expires within CERT_RENEWAL_WINDOW_MS
+     */
+    static certificateRenewalRequired(cert: unknown, now = Date.now()): boolean {
+        return AuthProvider.certificateExpired(cert, now + CERT_RENEWAL_WINDOW_MS);
     }
 
     async login(username: string, password: string): Promise<string> {
@@ -41,6 +81,8 @@ export default class AuthProvider {
             }
         }
 
+        if (profile.disabled) throw new Err(403, null, 'User is disabled - Contact your administrator');
+
         await this.valid(profile, password);
 
         return contents.sub;
@@ -50,18 +92,33 @@ export default class AuthProvider {
         profile: InferSelectModel<typeof Profile>,
         password?: string,
     ): Promise<InferSelectModel<typeof Profile>> {
-        let validTo;
+        let auth = profile.auth;
 
-        try {
-            const cert = new X509Certificate(profile.auth.cert);
-
-            validTo = cert.validTo;
-            const certExpiry = new Date(validTo);
-            if (Number.isNaN(certExpiry.getTime()) || certExpiry.getTime() < Date.now() + (7 * 24 * 60 * 60 * 1000)) {
-                throw new Error('Expired Certificate has expired or is about to');
+        if (!auth || AuthProvider.certificateRenewalRequired(auth.cert)) {
+            if (auth) {
+                console.error(`Error: CertificateExpiration: ${profile.username}: ${AuthProvider.certificate(auth.cert)?.validTo ?? 'unparseable'}: Certificate has expired or is about to`);
             }
-        } catch (err) {
-            console.error(`Error: CertificateExpiration: ${validTo}: ${err}`);
+
+            if (password) {
+                const api = await TAKAPI.init(new URL(this.config.server.webtak), new APIAuthPassword(profile.username, password));
+                auth = await api.Credentials.generate();
+                profile = await this.config.models.Profile.commit(profile.username, { auth });
+            } else if (auth) {
+                throw new Err(401, null, 'Certificate is expired');
+            } else {
+                throw new Err(401, null, 'User has been provisioned but has not yet logged in');
+            }
+        }
+
+        const cert_api = await TAKAPI.init(new URL(String(this.config.server.api)), new APIAuthCertificate(auth.cert, auth.key));
+
+        // The TAK Server X509 filter runs on every request so a GET of the anonymous, DB-free
+        // version endpoint is the cheapest authoritative check that the certificate is still
+        // accepted (revocation, trust) - non-authentication errors are rethrown by probe()
+        const probe = await cert_api.Certificate.probe();
+
+        if (!probe.accepted) {
+            console.error(`Error: CertificateRejected: ${profile.username}: ${probe.reason}: ${probe.message}`);
 
             if (password) {
                 const api = await TAKAPI.init(new URL(this.config.server.webtak), new APIAuthPassword(profile.username, password));
@@ -69,32 +126,42 @@ export default class AuthProvider {
                     auth: await api.Credentials.generate(),
                 });
             } else {
-                throw new Err(401, null, 'Certificate is expired');
-            }
-        }
+                let message = 'Certificate was rejected by the TAK Server';
 
-        const cert_api = await TAKAPI.init(new URL(String(this.config.server.api)), new APIAuthCertificate(profile.auth.cert, profile.auth.key));
+                if (probe.reason === 'revoked') {
+                    message = 'Certificate is Revoked';
 
-        try {
-            // No "certificate validity" endpoint exists so make a common call
-            // to ensure we get a 200 response and not a 500 - Update to check status when Josh
-            // pushes a fix to throw a 401 instead of a 500 on bad certs
-            await cert_api.Contacts.list();
-        } catch (err) {
-            if (err instanceof Error && err.message.includes('org.springframework.security.authentication.BadCredentialsException')) {
-                if (password) {
-                    const api = await TAKAPI.init(new URL(this.config.server.webtak), new APIAuthPassword(profile.username, password));
-                    profile = await this.config.models.Profile.commit(profile.username, {
-                        auth: await api.Credentials.generate(),
-                    });
-                } else {
-                    throw new Err(401, err instanceof Error ? err : new Error(String(err)), 'Certificate is Revoked');
+                    // Best effort - the admin certificate lookup adds the revocation date to the message
+                    try {
+                        const status = await this.status(auth.cert);
+                        if (status?.revocationDate) message = `Certificate was revoked on ${status.revocationDate}`;
+                    } catch (err) {
+                        console.error(err);
+                    }
+                } else if (probe.reason === 'tls') {
+                    message = 'Certificate is expired or not trusted by the TAK Server';
                 }
-            } else {
-                throw err;
+
+                throw new Err(401, new Error(probe.message ?? probe.reason), message);
             }
         }
 
         return profile;
+    }
+
+    /**
+     * Look up a certificate's TAK Server record (expiry & revocation) via the Admin certificate
+     *
+     * Returns undefined if the server has not been configured with an Admin certificate
+     */
+    async status(cert: string): Promise<Static<typeof CertificateValidation> | undefined> {
+        if (!this.config.server.auth.cert || !this.config.server.auth.key) return undefined;
+
+        const api = await TAKAPI.init(
+            new URL(String(this.config.server.api)),
+            new APIAuthCertificate(this.config.server.auth.cert, this.config.server.auth.key),
+        );
+
+        return await api.Certificate.validate(cert);
     }
 }

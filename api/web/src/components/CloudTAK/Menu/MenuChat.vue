@@ -40,7 +40,8 @@
 import { ref, onMounted, shallowRef, watch, onUnmounted, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import Chatroom from '../../../base/chatroom.ts';
-import { liveQuery, type Subscription } from 'dexie';
+import type { Subscription } from 'dexie';
+import { liveQuery } from '../../../database.ts';
 import type { DBChatroomChat } from '../../../database.ts';
 import { IconListCheck } from '@tabler/icons-vue';
 import {
@@ -166,7 +167,8 @@ async function sendMessage(message: string): Promise<void> {
     );
 
     if (route.params.chatroom === 'new') {
-        await router.push({
+        // Replace so Back skips the empty new-chat entry
+        await router.replace({
             name: 'home-menu-chat',
             params: { chatroom: name.value }
         });

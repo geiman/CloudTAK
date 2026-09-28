@@ -6,11 +6,10 @@
             </h1>
 
             <div class='ms-auto btn-list'>
-                <IconRefresh
-                    v-tooltip='"Refresh"'
+                <TablerRefreshButton
+                    title='Refresh'
                     :size='32'
-                    stroke='1'
-                    class='cursor-pointer'
+                    :loading='loading'
                     @click='fetchList'
                 />
             </div>
@@ -86,10 +85,10 @@ import TableFooter from '../util/TableFooter.vue';
 import {
     TablerNone,
     TablerInput,
-    TablerLoading
+    TablerLoading,
+    TablerRefreshButton,
 } from '@tak-ps/vue-tabler';
 import {
-    IconRefresh,
 } from '@tabler/icons-vue';
 
 const loading = ref<boolean>(true);

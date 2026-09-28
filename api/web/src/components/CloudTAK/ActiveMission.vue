@@ -1,51 +1,47 @@
 <template>
     <div
-        class='d-flex text-white align-items-center px-2'
-        style='
-            z-index: 1;
-            height: 60px;
-            max-width: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            border-radius: 0px 0px 6px 0px;
-        '
+        class='d-flex align-items-center'
+        style='min-width: 0;'
+        :class='{ "flex-grow-1": compact }'
     >
         <template v-if='!mapStore.mission'>
             <div
                 class='cloudtak-hover d-flex align-items-center user-select-none cursor-pointer rounded px-2'
-                style='height: 40px;'
+                style='height: 40px; min-width: 0;'
                 @click='router.push("/menu/missions")'
             >
-                <IconMap
+                <IconCloudPin
                     :size='32'
                     stroke='1'
-                    class='me-2'
+                    class='me-2 flex-shrink-0'
                 />
-                <div class='me-2 font-weight-bold'>
-                    No Active Data Sync
+                <div class='me-2 font-weight-bold text-truncate'>
+                    No Active Mission
                 </div>
             </div>
         </template>
         <template v-else>
             <div
                 class='d-flex align-items-center user-select-none cursor-pointer cloudtak-hover rounded px-2 me-2'
-                style='height: 40px;'
+                style='height: 40px; min-width: 0;'
+                :class='{ "flex-grow-1": compact }'
                 @click='router.push(`/menu/missions/${mapStore.mission.meta.guid}`)'
             >
-                <IconAmbulance
+                <IconCloudPin
                     :size='32'
                     stroke='1'
-                    class='me-2'
+                    class='me-2 flex-shrink-0'
                 />
 
                 <span
                     class='text-truncate fw-bold'
-                    style='max-width: 200px;'
+                    :style='compact ? { minWidth: 0 } : { maxWidth: "200px" }'
                     v-text='mapStore.mission.meta.name'
                 />
             </div>
 
             <div
-                class='d-none d-md-block border-start border-white opacity-50 mx-1'
+                class='d-none d-md-block border-start mx-1'
                 style='height: 32px;'
             />
 
@@ -100,7 +96,7 @@
                     </TablerIconButton>
                     <span
                         v-if='unreadLogs && unreadLogs > 0'
-                        class='position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger text-white fw-bold shadow-sm border border-dark'
+                        class='position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger text-white fw-bold shadow-sm unread-badge'
                         style='font-size: 0.75rem; z-index: 10;'
                     >
                         {{ unreadLogs > 99 ? '99+' : unreadLogs }}
@@ -121,7 +117,7 @@
                     </TablerIconButton>
                     <span
                         v-if='unreadChats && unreadChats > 0'
-                        class='position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger text-white fw-bold shadow-sm border border-dark'
+                        class='position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger text-white fw-bold shadow-sm unread-badge'
                         style='font-size: 0.75rem; z-index: 10;'
                     >
                         {{ unreadChats > 99 ? '99+' : unreadChats }}
@@ -147,14 +143,12 @@
 <script setup lang='ts'>
 import { useRouter } from 'vue-router';
 import { useMapStore } from '../../stores/map.ts';
-import { db } from '../../database.ts';
-import { liveQuery } from 'dexie';
+import { db, liveQuery } from '../../database.ts';
 import { useObservable } from '@vueuse/rxjs';
 import { from } from 'rxjs';
 import { TablerIconButton } from '@tak-ps/vue-tabler';
 import {
-    IconAmbulance,
-    IconMap,
+    IconCloudPin,
     IconBoxMultiple,
     IconTimeline,
     IconUsers,
@@ -162,6 +156,12 @@ import {
     IconFiles,
     IconMessage,
 } from '@tabler/icons-vue';
+
+withDefaults(defineProps<{
+    compact?: boolean;
+}>(), {
+    compact: false,
+});
 
 const mapStore = useMapStore();
 const router = useRouter();
@@ -188,3 +188,10 @@ const unreadChats = useObservable(
     }))
 );
 </script>
+
+<style scoped>
+/* Ring in the panel fill so the count lifts off the icon it overlaps. */
+.unread-badge {
+    border: 2px solid var(--cloudtak-panel-bg, transparent);
+}
+</style>

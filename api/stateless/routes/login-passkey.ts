@@ -1,11 +1,9 @@
-import jwt from 'jsonwebtoken';
 import Err from '@openaddresses/batch-error';
-import Auth, { AuthUserAccess } from '../../common/auth.js';
+import Auth from '../../common/auth.js';
 import type ConfigStateless from '../config.js';
 import Schema from '@openaddresses/batch-schema';
 import { Type } from '@sinclair/typebox';
-import { UAParser } from 'ua-parser-js';
-import { X509Certificate } from 'crypto';
+import { LoginResponse, issueSession, certificateStatus } from '../lib/user/session.js';
 import {
     generateRegistrationOptions,
     verifyRegistrationResponse,
@@ -13,7 +11,7 @@ import {
     verifyAuthenticationResponse,
 } from '@simplewebauthn/server';
 import type {
-    AuthenticatorTransportFuture,
+    AuthenticatorTransport,
     RegistrationResponseJSON as WebAuthnRegistrationResponseJSON,
     AuthenticationResponseJSON as WebAuthnAuthenticationResponseJSON,
 } from '@simplewebauthn/server';
@@ -163,7 +161,7 @@ export default async function router(schema: Schema, config: ConfigStateless) {
                 attestationType: 'none',
                 excludeCredentials: existingPasskeys.map(p => ({
                     id: p.credential_id,
-                    transports: (p.transports || []) as AuthenticatorTransportFuture[],
+                    transports: (p.transports || []) as AuthenticatorTransport[],
                 })),
                 authenticatorSelection: {
                     residentKey: 'preferred',
@@ -283,13 +281,7 @@ export default async function router(schema: Schema, config: ConfigStateless) {
         body: Type.Object({
             credential: AuthenticationResponseJSON,
         }),
-        res: Type.Object({
-            token: Type.String(),
-            access: Type.Enum(AuthUserAccess),
-            email: Type.String(),
-            session: Type.String(),
-            certRenewalRequired: Type.Optional(Type.Boolean()),
-        }),
+        res: LoginResponse,
     }, async (req, res) => {
         try {
             await assertPasskeysEnabled();
@@ -334,7 +326,7 @@ export default async function router(schema: Schema, config: ConfigStateless) {
                         id: passkey.credential_id,
                         publicKey: Buffer.from(passkey.public_key, 'base64url'),
                         counter: passkey.counter,
-                        transports: (passkey.transports || []) as AuthenticatorTransportFuture[],
+                        transports: (passkey.transports || []) as AuthenticatorTransport[],
                     },
                 });
             } catch (e) {
@@ -352,51 +344,17 @@ export default async function router(schema: Schema, config: ConfigStateless) {
 
             const profile = await config.models.Profile.from(passkey.username);
 
-            let access = AuthUserAccess.USER;
-            if (profile.system_admin) {
-                access = AuthUserAccess.ADMIN;
-            } else if (profile.agency_admin && profile.agency_admin.length) {
-                access = AuthUserAccess.AGENCY;
-            }
-
-            const userAgent = req.headers['user-agent'] || '';
-            const ua = UAParser(userAgent);
-
-            const session = await config.models.ProfileSession.generate({
-                username: profile.username,
-                created: new Date().toISOString(),
-                ip: String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'Unknown'),
-                device_type: ua.device.type || 'Desktop',
-                browser: [ua.browser.name, ua.browser.version].filter(Boolean).join(' ') || 'Unknown',
-                os: [ua.os.name, ua.os.version].filter(Boolean).join(' ') || 'Unknown',
-                user_agent: userAgent,
-            });
+            if (profile.disabled) throw new Err(403, null, 'User is disabled - Contact your administrator');
 
             await config.models.Profile.commit(profile.username, {
                 last_login: new Date().toISOString(),
             });
 
-            let certRenewalRequired = false;
-            try {
-                const cert = new X509Certificate(profile.auth.cert);
-                const certExpiry = new Date(cert.validTo);
-                if (Number.isNaN(certExpiry.getTime()) || certExpiry.getTime() < Date.now() + (7 * 24 * 60 * 60 * 1000)) {
-                    certRenewalRequired = true;
-                }
-            } catch {
-                certRenewalRequired = true;
-            }
-
+            // A passkey login has no password so the certificate cannot be regenerated here,
+            // instead the client is told to collect a password and call POST /login
             res.json({
-                access,
-                email: profile.username,
-                session: session.id,
-                token: jwt.sign(
-                    { access, email: profile.username, s: session.id },
-                    config.SigningSecret,
-                    { expiresIn: '16h' },
-                ),
-                ...(certRenewalRequired ? { certRenewalRequired: true } : {}),
+                ...await issueSession(config, req, profile),
+                ...await certificateStatus(config, profile),
             });
         } catch (err) {
             Err.respond(err, res);

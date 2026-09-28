@@ -60,10 +60,8 @@ export const UserConfigKeys: (keyof Static<typeof FullConfig>)[] = [
     'map::bearing',
     'map::zoom',
     'map::basemap',
+    'map::basemap::favs',
     'map::terrain',
-    'map::groundoverlay::max_size_mb',
-    'map::groundoverlay::max_total_size_mb',
-    'map::groundoverlay::max_count',
     'group::Yellow',
     'group::Cyan',
     'group::Green',
@@ -78,7 +76,8 @@ export const UserConfigKeys: (keyof Static<typeof FullConfig>)[] = [
     'group::Teal',
     'group::Dark Green',
     'group::Brown',
-    'external::applications'];
+    'external::applications',
+    'core::event::types'];
 
 const GeofenceConfigKeys = new Set<keyof Static<typeof FullConfig>>([
     'geofence::enabled',
@@ -144,6 +143,20 @@ export default async function router(schema: Schema, config: ConfigStateless) {
             const updatedKeys = Object.keys(req.body) as (keyof Static<typeof FullConfig>)[];
             const refreshGeofence = updatedKeys.some(key => GeofenceConfigKeys.has(key));
 
+            if (req.body['login::token::expiry'] !== undefined || req.body['login::refresh::expiry'] !== undefined) {
+                const expiry = await config.models.Setting.typedMany({
+                    'login::token::expiry': 192,
+                    'login::refresh::expiry': 720,
+                });
+
+                const token = req.body['login::token::expiry'] ?? expiry['login::token::expiry'];
+                const refresh = req.body['login::refresh::expiry'] ?? expiry['login::refresh::expiry'];
+
+                if (token > refresh) {
+                    throw new Err(400, null, 'Login token lifetime cannot exceed the refresh token lifetime');
+                }
+            }
+
             if (req.body['map::basemap'] !== undefined && req.body['map::basemap'] !== null) {
                 let basemap;
                 try {
@@ -154,6 +167,21 @@ export default async function router(schema: Schema, config: ConfigStateless) {
 
                 if (basemap.username || basemap.overlay || basemap.hidden) {
                     throw new Err(400, null, 'Default Basemap must be a visible, non-overlay Server Basemap');
+                }
+            }
+
+            if (req.body['map::basemap::favs'] !== undefined && req.body['map::basemap::favs'] !== null) {
+                for (const fav of req.body['map::basemap::favs']) {
+                    let basemap;
+                    try {
+                        basemap = await config.models.Basemap.from(fav.id);
+                    } catch (err) {
+                        throw new Err(400, err instanceof Error ? err : new Error(String(err)), `Favourite Basemap (${fav.id}) does not exist`);
+                    }
+
+                    if (basemap.username || basemap.overlay || basemap.hidden) {
+                        throw new Err(400, null, 'Favourite Basemaps must be visible, non-overlay Server Basemaps');
+                    }
                 }
             }
 
@@ -286,6 +314,25 @@ export default async function router(schema: Schema, config: ConfigStateless) {
         try {
             res.json({
                 url: config.PMTILES_URL,
+            });
+        } catch (err) {
+            Err.respond(err, res);
+        }
+    });
+
+    await schema.get('/config/webhooks', {
+        name: 'Webhook Config',
+        group: 'Config',
+        description: 'Return the base URL that incoming Layer Webhooks are served from',
+        res: Type.Object({
+            url: Type.String(),
+        }),
+    }, async (req, res) => {
+        try {
+            await Auth.as_user(config, req);
+
+            res.json({
+                url: config.WEBHOOKS_URL,
             });
         } catch (err) {
             Err.respond(err, res);

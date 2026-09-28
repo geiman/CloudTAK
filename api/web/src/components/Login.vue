@@ -200,8 +200,10 @@
                                     <TablerInlineAlert
                                         class='mt-3 mb-2'
                                         title='Certificate Renewal Required'
-                                        description='Your TAK certificate is expiring soon. Please enter your password to renew it.'
-                                        severity='warning'
+                                        :description='certRenewal.expired
+                                            ? "Your TAK certificate is expired or no longer valid. Please enter your password to issue a new one."
+                                            : "Your TAK certificate is expiring soon. Please enter your password to renew it."'
+                                        :severity='certRenewal.expired ? "danger" : "warning"'
                                     />
                                     <div class='mb-3'>
                                         <TablerInput
@@ -222,6 +224,7 @@
                                             Renew Certificate
                                         </button>
                                         <button
+                                            v-if='!certRenewal.expired'
                                             type='button'
                                             class='btn btn-secondary'
                                             @click='skipCertRenewal'
@@ -357,16 +360,16 @@
 
 <script setup lang='ts'>
 import type { Login_Create, ConfigLogin } from '../types.ts'
-import { ref, computed, onMounted, reactive, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, reactive, watch } from 'vue';
 import { version } from '../../package.json';
 import { IconSettings, IconTrash, IconLock, IconFingerprint, IconUser } from '@tabler/icons-vue';
 import { Preferences } from '@capacitor/preferences';
-import { startAuthentication } from '@simplewebauthn/browser';
+import { startAuthentication, WebAuthnAbortService } from '@simplewebauthn/browser';
 import type { PublicKeyCredentialRequestOptionsJSON, AuthenticationResponseJSON } from '@simplewebauthn/browser';
 import Config from '../base/config.ts';
 import type { FullConfig } from '../base/config.ts';
-import { isNativePlatform, supportsServiceWorker } from '../base/capacitor.ts';
-import { getCurrentEntryBuildId } from '../base/service-worker.ts';
+import { isNativePlatform, supportsServiceWorker } from '../utils/capacitor.ts';
+import { getCurrentEntryBuildId } from '../utils/service-worker.ts';
 import { useRouter, useRoute } from 'vue-router'
 import { server } from '../std.ts';
 import { useAppStore } from '../stores/app.ts';
@@ -424,8 +427,6 @@ const customBackgroundColor = computed(() => {
 const footerLogo = computed(() => {
     if (!brandStore.login) return undefined;
 
-    // Check if brand is enabled, if not return undefined (hidden)
-    // If enabled or default, check logic below
     if (brandStore.login.brand?.enabled === 'disabled') {
         return undefined;
     } else if (brandStore.login.brand?.logo) {
@@ -501,33 +502,37 @@ const body = ref<Login_Create>({
 });
 const certRenewal = reactive<{
     required: boolean;
+    expired: boolean;
     email: string;
     password: string;
 }>({
     required: false,
+    expired: false,
     email: '',
     password: '',
 });
 
-onMounted(async () => {
-    const config = await Config.list([
-        'login::name',
-        'login::logo',
-        'login::signup',
-        'login::forgot',
-        'login::username',
-        'login::brand::enabled',
-        'login::brand::logo',
-        'login::background::enabled',
-        'login::background::color',
-        'oidc::enforced',
-        'oidc::enabled',
-        'oidc::discovery',
-        'oidc::name',
-        'oidc::logo',
-        'passkey::enabled' as keyof FullConfig,
-    ]);
+const configKeys: (keyof FullConfig)[] = [
+    'login::name',
+    'login::logo',
+    'login::signup',
+    'login::forgot',
+    'login::username',
+    'login::brand::enabled',
+    'login::brand::logo',
+    'login::background::enabled',
+    'login::background::color',
+    'oidc::enforced',
+    'oidc::enabled',
+    'oidc::discovery',
+    'oidc::name',
+    'oidc::logo',
+    'passkey::enabled' as keyof FullConfig,
+];
 
+let passkeyStarted = false;
+
+function applyConfig(config: Partial<FullConfig>): void {
     brandStore.login = {
         name: config['login::name'],
         logo: config['login::logo'],
@@ -551,14 +556,29 @@ onMounted(async () => {
     brandStore.passkey.enabled = (config as Record<string, unknown>)['passkey::enabled'] !== false;
     brandStore.loaded = true;
 
-    if (brandStore.passkey.enabled) {
+    if (brandStore.passkey.enabled && !isNativePlatform() && !passkeyStarted) {
+        passkeyStarted = true;
         startConditionalPasskey();
     }
+}
 
-    // Detect an existing (un-cleared) session left behind by a previous login.
-    // The database is intentionally NOT deleted here - it is only cleared on an
-    // explicit sign-out or when a different user logs in. This avoids a costly
-    // resync when a token simply expires.
+onMounted(async () => {
+    let config: Partial<FullConfig> = {};
+    try {
+        config = await Config.list(configKeys);
+    } catch (err) {
+        console.error('Failed to load login config, using defaults', err);
+    }
+
+    applyConfig(config);
+
+    // Cached values may be stale - pick up server-side changes in the background
+    Config.refresh(configKeys)
+        .then((fresh) => applyConfig({ ...config, ...fresh }))
+        .catch((err) => console.warn('Failed to refresh login config', err));
+
+    // The database is intentionally kept until an explicit sign-out or a
+    // different user logs in, avoiding a costly resync on token expiry.
     try {
         const existing = await appStore.getUsername();
         if (existing) {
@@ -570,8 +590,7 @@ onMounted(async () => {
     }
 });
 
-// Clear the stored session and wipe the local database. Triggered by the
-// "Not Me" button when the user wants to log in as a different account.
+// Clear the stored session and wipe the local database ("Not Me" button).
 async function notMe(): Promise<void> {
     try {
         await appStore.destroySession();
@@ -584,15 +603,14 @@ async function notMe(): Promise<void> {
     body.value.password = '';
 }
 
-// Persist a successful login. If the authenticated user differs from the one
-// whose data is already cached locally, wipe the database first so the new
-// user does not inherit the previous user's data.
-async function applySession(login: { token: string; email: string; session: string }): Promise<void> {
+// Persist a successful login, wiping the database first if a different user
+// than the one cached locally is authenticating.
+async function applySession(login: { token: string; refresh: string; email: string; session: string }): Promise<void> {
     if (storedUsername.value && storedUsername.value !== login.email) {
         await appStore.destroySession();
     }
 
-    await appStore.persistSession({ token: login.token, username: login.email, session: login.session });
+    await appStore.persistSession({ token: login.token, refresh: login.refresh, username: login.email, session: login.session });
     storedUsername.value = login.email;
 }
 
@@ -609,7 +627,7 @@ async function createLogin() {
         if (res.error) throw new Error(res.error.message);
         const login = res.data;
 
-        await applySession({ token: login.token, email: login.email, session: login.session });
+        await applySession({ token: login.token, refresh: login.refresh, email: login.email, session: login.session });
 
         navigateAfterLogin();
     } catch (err) {
@@ -617,6 +635,10 @@ async function createLogin() {
         throw err;
     }
 }
+
+onUnmounted(() => {
+    WebAuthnAbortService.cancelCeremony();
+});
 
 async function startConditionalPasskey() {
     try {
@@ -683,10 +705,11 @@ async function completePasskeyLogin(credential: AuthenticationResponseJSON) {
         if (res.error) throw new Error(res.error.message);
         const login = res.data;
 
-        await applySession({ token: login.token, email: login.email, session: login.session });
+        await applySession({ token: login.token, refresh: login.refresh, email: login.email, session: login.session });
 
         if (login.certRenewalRequired) {
             certRenewal.required = true;
+            certRenewal.expired = Boolean(login.certExpired);
             certRenewal.email = login.email;
             certRenewal.password = '';
             loading.value = false;
@@ -719,14 +742,14 @@ function navigateAfterLogin() {
         })();
 
         if (resolved.matched.length > 0) {
-            router.push(redirectPath);
+            router.replace(redirectPath);
         } else if (isSafeRedirect) {
             window.location.href = redirectPath;
         } else {
-            router.push("/");
+            router.replace("/");
         }
     } else {
-        router.push("/");
+        router.replace("/");
     }
 }
 
@@ -743,8 +766,9 @@ async function renewCertificate() {
         if (res.error) throw new Error(res.error.message);
         const login = res.data;
 
-        await applySession({ token: login.token, email: login.email, session: login.session });
+        await applySession({ token: login.token, refresh: login.refresh, email: login.email, session: login.session });
         certRenewal.required = false;
+        certRenewal.expired = false;
         certRenewal.password = '';
 
         navigateAfterLogin();
@@ -755,7 +779,9 @@ async function renewCertificate() {
 }
 
 function skipCertRenewal() {
+    // Only offered while the certificate is still valid (expiring soon, not expired)
     certRenewal.required = false;
+    certRenewal.expired = false;
     certRenewal.password = '';
     navigateAfterLogin();
 }

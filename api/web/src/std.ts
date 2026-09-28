@@ -1,17 +1,25 @@
 import createClient from "openapi-fetch";
 import { Browser } from '@capacitor/browser';
 import { Preferences } from '@capacitor/preferences';
-import KV from './base/kv.ts'
 import type { Middleware } from "openapi-fetch";
 import type { paths } from '@cloudtak/api-types'
 import type { APIError } from './types.js'
 import type { Router } from 'vue-router'
-import { isNativePlatform, openSecondaryView } from './base/capacitor.ts';
+import { isNativePlatform, openSecondaryView } from './utils/capacitor.ts';
 import { reportError } from './lib/reporting/index.ts';
 import { db } from './database.ts';
+import { parseWorkerBootConfig } from './utils/worker-boot.ts';
 
 export const serverUrl = await getRuntimeServerUrl();
 export const server = await getServer();
+
+// Registered by the app store - exchanges the stored refresh token for a new
+// login token and returns it, or undefined when the session cannot be extended
+let sessionRefresher: (() => Promise<string | undefined>) | undefined;
+
+export function setSessionRefresher(fn: (() => Promise<string | undefined>) | undefined): void {
+    sessionRefresher = fn;
+}
 
 export async function getServer() {
     const server = createClient<paths>({
@@ -74,7 +82,10 @@ async function getRuntimeServerUrl(): Promise<string> {
         return value || getRuntimeOrigin();
     }
 
-    return (await KV.value('serverUrl')) || getRuntimeOrigin();
+    // Handed over on Worker.name by the main thread - never read from
+    // IndexedDB here, a stalled read would block the worker before it can
+    // even signal ready
+    return parseWorkerBootConfig(self.name)?.serverUrl || getRuntimeOrigin();
 }
 
 function getRuntimeOrigin(): string {
@@ -173,8 +184,9 @@ export async function std(
 
         const errbody = bdy as APIError;
         const err = new Error(errbody.message || `Status Code: ${res.status}`);
+        // Shown in TablerAlert's "Advanced" dropdown
         // @ts-expect-error TODO Fix this
-        err.body = bdy;
+        err.body = typeof errbody.details === 'string' && errbody.details.length ? errbody.details : bdy;
         throw err;
     } else if (res.status === 401) {
         // Verify the token is actually invalid before removing it.
@@ -185,6 +197,12 @@ export async function std(
         const loginRes = await fetch(stdurl('/login'), { headers: loginHeaders });
 
         if (loginRes.status === 401 && !isWebWorker()) {
+            const refreshed = !opts.token && sessionRefresher ? await sessionRefresher() : undefined;
+
+            if (refreshed) {
+                return await std(url, { ...opts, token: refreshed, headers: { ...opts.headers, Authorization: `Bearer ${refreshed}` } });
+            }
+
             await Preferences.remove({ key: 'token' });
         }
 

@@ -78,16 +78,16 @@
         v-else
         class='w-100 px-0 d-flex flex-column overflow-hidden'
         :class='standalone ? "" : "flex-grow-1"'
-        :style='standalone ? "height: calc(100vh - 64px - var(--map-bottom-bar-size, 0px)); max-height: 100%;" : "min-height: 0"'
+        :style='standalone ? "height: 100%; max-height: 100%;" : "min-height: 0"'
     >
         <div
-            class='col-12 cloudtak-bg flex-shrink-0'
+            class='col-12 cloudtak-header flex-shrink-0'
             :style='`z-index: ${zindex};`'
             style='
                 border-radius: 0px;
             '
             :class='{
-                "border-bottom border-light": border
+                "border-bottom": border
             }'
         >
             <div class='card-header d-flex align-items-center py-2 px-0 mx-2 flex-wrap row-gap-2'>
@@ -124,7 +124,7 @@
                         v-text='name'
                     />
                 </div>
-                <div class='col-auto btn-list align-items-center'>
+                <div class='col-auto btn-list align-items-center menu-header-buttons'>
                     <slot name='buttons' />
                 </div>
             </div>
@@ -236,24 +236,22 @@ const isModal = computed(() => props.standalone && appStore.isMobileDetected);
 </script>
 
 <style scoped>
-/*
- * On mobile a standalone menu is presented as a near-fullscreen modal so the
- * title/buttons live in a single modal header instead of a stacked double
- * header. Mirrors the previous MainMenu modal frame sizing.
- */
+/* Matches a 32px TablerIconButton so the header stays the same height when the buttons slot is empty */
+.menu-header-buttons {
+    min-height: 34px;
+}
+
+/* Mobile standalone menu is shown as a near-fullscreen modal with a single header.
+ * The status bar inset is subtracted twice to keep the centered modal's top edge
+ * clear of the transparent native status bar. */
 .main-menu-modal-frame {
-    height: calc(100dvh - 2rem);
-    max-height: calc(100dvh - 2rem);
+    height: calc(100dvh - 2rem - 2 * var(--status-bar-height, 0px));
+    max-height: calc(100dvh - 2rem - 2 * var(--status-bar-height, 0px));
 }
 
 /*
- * Ensure the final menu item is never flush against the bottom of the
- * display. env(safe-area-inset-bottom) accounts for device hardware that
- * intrudes on the viewport (notches, home indicators, curved screen edges)
- * while the additional buffer keeps the last item comfortably reachable.
- *
- * Note: padding-bottom on overflow-y:auto flex containers is ignored by many
- * browsers, so a spacer element is used instead to guarantee scroll clearance.
+ * Spacer (not padding-bottom, which is ignored on overflow-y:auto flex containers)
+ * keeps the last item clear of device intrusions via env(safe-area-inset-bottom).
  */
 .menu-scroll-spacer {
     height: calc(env(safe-area-inset-bottom, 0px) + 32px);

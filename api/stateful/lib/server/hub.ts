@@ -10,7 +10,8 @@ import { ProfileConnConfig, AdminConnConfig } from '../../../common/connection-c
 import { ConnectionClient } from '../connection-pool.js';
 import { ConnectionWebSocket } from '../connection-web.js';
 import { setTimeout } from 'node:timers/promises';
-import { tokenParser, AuthUser } from '../../../common/auth.js';
+import Auth, { tokenParser, AuthUser, AuthResource, AuthResourceAccess } from '../../../common/auth.js';
+import { WebSocket_Event } from '../../../common/enums.js';
 import type ConfigStateful from '../../config.js';
 
 export function attachWebsocket(srv: Server, config: ConfigStateful): ws.WebSocketServer {
@@ -26,10 +27,24 @@ export function attachWebsocket(srv: Server, config: ConfigStateful): ws.WebSock
 
             if (!params.get('connection')) throw new Error('Connection Parameter Required');
             if (!params.get('token')) throw new Error('Token Parameter Required');
+
+            const events: WebSocket_Event[] = [];
+            for (const value of params.getAll('events').flatMap(v => v.split(','))) {
+                if (!Object.values(WebSocket_Event).includes(value as WebSocket_Event)) {
+                    throw new Error(`Unknown Event: ${value}`);
+                }
+
+                if (!events.includes(value as WebSocket_Event)) {
+                    events.push(value as WebSocket_Event);
+                }
+            }
+            if (!events.length) events.push(WebSocket_Event.MAP);
+
             const parsedParams = {
                 connection: String(params.get('connection')),
                 token: String(params.get('token')),
                 format: String(params.get('format') || 'raw'),
+                events,
             };
 
             const auth = await tokenParser(config, parsedParams.token, config.SigningSecret);
@@ -39,9 +54,26 @@ export function attachWebsocket(srv: Server, config: ConfigStateful): ws.WebSock
             if (!config.conns) throw new Error('Server not configured with Connection Pool');
 
             if (!isNaN(Number(parsedParams.connection)) && Number.isInteger(Number(parsedParams.connection))) {
+                const connectionid = Number(parsedParams.connection);
+
+                // tokenParser doesn't scope resource tokens the way Auth.is_auth does
+                if (auth instanceof AuthResource) {
+                    if (auth.access === AuthResourceAccess.CONNECTION) {
+                        if (Number(auth.id) !== connectionid) throw new Error('Unauthorized');
+                    } else if (auth.access !== AuthResourceAccess.LAYER) {
+                        throw new Error('Unauthorized');
+                    }
+
+                    if (!auth.internal) {
+                        await config.models.ConnectionToken.from(auth.token);
+                    }
+                }
+
+                await Auth.is_connection_auth(config, auth, connectionid);
+
                 let webClients = config.wsClients.get(parsedParams.connection);
                 if (!webClients) webClients = [];
-                webClients.push(new ConnectionWebSocket(ws, parsedParams.format));
+                webClients.push(new ConnectionWebSocket(ws, parsedParams.format, parsedParams.events));
                 config.wsClients.set(parsedParams.connection, webClients);
                 ws.send(JSON.stringify({ type: 'connected' }));
             } else if (parsedParams.connection === 'admin') {
@@ -50,12 +82,14 @@ export function attachWebsocket(srv: Server, config: ConfigStateful): ws.WebSock
                 }
 
                 let client: ConnectionClient;
+                let created = false;
 
                 if (!config.conns.has(0)) {
                     if (!config.server.connection) {
                         throw new Error('Admin connection is disabled');
                     } else if (config.server.auth.cert && config.server.auth.key) {
                         client = await config.conns.add(new AdminConnConfig(config));
+                        created = true;
                     } else {
                         throw new Error('Admin connection not configured');
                     }
@@ -63,7 +97,7 @@ export function attachWebsocket(srv: Server, config: ConfigStateful): ws.WebSock
                     client = config.conns.get(0) as ConnectionClient;
                 }
 
-                const connClient = new ConnectionWebSocket(ws, parsedParams.format, client, auth.session);
+                const connClient = new ConnectionWebSocket(ws, parsedParams.format, parsedParams.events, client, auth.session);
 
                 let webClients = config.wsClients.get('admin');
                 if (!webClients) webClients = [];
@@ -84,20 +118,31 @@ export function attachWebsocket(srv: Server, config: ConfigStateful): ws.WebSock
                     config.wsClients.delete('admin');
                 });
 
-                await client.awaitSecure();
+                if (created) {
+                    try {
+                        await client.awaitSecure();
+                    } catch (err) {
+                        console.error(`not ok - admin - TAK connection not ready, proceeding with websocket attach: ${err instanceof Error ? err.message : String(err)}`);
+                    }
+                }
+
                 ws.send(JSON.stringify({ type: 'connected' }));
             } else if (auth instanceof AuthUser && parsedParams.connection === auth.email) {
+                config.conns.keep(parsedParams.connection);
+
                 let client: ConnectionClient;
+                let created = false;
                 if (!config.conns.has(parsedParams.connection)) {
                     const profile = await config.models.Profile.from(parsedParams.connection);
-                    if (!profile.auth.cert || !profile.auth.key) throw new Error('No Cert Found on profile');
+                    if (!profile.auth || !profile.auth.cert || !profile.auth.key) throw new Error('No Cert Found on profile');
 
                     client = await config.conns.add(new ProfileConnConfig(config, parsedParams.connection, profile.auth));
+                    created = true;
                 } else {
                     client = config.conns.get(parsedParams.connection) as ConnectionClient;
                 }
 
-                const connClient = new ConnectionWebSocket(ws, parsedParams.format, client, auth.session);
+                const connClient = new ConnectionWebSocket(ws, parsedParams.format, parsedParams.events, client, auth.session);
 
                 let webClients = config.wsClients.get(parsedParams.connection);
                 if (!webClients) webClients = [];
@@ -117,10 +162,17 @@ export function attachWebsocket(srv: Server, config: ConfigStateful): ws.WebSock
 
                     config.wsClients.delete(parsedParams.connection);
 
-                    config.conns.delete(parsedParams.connection);
+                    config.conns.deleteLater(parsedParams.connection);
                 });
 
-                await client.awaitSecure();
+                if (created) {
+                    try {
+                        await client.awaitSecure();
+                    } catch (err) {
+                        console.error(`not ok - ${parsedParams.connection} - TAK connection not ready, proceeding with websocket attach: ${err instanceof Error ? err.message : String(err)}`);
+                    }
+                }
+
                 ws.send(JSON.stringify({ type: 'connected' }));
             } else {
                 throw new Error('Unauthorized');

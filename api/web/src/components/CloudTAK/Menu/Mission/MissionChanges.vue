@@ -72,8 +72,8 @@
                         stroke='1'
                     />
                     <span
-                        v-tooltip='change.contentUid'
                         class='mx-2'
+                        :title='change.contentUid'
                     >Content Added</span>
                 </template>
                 <template v-else-if='change.type === "REMOVE_CONTENT" && change.contentResource'>
@@ -92,8 +92,8 @@
                         stroke='1'
                     />
                     <span
-                        v-tooltip='change.contentUid'
                         class='mx-2'
+                        :title='change.contentUid'
                     >Content Removed</span>
                 </template>
                 <template v-else>
@@ -117,7 +117,7 @@
 <script setup lang='ts'>
 import { ref, onMounted } from 'vue';
 import { from } from 'rxjs';
-import { liveQuery } from "dexie";
+import { liveQuery } from '../../../../database.ts';
 import { useObservable } from "@vueuse/rxjs";
 import type { Ref } from 'vue';
 import Subscription from '../../../../base/subscription.ts';

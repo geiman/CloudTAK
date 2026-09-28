@@ -80,11 +80,12 @@ services:
             RETENTION_SCHEDULE: ${RETENTION_SCHEDULE:-0 3 * * *}
 
     media:
-        image: ghcr.io/dfpc-coe/media-infra:v9.1.1
+        image: ghcr.io/dfpc-coe/media-infra:v9.10.0
         restart: 'always'
         environment:
             - API_URL=${API_URL}
             - SigningSecret=${SigningSecret}
+            - MEDIAMTX_LOGLEVEL=${MEDIAMTX_LOGLEVEL:-info}
             - CLOUDTAK_Config_media_url=${CLOUDTAK_Config_media_url}
         ports:
             - "${MEDIA_PORT_API:-9997}:9997"
@@ -106,7 +107,7 @@ services:
             - postgis-data:/var/lib/postgresql/data
 
     store:
-        image: minio/minio:RELEASE.2024-08-17T01-24-54Z
+        image: quay.io/minio/minio:RELEASE.2024-08-17T01-24-54Z
         entrypoint: sh
         command: -c 'mkdir -p /data/cloudtak && /usr/bin/minio server /data --console-address ":9002"'
         restart: 'always'

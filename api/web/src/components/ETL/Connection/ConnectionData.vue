@@ -4,18 +4,19 @@
             Data Syncs
 
             <div class='ms-auto btn-list'>
-                <IconPlus
-                    v-tooltip='"Create Sync"'
-                    :size='32'
-                    stroke='1'
-                    class='cursor-pointer'
+                <TablerIconButton
+                    title='Create Sync'
                     @click='router.push(`/connection/${props.connection.id}/data/new`)'
-                />
-                <IconRefresh
-                    v-tooltip='"Refresh"'
+                >
+                    <IconPlus
+                        :size='32'
+                        stroke='1'
+                    />
+                </TablerIconButton>
+                <TablerRefreshButton
+                    title='Refresh'
                     :size='32'
-                    stroke='1'
-                    class='cursor-pointer'
+                    :loading='loading'
                     @click='listData'
                 />
             </div>
@@ -71,20 +72,26 @@
                                         v-text='data.name'
                                     />
                                     <div class='ms-auto'>
-                                        <IconAccessPoint
+                                        <span
                                             v-if='data.mission_sync'
-                                            v-tooltip='"Mission Sync On"'
-                                            :size='32'
-                                            stroke='1'
-                                            class='cursor-pointer text-green'
-                                        />
-                                        <IconAccessPointOff
+                                            title='Mission Sync On'
+                                        >
+                                            <IconAccessPoint
+                                                :size='32'
+                                                stroke='1'
+                                                class='cursor-pointer text-green'
+                                            />
+                                        </span>
+                                        <span
                                             v-else
-                                            v-tooltip='"Mission Sync Off"'
-                                            :size='32'
-                                            stroke='1'
-                                            class='cursor-pointer text-red'
-                                        />
+                                            title='Mission Sync Off'
+                                        >
+                                            <IconAccessPointOff
+                                                :size='32'
+                                                stroke='1'
+                                                class='cursor-pointer text-red'
+                                            />
+                                        </span>
                                     </div>
                                 </div>
                             </td>
@@ -117,13 +124,14 @@ import {
     TablerNone,
     TablerAlert,
     TablerInput,
-    TablerLoading
+    TablerLoading,
+    TablerIconButton,
+    TablerRefreshButton,
 } from '@tak-ps/vue-tabler'
 import {
     IconAccessPoint,
     IconAccessPointOff,
     IconDatabase,
-    IconRefresh,
     IconPlus
 } from '@tabler/icons-vue';
 
