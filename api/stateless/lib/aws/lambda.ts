@@ -17,6 +17,23 @@ function repositoryName(): string {
     return String(process.env.ECR_TASKS_REPOSITORY_NAME);
 }
 
+export function vpcConfig(): { SecurityGroupIds: string[]; SubnetIds: string[] } {
+    const { ETLSecurityGroup, SubnetPrivateA, SubnetPrivateB } = process.env;
+
+    if (!ETLSecurityGroup || !SubnetPrivateA || !SubnetPrivateB) {
+        throw new Err(400, null, 'VPC access is not configured for this deployment');
+    }
+
+    return {
+        SecurityGroupIds: [ETLSecurityGroup],
+        SubnetIds: [SubnetPrivateA, SubnetPrivateB],
+    };
+}
+
+export function vpcAddresses(): string[] {
+    return [process.env.NatPublicIPA, process.env.NatPublicIPB].filter((ip): ip is string => !!ip);
+}
+
 /**
  * @class
  */
@@ -169,6 +186,10 @@ export default class Lambda {
             },
         };
 
+        if (layer.vpc) {
+            stack.Resources.ETLFunction.Properties.VpcConfig = vpcConfig();
+        }
+
         if (layer.outgoing) {
             stack.Resources.OutgoingQueue = {
                 Type: 'AWS::SQS::Queue',
@@ -314,6 +335,26 @@ export default class Lambda {
                         IntegrationUri: cf.getAtt('ETLFunction', 'Arn'),
                         CredentialsArn: cf.importValue(config.StackName.replace(/^tak-cloudtak-/, 'tak-cloudtak-webhooks-') + '-role'),
                         PayloadFormatVersion: '2.0',
+                    },
+                };
+            }
+
+            if (layer.incoming.email && layer.enabled) {
+                // Registers the Layer with the router in cloudformation/lib/mail-lambda.cjs
+                stack.Resources.EmailParameter = {
+                    Type: 'AWS::SSM::Parameter',
+                    Properties: {
+                        Type: 'String',
+                        Name: cf.join([
+                            cf.importValue(config.StackName.replace(/^tak-cloudtak-/, 'tak-cloudtak-mail-') + '-layer-prefix'),
+                            cf.ref('UniqueID'),
+                        ]),
+                        Description: `${StackName}: Incoming Email`,
+                        Value: cf.join([
+                            '{"arn":"', cf.getAtt('ETLFunction', 'Arn'),
+                            '","senders":', JSON.stringify(layer.incoming.email_senders),
+                            '}',
+                        ]),
                     },
                 };
             }

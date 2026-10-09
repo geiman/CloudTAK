@@ -109,7 +109,7 @@
         "query": false,
         "res": true
     },
-    "GET /config/webhooks": {
+    "GET /config/layer": {
         "body": false,
         "query": false,
         "res": true
@@ -1045,6 +1045,31 @@
         "res": true
     },
     "DELETE /marti/missions/:guid/log/:log": {
+        "body": false,
+        "query": false,
+        "res": true
+    },
+    "GET /marti/missions/:guid/property": {
+        "body": false,
+        "query": true,
+        "res": true
+    },
+    "GET /marti/missions/:guid/property/:key": {
+        "body": false,
+        "query": false,
+        "res": true
+    },
+    "PUT /marti/missions/:guid/property": {
+        "body": true,
+        "query": false,
+        "res": true
+    },
+    "DELETE /marti/missions/:guid/property/:key": {
+        "body": false,
+        "query": false,
+        "res": true
+    },
+    "DELETE /marti/missions/:guid/property": {
         "body": false,
         "query": false,
         "res": true

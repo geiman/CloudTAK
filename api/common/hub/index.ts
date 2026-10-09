@@ -60,6 +60,12 @@ export interface HubClient {
 
     connectionStatus(ids: Array<number | string>): Promise<Record<string, ConnStatus>>;
 
+    /**
+     * Active channel bitpos set cached on a pooled connection, or null when
+     * the connection is not pooled or its channel list has not loaded yet
+     */
+    connectionChannels(id: number | string): Promise<number[] | null>;
+
     connectionSummary(): Promise<PoolSummary>;
 
     serverRefresh(opts?: { refreshAll?: boolean }): Promise<ConnStatus>;
@@ -76,7 +82,7 @@ export interface HubClient {
 
     featureRefresh(connection: number): Promise<void>;
 
-    coreEventSubmit(event: string): Promise<void>;
+    coreEntitySubmit(event: string): Promise<void>;
 
     geofenceRefresh(): Promise<void>;
 

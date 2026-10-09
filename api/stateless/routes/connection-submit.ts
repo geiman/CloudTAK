@@ -10,7 +10,7 @@ import type { MappingRow } from '../../common/mapping.js';
 import { LayerMapping } from '../../common/schema.js';
 import { LayerMapping_Destination } from '../../common/enums.js';
 import SubmitControl from '../lib/control/submit.js';
-import { connectionChannels } from '../lib/tak-channels.js';
+import { connectionChannels } from '../../common/control/tak-channels.js';
 import { archiveCots } from '../lib/control/feature.js';
 import type ConfigStateless from '../config.js';
 
@@ -25,7 +25,7 @@ const SubmitFeature = Type.Object({
 });
 
 const RECORDS = [
-    [LayerMapping_Destination.COREEVENT, 'event'],
+    [LayerMapping_Destination.COREENTITY, 'event'],
     [LayerMapping_Destination.COREDEVICE, 'device'],
 ] as const;
 

@@ -14,9 +14,138 @@
 
 - `GET /api/search/reverse/:long/:lat` endpoint is deprecated and will be removed in v14, use `GET /api/search/reverse/:long/:lat/<type>` instead
 - `Layer.template` is deprecated and will be removed
+- The `external_id` string on CoreEvent & CoreDevice requests & responses is deprecated and will be removed in v14, use `external_id: { system, value }` on requests and `external_ids` on responses
 - ETLs in v14 will be required to declare Named Schemas, single schema support will be removed
+- The Minio Legacy Store will be removed in V14 - Ensure you have migrated to Garage before updating to v14.
+- CoreEntity single external ID support will be removed in v14 - ensure you have migrated to multi-system external IDs before updating to v14.
+
+### Beta Notice
+
+- CoreEvents & CoreDevices are in beta and functionality may change in minor releases. Use with caution in production environments.
 
 ### Pending Release
+
+### v13.108.1 - 2026-10-08
+
+- :tada: Add a `schema` column to `layers` recording the static Capabilities document `version` of the Task (`1.0` when the Task declares none) - it is read from the ECR image manifest when a Layer is created and again whenever the Layer's task version changes
+- :rocket: Hide the Layer Incoming `Legacy Styling` tab and editor for Layers whose Task declares Capabilities `version: "1.1"` - these Layers are styled through Field Mapping only
+
+### v13.108.0 - 2026-10-08
+
+- :tada: Core Event view gains an Assignments panel for listing, adding, editing & removing the people managing an Event by name, role & optional Profile username
+
+### v13.107.0 - 2026-10-07
+
+- :rocket: Introduce Quick Pic Support in the Draw Menu
+
+### v13.106.0 - 2026-10-07
+
+- :tada: CoreEvents & CoreDevices now carry multiple external IDs keyed by system (ie: `{ "active911": "1234", "caltopo": "B42325" }`) in a new `core_entity_external` table, returned as `external_ids`
+- :rocket: `POST` & `PATCH /api/core/event` & `/api/core/device` take a single `external_id: { system, value }` which is merged into the record's external IDs - an empty value removes the system - a bare string is still accepted as the `default` system and echoed on the deprecated `external_id` response field
+- :rocket: The CoreEvent & CoreDevice Layer Mappings map the External ID as a `system` & `value` pair - the value defaults to the Feature ID and the system to `default`, which is where existing external IDs are migrated to - Mappings saved with the bare string form are migrated & still accepted
+- :rocket: Layer submissions UPSERT on the external ID within the Connection, kind & system, serialised by an advisory lock
+- :white_check_mark: Add API & Mapping tests for multi-system external IDs
+
+### v13.105.1 - 2026-10-07
+
+- :rocket: Use internally cached active group list for faster API responses as we can avoid a TAK Server Request
+
+### v13.105.0 - 2026-10-06
+
+- :tada: Introduce GeoParquet output for imported vector layers to power future offline search
+
+### v13.104.0 - 2026-10-06
+
+- :tada: Add `Layer.vpc` - System Admins can attach a Layer's Lambda to the private VPC subnets so it egresses from the static NAT addresses and can reach internal resources; the addresses to allowlist are shown under Layer > Deployment > Infrastructure
+- :tada: Add `cloudformation/sms.template.js` provisioning AWS End User Messaging SMS resources (opt-out list, protect configuration, configuration set with CloudWatch event logging, phone number, pool, optional two-way SNS topic and send policy) for outbound SMS from CloudTAK in commercial and GovCloud partitions
+- :rocket: **Breaking** Core Devices are now `core_entity` rows of kind `CoreDevice` with a `core_entity_device` side table, matching Core Events - the `core_device` & `core_device_channel` tables are dropped, Device payloads gain `editable`, `links`, `style` & a nullable `geometry` and lose `event`, the `event` query of `GET /api/core/device` & `event_external_id` of the CoreDevice ETL schema are removed - a Device's Event assignment is expressed through Effects, existing assignments are migrated to an active `assigned` Effect
+- :rocket: **Internal** Replace `GET /api/config/webhooks` & `GET /api/config/email` with a single `GET /api/config/layer` returning webhook, email & VPC settings
+
+### v13.103.5 - 2026-10-06
+
+- :rocket: Allow navigating to non-cot Point Features from imported overlays
+- :rocket: Require explicit confirmation when updating a single Layer's Task version, only Admin "Update All" skips the prompt
+
+### v13.103.4 - 2026-10-05
+
+- :rocket: Allow permanently dismissing Initial Permissions Modal on Desktop clients
+
+### v13.103.3 - 2026-10-05
+
+- :bug: Ensure all localStorage properties are wiped on logout
+- :bug: `PUT/POST /api/profile/location` reported the user's Default Point Type (a 2525 SIDC) as the self CoT type, rendering CloudTAK users in ATAK as a MIL-STD friendly unit square instead of a team skittle - the self type is now always `a-f-G-E-V-C` as the web client sends
+
+### v13.103.2 - 2026-10-05
+
+- :rocket: TAK Server API clients are now built through a shared `TAKServerControl` (`asUser`, `asServer`, `asConnection`) and the CloudTAK client UID through `profileUid`, replacing ~90 inline `TAKAPI.init` calls and 11 inline UID strings
+- :rocket: Profile Overlay rules (unique per url, single basemap, single active mission, mission subscribe/unsubscribe, existence pruning, default basemap & terrain provisioning) now live in a shared `ProfileOverlayControl` used by the overlay, iconset, package & user erase paths and the stateful connection pool
+- :rocket: `POST /api/profile/overlay` is now idempotent - posting an overlay whose URL already exists for the user patches the existing overlay with the supplied fields and returns it instead of failing with a duplicate error
+
+### v13.103.1 - 2026-10-05
+
+- :bug: Ensure File Share Notification CoTs don't end up rendered on the map
+
+### v13.103.0 - 2026-10-02
+
+- :rocket: **Breaking** Replace the Core Event `mission_guid` column with a `missions` array of `{ name, guid }` objects on the `core_entity_event` side table - existing associations are migrated with the GUID as a placeholder name, `POST` & `PATCH /api/core/event` take `missions` in place of `mission_guid`
+- :tada: Core Events can now be associated with multiple TAK Server Missions - the Event Mission panel lists, links to & removes each associated Mission, and hides already associated Missions from the selection list
+- :rocket: Move the Imports entry out of the main menu & into a card at the top of the Files menu - saved menu orders have the `imports` entry removed
+
+### v13.102.0 - 2026-10-02
+
+> [!WARNING]
+> This release migrates from Minio to Garage as the object store. If you are using Docker Compose, you must run `./cloudtak.sh migrate-store`
+> to copy existing files out of the MinIO volume before updating to this release.
+>
+> BEFORE RUNNING THE MIGRATION ENSURE YOU BACKUP YOUR MINIO VOLUMN!
+>
+> If you are using CloudFormation, the migration is not relevant as CloudTAK uses S3 natively.
+
+- :rocket: Docker Compose deployments now use [Garage](https://garagehq.deuxfleurs.fr/) as the object store instead of MinIO, whose community images & binaries are no longer published - `./cloudtak.sh migrate-store` (run automatically by `./cloudtak.sh update`) copies existing files out of the MinIO volume, `AWS_S3_Endpoint` moves to `http://store:3900` & a `GARAGE_RPC_SECRET` is added to `.env`
+- :bug: S3 clients only calculate & validate request/response checksums when required so multipart objects served by non-AWS S3 endpoints download correctly
+- :bug: Fix HTML vs Markdown Detection Parser
+- :tada: Add a `type` Field Mapping widget (`@widget: 'type'` on `common/core-schema.ts` properties) using the MIL-STD-2525E symbol picker from the CoT sidebar to select a fixed Type, or a template
+- :rocket: Move the Event specific `started`, `ended`, `priority` & `location` columns of `core_entity` into a `core_entity_event` side table sharing its primary key - payloads are unchanged, `GET /api/core/event` no longer accepts those columns as `sort`
+
+### v13.101.1 - 2026-09-30
+
+- :rocket: Add a `kind` column to `core_entity` (defaults to `CoreEvent`) and rename the `core_entity_channel.event` column to `entity` - no API change
+
+### v13.101.0 - 2026-09-30
+
+- :rocket: Rename `CoreEvent` to `CoreEntity` throughout the database, server, and web app - API routes, payloads, and the `CoreEvent` Layer Mapping destination are unchanged
+
+### v13.100.4 - 2026-09-30
+
+- :bug: Fix Buffer/Range distance input freezing the page when typing 3+ digits in yards or miles due to a unit conversion feedback loop
+
+### v13.100.3 - 2026-09-30
+
+- :rocket: Reverse order of overlays (basemap on bottom) in MenuOverlays based on user feedback
+- :bug: Fix overlays without layers from corrupting internal maplibre layer order - Closes: https://github.com/dfpc-coe/CloudTAK/issues/1809
+
+### v13.100.2 - 2026-09-29
+
+- :rocket: Add `Area Unit` display preference, defaulting Polygon Area to acres instead of square feet [#1853](https://github.com/dfpc-coe/CloudTAK/issues/1853)
+
+### v13.100.1 - 2026-09-28
+
+- :bug: Fix permissions required to invoke a layer by email
+
+### v13.100.0 - 2026-09-28
+
+- :tada: ETL Layers can be invoked by email alongside schedules & webhooks - enabling Email Delivery in the Layer Config gives the Layer the address `<layer uuid>@mail.map.<domain>` and each email it receives is delivered to the task. Tasks must be built with `@tak-ps/etl` v10.22.0 or later & list the `Email` invocation
+- :tada: Add Allowed Senders to the Layer Config - a list of addresses or `@domains`, matched against the `From` header, that may email the Layer. An empty list accepts email from any sender
+- :tada: Creating a Layer seeds Email Delivery & its Allowed Senders from `invocations.incoming.email.default` of the task's Capabilities document
+- :tada: Add `email` & `email_senders` to the incoming config accepted by `POST /connection/:connectionid/layer` and `POST/PATCH /connection/:connectionid/layer/:layerid/incoming`
+- :tada: Add `GET /api/config/email` returning the domain Layer email is addressed to - it defaults to `mail.<API host>` & can be set with the `MAIL_DOMAIN` environment variable
+- :rocket: The `mail` CloudFormation stack writes received email to an S3 bucket, expired after `MailExpirationDays`, and routes it to the Layer it is addressed to - the stack must be deployed or updated before Email Delivery is enabled on a Layer & now requires the main CloudTAK stack to exist
+- :bug: `PATCH /connection/:connectionid/layer/:layerid/incoming` deployed the Layer with the config as it was before the update, so a changed schedule or webhooks setting did not take effect until a later deploy
+- :bug: `PATCH /connection/:connectionid/layer/:layerid/incoming` redeployed the Layer whenever `cron` or `webhooks` was in the request, even if the value had not changed
+
+### v13.99.1 - 2026-09-28
+
+- :bug: Refresh search/route manager to ensure most recent config
 
 ### v13.99.0 - 2026-09-27
 

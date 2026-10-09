@@ -1,0 +1,263 @@
+<template>
+    <MenuTemplate
+        :name='featureTitle'
+        :none='!feature'
+    >
+        <template #buttons>
+            <TablerIconButton
+                v-if='feature'
+                title='Zoom To'
+                @click='zoomTo'
+            >
+                <IconZoomPan
+                    :size='32'
+                    stroke='1'
+                />
+            </TablerIconButton>
+
+            <TablerIconButton
+                v-if='feature'
+                :title='isNavigating ? "End Navigation" : "Navigate"'
+                @click='toggleNavigation'
+            >
+                <IconNavigationFilled
+                    v-if='isNavigating'
+                    :size='32'
+                    stroke='1'
+                    style='color: #1E90FF;'
+                />
+                <IconNavigation
+                    v-else
+                    :size='32'
+                    stroke='1'
+                />
+            </TablerIconButton>
+
+            <TablerIconButton
+                v-if='overlay && ["basemap", "overlay"].includes(overlay.mode) && overlay.actions.feature.includes("fetch")'
+                title='Cut to Marker'
+                @click='cutFeature'
+            >
+                <IconScissors
+                    :size='32'
+                    stroke='1'
+                />
+            </TablerIconButton>
+
+            <TablerIconButton
+                v-if='mode === "default"'
+                title='Raw View'
+                @click='mode = "raw"'
+            >
+                <IconCode
+                    :size='32'
+                    stroke='1'
+                />
+            </TablerIconButton>
+
+            <TablerIconButton
+                v-else
+                title='Default View'
+                @click='mode = "default"'
+            >
+                <IconX
+                    :size='32'
+                    stroke='1'
+                />
+            </TablerIconButton>
+        </template>
+
+        <template v-if='feature'>
+            <template v-if='mode === "default"'>
+                <div class='col-12 px-2 py-2'>
+                    <Coordinate v-model='center' />
+                </div>
+
+                <div class='col-12 px-2 pb-2'>
+                    <div class='col-12'>
+                        <IconBlockquote
+                            :size='18'
+                            stroke='1'
+                            color='#6b7990'
+                            class='ms-2 me-1'
+                        />
+                        <label class='subheader user-select-none'>Remarks</label>
+                    </div>
+                    <div
+                        v-if='htmlDescription'
+                        class='mx-2'
+                    >
+                        <CopyField
+                            :model-value='htmlDescription'
+                            :display='htmlDisplay'
+                            :rows='2'
+                            mode='text'
+                        />
+                    </div>
+                    <div
+                        v-else
+                        class='table-responsive rounded mx-2'
+                    >
+                        <table class='table card-table table-hover table-vcenter datatable'>
+                            <thead>
+                                <tr>
+                                    <th>Key</th>
+                                    <th>Value</th>
+                                </tr>
+                            </thead>
+                            <tbody class='cloudtak-accent'>
+                                <template v-if='feature.properties'>
+                                    <tr
+                                        v-for='prop of Object.keys(feature.properties)'
+                                        :key='prop'
+                                    >
+                                        <td v-text='prop' />
+                                        <td>
+                                            <a
+                                                v-if='typeof feature.properties[prop] === "string" && feature.properties[prop].startsWith("http")'
+                                                :href='feature.properties[prop]'
+                                                target='_blank'
+                                                v-text='feature.properties[prop]'
+                                            />
+                                            <span
+                                                v-else
+                                                v-text='feature.properties[prop]'
+                                            />
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </template>
+            <template v-else-if='mode === "raw"'>
+                <pre v-text='feature' />
+            </template>
+        </template>
+    </MenuTemplate>
+</template>
+
+<script setup lang='ts'>
+import { ref, computed, watch, onMounted } from 'vue';
+import { useMapStore } from '../../../stores/map.ts';
+import type { LngLatLike, MapGeoJSONFeature } from 'maplibre-gl';
+import type { Feature } from 'geojson';
+import pointOnFeature from '@turf/point-on-feature';
+import Handlebars from 'handlebars';
+import { server, getRuntimeToken } from '../../../std.ts';
+import MenuTemplate from '../util/MenuTemplate.vue';
+import Coordinate from '../util/Coordinate.vue';
+import CopyField from '../util/CopyField.vue';
+import { cutOverlayFeature, getFeatureOverlay } from '../util/featureCut.ts';
+import { featureHtmlDescription, proxyHtmlImages } from '../util/proxyImages.ts';
+import {
+    TablerIconButton
+} from '@tak-ps/vue-tabler';
+import {
+    IconX,
+    IconScissors,
+    IconZoomPan,
+    IconBlockquote,
+    IconCode,
+    IconNavigation,
+    IconNavigationFilled
+} from '@tabler/icons-vue';
+
+const mapStore = useMapStore();
+
+const props = defineProps<{
+    feat?: Feature | MapGeoJSONFeature
+}>();
+
+const feature = computed(() => {
+    if (props.feat) return props.feat;
+    return mapStore.viewedFeature;
+})
+
+const mode = ref('default');
+const token = ref<string | null | undefined>(undefined);
+
+onMounted(async () => {
+    token.value = (await getRuntimeToken()) ?? null;
+});
+
+const overlay = computed(() => getFeatureOverlay(feature.value));
+
+const titleTemplate = ref<string | null>(null);
+
+watch(overlay, async (ov) => {
+    titleTemplate.value = null;
+    if (!ov || !ov.mode_id || !['basemap', 'overlay'].includes(ov.mode)) return;
+
+    const { data } = await server.GET('/api/basemap/{:basemapid}', {
+        params: { path: { ':basemapid': Number(ov.mode_id) } }
+    });
+
+    if (data && typeof data === 'object' && 'title' in data && data.title) {
+        titleTemplate.value = data.title;
+    }
+}, { immediate: true });
+
+const featureTitle = computed(() => {
+    if (!feature.value) return 'No Name';
+    const props = feature.value.properties || {};
+
+    if (titleTemplate.value) {
+        try {
+            let tmpl = titleTemplate.value;
+            // Bare property name (e.g. "callsign") => wrap as handlebars expression
+            if (/^[a-zA-Z0-9_]+$/.test(tmpl)) {
+                tmpl = `{{${tmpl}}}`;
+            }
+            const result = Handlebars.compile(tmpl)(props);
+            if (result && result.trim().length > 0) return result;
+        } catch {
+            // Fall through to default
+        }
+    }
+
+    return props.name || props.callsign || 'No Name';
+});
+
+const center = computed(() => {
+    if (!feature.value) return [0, 0];
+    return pointOnFeature(feature.value).geometry.coordinates;
+});
+
+const htmlDescription = computed(() => featureHtmlDescription(feature.value?.properties));
+
+const htmlDisplay = computed(() => {
+    // Empty until the token is read so images are never requested without it
+    if (token.value === undefined || !htmlDescription.value) return '';
+    return proxyHtmlImages(htmlDescription.value, token.value);
+});
+
+async function cutFeature() {
+    await cutOverlayFeature(mapStore, feature.value);
+}
+
+const isNavigating = computed(() => {
+    const dest = mapStore.navigation.destination;
+    return mapStore.navigation.active
+        && !mapStore.navigation.cotId
+        && !!dest
+        && dest[0] === center.value[0]
+        && dest[1] === center.value[1];
+});
+
+function toggleNavigation() {
+    if (isNavigating.value) {
+        mapStore.stopNavigation();
+    } else if (feature.value) {
+        mapStore.navigateTo(center.value, featureTitle.value);
+    }
+}
+
+function zoomTo() {
+    mapStore.map.flyTo({
+        center: center.value as LngLatLike,
+        zoom: 14
+    })
+}
+</script>

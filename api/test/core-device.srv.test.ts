@@ -69,7 +69,10 @@ test('POST: api/core/device', async () => {
         assert.deepEqual(res.body, {
             username: 'admin@example.com',
             connection: null,
-            event: null,
+            editable: true,
+            links: [],
+            style: {},
+            geometry: null,
             type: '10031000001213000000',
             name: 'Backpack Detective',
             manufacturer: 'Ortec',
@@ -80,32 +83,13 @@ test('POST: api/core/device', async () => {
             battery: 87.5,
             simulated: false,
             external_id: '',
+            external_ids: {},
             remarks: 'Assigned to Engine 4',
             metadata: {
                 source: 'test-suite',
             },
             channels: [7, 42],
         });
-    } catch (err) {
-        assert.ifError(err);
-    }
-});
-
-test('POST: api/core/device - 400 for nonexistent event', async () => {
-    try {
-        const res = await flight.fetch('/api/core/device', {
-            method: 'POST',
-            auth: {
-                bearer: flight.token.admin,
-            },
-            body: {
-                name: 'Orphan Device',
-                type: '10031000001213000000',
-                event: '00000000-0000-0000-0000-000000000000',
-            },
-        }, false);
-
-        assert.equal(res.status, 400);
     } catch (err) {
         assert.ifError(err);
     }
@@ -225,18 +209,25 @@ test('PATCH: api/core/device/:device', async () => {
                 status: 'Reduced',
                 battery: 12,
                 simulated: true,
-                external_id: 'ASSET-1234',
+                external_id: { system: 'asset', value: 'ASSET-1234' },
                 remarks: 'Returned for maintenance',
+                geometry: {
+                    type: 'Point',
+                    coordinates: [-105.2705, 40.015],
+                },
+                links: [{ name: 'Manual', url: 'https://example.com/manual.pdf' }],
                 channels: [1],
             },
         }, true);
 
         assert.equal(res.body.name, 'Backpack Detective');
+        assert.deepEqual(res.body.geometry, { type: 'Point', coordinates: [-105.2705, 40.015] });
+        assert.deepEqual(res.body.links, [{ name: 'Manual', url: 'https://example.com/manual.pdf' }]);
         assert.equal(res.body.firmware, 'v2.2.0');
         assert.equal(res.body.status, 'Reduced');
         assert.equal(res.body.battery, 12);
         assert.equal(res.body.simulated, true);
-        assert.equal(res.body.external_id, 'ASSET-1234');
+        assert.deepEqual(res.body.external_ids, { asset: 'ASSET-1234' });
         assert.equal(res.body.remarks, 'Returned for maintenance');
         assert.deepEqual(res.body.channels, [1]);
     } catch (err) {
@@ -298,82 +289,6 @@ test('PATCH: api/core/device/:device - update metadata', async () => {
     }
 });
 
-test('PATCH: api/core/device/:device - assign and unassign event', async () => {
-    try {
-        const event = await flight.fetch('/api/core/event', {
-            method: 'POST',
-            auth: {
-                bearer: flight.token.admin,
-            },
-            body: {
-                name: 'Wildfire Report',
-                type: '10031000001213000000',
-                geometry: {
-                    type: 'Point',
-                    coordinates: [-105.2705, 40.015],
-                },
-                channels: [7],
-            },
-        }, true);
-
-        eventId = event.body.id;
-
-        const res = await flight.fetch(`/api/core/device/${deviceId}`, {
-            method: 'PATCH',
-            auth: {
-                bearer: flight.token.admin,
-            },
-            body: {
-                event: eventId,
-            },
-        }, true);
-
-        assert.equal(res.body.event, eventId);
-
-        const list = await flight.fetch(`/api/core/device?event=${eventId}`, {
-            method: 'GET',
-            auth: {
-                bearer: flight.token.admin,
-            },
-        }, true);
-
-        assert.equal(list.body.total, 1);
-        assert.equal(list.body.items[0].id, deviceId);
-
-        const cleared = await flight.fetch(`/api/core/device/${deviceId}`, {
-            method: 'PATCH',
-            auth: {
-                bearer: flight.token.admin,
-            },
-            body: {
-                event: null,
-            },
-        }, true);
-
-        assert.equal(cleared.body.event, null);
-    } catch (err) {
-        assert.ifError(err);
-    }
-});
-
-test('PATCH: api/core/device/:device - 400 for nonexistent event', async () => {
-    try {
-        const res = await flight.fetch(`/api/core/device/${deviceId}`, {
-            method: 'PATCH',
-            auth: {
-                bearer: flight.token.admin,
-            },
-            body: {
-                event: '00000000-0000-0000-0000-000000000000',
-            },
-        }, false);
-
-        assert.equal(res.status, 400);
-    } catch (err) {
-        assert.ifError(err);
-    }
-});
-
 test('PATCH: api/core/device/:device - clear channels', async () => {
     try {
         const res = await flight.fetch(`/api/core/device/${deviceId}`, {
@@ -403,7 +318,7 @@ test('POST: api/connection/1/token - create machine token', async () => {
                 bearer: flight.token.admin,
             },
             body: {
-                permissions: ['device:*'],
+                permissions: ['device:*', 'event:*'],
                 name: 'Core Device Token',
             },
         }, true);
@@ -426,7 +341,7 @@ test('POST: api/core/device - connection token', async () => {
                 name: 'Feed Sensor',
                 type: '10031000001213000000',
                 serial: 'FS-001',
-                external_id: 'SENSOR-1',
+                external_id: { system: 'feed', value: 'SENSOR-1' },
                 channels: [7],
             },
         }, true);
@@ -456,7 +371,7 @@ test('POST: api/core/device - 400 for an external_id already used by the Connect
             body: {
                 name: 'Duplicate Sensor',
                 type: '10031000001213000000',
-                external_id: 'SENSOR-1',
+                external_id: { system: 'feed', value: 'SENSOR-1' },
             },
         }, false);
 
@@ -476,7 +391,7 @@ test('PATCH: api/core/device/:device - 400 for an external_id already used by th
             body: {
                 name: 'Second Sensor',
                 type: '10031000001213000000',
-                external_id: 'SENSOR-2',
+                external_id: { system: 'feed', value: 'SENSOR-2' },
             },
         }, true);
 
@@ -486,14 +401,68 @@ test('PATCH: api/core/device/:device - 400 for an external_id already used by th
                 bearer: connectionToken,
             },
             body: {
-                external_id: 'SENSOR-1',
+                external_id: { system: 'feed', value: 'SENSOR-1' },
             },
         }, false);
 
         assert.equal(res.status, 400);
         assert.equal(res.body.message, 'external_id is already used by another Device of the Connection');
 
+        // The same value under another system is a different ID
+        const other = await flight.fetch(`/api/core/device/${created.body.id}`, {
+            method: 'PATCH',
+            auth: {
+                bearer: connectionToken,
+            },
+            body: {
+                external_id: { system: 'other', value: 'SENSOR-1' },
+            },
+        }, true);
+
+        assert.deepEqual(other.body.external_ids, { feed: 'SENSOR-2', other: 'SENSOR-1' });
+
         await flight.config!.models.CoreDevice.delete(created.body.id);
+    } catch (err) {
+        assert.ifError(err);
+    }
+});
+
+test('POST: api/core/event - an Event of the Connection may share the external_id of a Device', async () => {
+    try {
+        const res = await flight.fetch('/api/core/event', {
+            method: 'POST',
+            auth: {
+                bearer: connectionToken,
+            },
+            body: {
+                name: 'Sensor Alarm',
+                type: '10031000001213000000',
+                external_id: { system: 'feed', value: 'SENSOR-1' },
+                geometry: {
+                    type: 'Point',
+                    coordinates: [-105.2705, 40.015],
+                },
+                channels: [7],
+            },
+        }, true);
+
+        assert.deepEqual(res.body.external_ids, { feed: 'SENSOR-1' });
+
+        const device = await flight.fetch(`/api/core/device/${res.body.id}`, {
+            method: 'GET',
+            auth: {
+                bearer: flight.token.admin,
+            },
+        }, false);
+
+        assert.equal(device.status, 404, 'an Event is not served as a Device');
+
+        await flight.fetch(`/api/core/event/${res.body.id}`, {
+            method: 'DELETE',
+            auth: {
+                bearer: flight.token.admin,
+            },
+        }, true);
     } catch (err) {
         assert.ifError(err);
     }
@@ -647,19 +616,38 @@ test('DELETE: api/core/device/:device - 403 for non-creator', async () => {
     }
 });
 
-test('DELETE: api/core/event/:event - assigned device survives event delete', async () => {
+test('DELETE: api/core/event/:event - a Device with an Effect survives event delete', async () => {
     try {
-        const assign = await flight.fetch(`/api/core/device/${deviceId}`, {
-            method: 'PATCH',
+        const event = await flight.fetch('/api/core/event', {
+            method: 'POST',
             auth: {
                 bearer: flight.token.admin,
             },
             body: {
-                event: eventId,
+                name: 'Wildfire Report',
+                type: '10031000001213000000',
+                geometry: {
+                    type: 'Point',
+                    coordinates: [-105.2705, 40.015],
+                },
+                channels: [7],
             },
         }, true);
 
-        assert.equal(assign.body.event, eventId);
+        eventId = event.body.id;
+
+        const effect = await flight.fetch(`/api/core/event/${eventId}/effect`, {
+            method: 'POST',
+            auth: {
+                bearer: flight.token.admin,
+            },
+            body: {
+                device: deviceId,
+                action: 'monitor',
+            },
+        }, true);
+
+        assert.equal(effect.body.device, deviceId);
 
         await flight.fetch(`/api/core/event/${eventId}`, {
             method: 'DELETE',
@@ -675,7 +663,7 @@ test('DELETE: api/core/event/:event - assigned device survives event delete', as
             },
         }, true);
 
-        assert.equal(res.body.event, null, 'assignment cleared by SET NULL');
+        assert.equal(res.body.id, deviceId);
     } catch (err) {
         assert.ifError(err);
     }

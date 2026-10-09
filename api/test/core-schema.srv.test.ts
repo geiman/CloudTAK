@@ -55,7 +55,7 @@ test('GET: api/core/schema/CoreDevice', async () => {
         assert.equal(res.body.$id, 'CoreDevice');
         assert.equal(res.body.type, 'object');
         assert.deepEqual(res.body.required, ['name', 'type']);
-        assert.equal(res.body.properties.event_external_id.title, 'Event');
+        assert.equal(res.body.properties.simulated.title, 'Simulated');
         assert.deepEqual(res.body.properties.battery, {
             'title': 'Battery',
             '@icon': 'IconBattery',
@@ -90,6 +90,7 @@ test('GET: api/core/schema/CoreEvent - enum & date-time properties', async () =>
         assert.equal(res.body.properties.priority.default, 'none');
         assert.equal(res.body.properties.ended.format, 'date-time');
 
+        assert.equal(res.body.properties.type['@widget'], 'type');
         assert.equal(res.body.properties.channels['@widget'], 'channels');
         assert.deepEqual(res.body.properties.channels.items, { minimum: 0, type: 'integer' });
         assert.equal(res.body.properties.style.type, 'object');
