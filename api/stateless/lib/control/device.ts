@@ -1,11 +1,10 @@
 import type { Static } from '@sinclair/typebox';
-import { sql } from 'drizzle-orm';
 import Err from '@openaddresses/batch-error';
 import { AuthUser, AuthResourceAccess } from '../../../common/auth.js';
 import type { AuthResource } from '../../../common/auth.js';
 import type { CoreDeviceResponse } from '../../../common/types.js';
 import type ConfigStateless from '../../config.js';
-import { userChannels } from '../tak-channels.js';
+import { userChannels } from '../../../common/control/tak-channels.js';
 
 /**
  * Access control shared by the Core Device endpoints
@@ -63,17 +62,5 @@ export default class DeviceControl {
         }
 
         throw new Err(403, null, 'You do not have permission to access this Device');
-    }
-
-    /**
-     * Ensure a Core Event a Device is being assigned to exists
-     */
-    async ensureEventExists(event: string): Promise<void> {
-        const list = await this.config.models.CoreEvent.list({
-            limit: 1,
-            where: sql`id = ${event}`,
-        });
-
-        if (list.total === 0) throw new Err(400, null, 'Assigned Core Event does not exist');
     }
 }

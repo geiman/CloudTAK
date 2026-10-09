@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert';
 import jwt from 'jsonwebtoken';
-import { eq } from 'drizzle-orm';
+import { eq, sql, getTableColumns } from 'drizzle-orm';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import Flight from './flight.js';
-import { ConnectionFeature, CoreEvent, CoreEventChannel, CoreDevice } from '../common/schema.js';
+import { ConnectionFeature, CoreEntity, CoreEntityEvent, CoreEntityDevice, CoreEntityChannel, CoreEntityExternal } from '../common/schema.js';
+import { EXTERNAL_IDS } from '../common/models/CoreEntity.js';
 import { LayerMapping_Destination } from '../common/enums.js';
 
 const flight = new Flight();
@@ -18,6 +19,24 @@ flight.connection();
 
 const layerToken = 'etl.' + jwt.sign({ access: 'layer', id: 1, internal: true }, 'coe-wildland-fire');
 const otherLayerToken = 'etl.' + jwt.sign({ access: 'layer', id: 2, internal: true }, 'coe-wildland-fire');
+
+const externalIds = sql<Record<string, string>>`${EXTERNAL_IDS}`;
+
+/** Events as flat rows across core_entity & core_entity_event with their external IDs */
+function eventRows() {
+    const { id, ...event } = getTableColumns(CoreEntityEvent);
+    return flight.config!.pg.select({ ...getTableColumns(CoreEntity), ...event, id, external_ids: externalIds })
+        .from(CoreEntity)
+        .innerJoin(CoreEntityEvent, eq(CoreEntity.id, CoreEntityEvent.id));
+}
+
+/** Devices as flat rows across core_entity & core_entity_device with their external IDs */
+function deviceRows() {
+    const { id, ...device } = getTableColumns(CoreEntityDevice);
+    return flight.config!.pg.select({ ...getTableColumns(CoreEntity), ...device, id, external_ids: externalIds })
+        .from(CoreEntity)
+        .innerJoin(CoreEntityDevice, eq(CoreEntity.id, CoreEntityDevice.id));
+}
 
 test('Setup: Create Layers', async () => {
     try {
@@ -358,8 +377,8 @@ test('POST: api/connection/1/submit - CoreFeature maps for the schema style the 
         // A Feature directed to a CoreDevice is not styled or delivered as CoT
         assert.equal(byId.get('unit-sensor'), undefined);
 
-        const devices = await flight.config!.pg.select().from(CoreDevice);
-        assert.deepEqual(devices.map(d => [d.external_id, d.name, d.status]), [
+        const devices = await deviceRows();
+        assert.deepEqual(devices.map(d => [d.external_ids.default, d.name, d.status]), [
             ['unit-sensor', 'Charlie', 'sensor'],
         ]);
     } catch (err) {
@@ -400,7 +419,7 @@ test('POST: api/connection/1/submit - a user token has no Layer so no maps apply
     }
 });
 
-test('POST: api/connection/1/submit - CoreEvent & CoreDevice maps create records', async () => {
+test('POST: api/connection/1/submit - CoreEntity & CoreDevice maps create records', async () => {
     try {
         const models = flight.config!.models;
 
@@ -408,7 +427,7 @@ test('POST: api/connection/1/submit - CoreEvent & CoreDevice maps create records
         await models.LayerMapping.generate({
             layer: 1,
             schema: 'incident',
-            destination: LayerMapping_Destination.COREEVENT,
+            destination: LayerMapping_Destination.COREENTITY,
             name: 'Severe',
             query: 'properties.metadata.severity > 3',
             mapping: {
@@ -417,14 +436,14 @@ test('POST: api/connection/1/submit - CoreEvent & CoreDevice maps create records
                 priority: 'critical',
                 location: '{{address}}',
                 remarks: 'Incident {{number}}',
-                external_id: 'inc-{{number}}',
+                external_id: { value: 'inc-{{number}}' },
             },
         });
 
         await models.LayerMapping.generate({
             layer: 1,
             schema: 'incident',
-            destination: LayerMapping_Destination.COREEVENT,
+            destination: LayerMapping_Destination.COREENTITY,
             name: 'Incident Defaults',
             query: 'properties.metadata.title != null',
             mapping: {
@@ -433,7 +452,7 @@ test('POST: api/connection/1/submit - CoreEvent & CoreDevice maps create records
                 priority: 'low',
                 location: '{{address}}',
                 remarks: 'Incident {{number}}',
-                external_id: 'inc-{{number}}',
+                external_id: { value: 'inc-{{number}}' },
             },
         });
 
@@ -486,8 +505,8 @@ test('POST: api/connection/1/submit - CoreEvent & CoreDevice maps create records
         assert.equal(res.body.devices, 1);
         assert.equal(res.body.submitted, 0, 'mapped Features are not delivered as CoT');
 
-        const events = await flight.config!.pg.select().from(CoreEvent);
-        const byExternal = new Map(events.map(e => [e.external_id, e]));
+        const events = await eventRows();
+        const byExternal = new Map(events.map(e => [e.external_ids.default, e]));
 
         assert.equal(events.length, 2);
 
@@ -500,19 +519,19 @@ test('POST: api/connection/1/submit - CoreEvent & CoreDevice maps create records
         assert.equal(fire.connection, 1);
         assert.equal(fire.username, null);
         assert.deepEqual(fire.metadata, { title: 'Fire', address: '1 Main St', number: 1, severity: 5, sensor: 'Sensor A', battery: '80' });
-        assert.deepEqual(fire.geometry.coordinates, [-105, 39]);
+        assert.deepEqual(fire.geometry!.coordinates, [-105, 39]);
 
         const flood = byExternal.get('inc-2')!;
         assert.equal(flood.priority, 'low');
-        assert.equal(flood.geometry.type, 'Point');
+        assert.equal(flood.geometry!.type, 'Point');
 
-        const devices = await flight.config!.pg.select().from(CoreDevice);
+        const devices = await deviceRows();
         assert.equal(devices.length, 2);
 
-        // incident-1 matched the CoreEvent query first so is not also a Device
-        assert.equal(devices.find(d => d.external_id === 'incident-1'), undefined);
+        // incident-1 matched the CoreEntity query first so is not also a Device
+        assert.equal(devices.find(d => d.external_ids.default === 'incident-1'), undefined);
 
-        const b = devices.find(d => d.external_id === 'sensor-only')!;
+        const b = devices.find(d => d.external_ids.default === 'sensor-only')!;
         assert.equal(b.name, 'Sensor B');
         assert.equal(b.manufacturer, 'Acme');
         assert.equal(b.battery, 20);
@@ -552,17 +571,17 @@ test('POST: api/connection/1/submit - resubmitting updates the mapped records in
         assert.equal(res.body.events, 1);
         assert.equal(res.body.devices, 1);
 
-        const events = await flight.config!.pg.select().from(CoreEvent);
+        const events = await eventRows();
         assert.equal(events.length, 2);
 
-        const fire = events.find(e => e.external_id === 'inc-1')!;
+        const fire = events.find(e => e.external_ids.default === 'inc-1')!;
         assert.equal(fire.name, 'Fire Contained');
         assert.equal(fire.priority, 'low');
-        assert.deepEqual(fire.geometry.coordinates, [-105.5, 39.5]);
+        assert.deepEqual(fire.geometry!.coordinates, [-105.5, 39.5]);
 
-        const devices = await flight.config!.pg.select().from(CoreDevice);
+        const devices = await deviceRows();
         assert.equal(devices.length, 2);
-        assert.equal(devices.find(d => d.external_id === 'sensor-only')!.battery, 65);
+        assert.equal(devices.find(d => d.external_ids.default === 'sensor-only')!.battery, 65);
     } catch (err) {
         assert.ifError(err);
     }
@@ -570,8 +589,8 @@ test('POST: api/connection/1/submit - resubmitting updates the mapped records in
 
 test('POST: api/connection/1/submit - concurrent submissions UPSERT a single record per external_id', async () => {
     try {
-        const before = await flight.config!.pg.select().from(CoreEvent);
-        const fire = before.find(e => e.external_id === 'inc-1')!;
+        const before = await eventRows();
+        const fire = before.find(e => e.external_ids.default === 'inc-1')!;
 
         const responses = await Promise.all([1, 2, 3, 4, 5].map((i) => {
             return flight.fetch('/api/connection/1/submit', {
@@ -603,12 +622,12 @@ test('POST: api/connection/1/submit - concurrent submissions UPSERT a single rec
             assert.equal(res.body.events, 2);
         }
 
-        const events = await flight.config!.pg.select().from(CoreEvent);
+        const events = await eventRows();
         assert.equal(events.length, before.length + 1);
-        assert.equal(events.filter(e => e.external_id === 'inc-9').length, 1);
+        assert.equal(events.filter(e => e.external_ids.default === 'inc-9').length, 1);
 
         // An UPSERT keeps the identity of the existing Event
-        const updated = events.find(e => e.external_id === 'inc-1')!;
+        const updated = events.find(e => e.external_ids.default === 'inc-1')!;
         assert.equal(updated.id, fire.id);
         assert.equal(updated.created, fire.created);
         assert.match(updated.name, /^Fire \d$/);
@@ -617,14 +636,14 @@ test('POST: api/connection/1/submit - concurrent submissions UPSERT a single rec
     }
 });
 
-test('POST: api/connection/1/submit - channels, style, links, active & Device assignment', async () => {
+test('POST: api/connection/1/submit - channels, style, links & active', async () => {
     try {
         const models = flight.config!.models;
 
         await models.LayerMapping.generate({
             layer: 1,
             schema: 'dispatch',
-            destination: LayerMapping_Destination.COREEVENT,
+            destination: LayerMapping_Destination.COREENTITY,
             name: 'Calls',
             query: 'properties.metadata.kind = "call"',
             mapping: {
@@ -632,7 +651,7 @@ test('POST: api/connection/1/submit - channels, style, links, active & Device as
                 type: '10031000001211000000',
                 priority: '{{severity}}',
                 active: '{{open}}',
-                external_id: 'call-{{number}}',
+                external_id: { system: 'cad', value: 'call-{{number}}' },
                 channels: [3, 7],
                 style: { 'marker-color': '#ff0000', 'marker-opacity': '{{opacity}}' },
                 links: [{ name: 'CAD {{number}}', url: 'https://cad.example.com/{{number}}' }],
@@ -648,8 +667,7 @@ test('POST: api/connection/1/submit - channels, style, links, active & Device as
             mapping: {
                 name: '{{unit}}',
                 type: '10031000001211000000',
-                external_id: 'unit-{{unit}}',
-                event_external_id: '{{#if call}}call-{{call}}{{/if}}',
+                external_id: { value: 'unit-{{unit}}' },
                 channels: [3],
             },
         });
@@ -663,7 +681,6 @@ test('POST: api/connection/1/submit - channels, style, links, active & Device as
                 body: {
                     type: 'FeatureCollection',
                     schema: 'dispatch',
-                    // The Device precedes the Event it is assigned to
                     features: [{
                         id: 'e1',
                         type: 'Feature',
@@ -683,8 +700,8 @@ test('POST: api/connection/1/submit - channels, style, links, active & Device as
             assert.equal(res.body.events, 1);
             assert.equal(res.body.devices, 1);
 
-            const [event] = (await flight.config!.pg.select().from(CoreEvent)).filter(e => e.external_id === 'call-77');
-            const [device] = (await flight.config!.pg.select().from(CoreDevice)).filter(d => d.external_id === 'unit-E1');
+            const [event] = (await eventRows()).filter(e => e.external_ids.cad === 'call-77');
+            const [device] = (await deviceRows()).filter(d => d.external_ids.default === 'unit-E1');
 
             return { event, device };
         };
@@ -695,9 +712,10 @@ test('POST: api/connection/1/submit - channels, style, links, active & Device as
         assert.equal(opened.event.ended, null);
         assert.deepEqual(opened.event.style, { 'marker-color': '#ff0000', 'marker-opacity': 0.5 });
         assert.deepEqual(opened.event.links, [{ name: 'CAD 77', url: 'https://cad.example.com/77' }]);
-        assert.equal(opened.device.event, opened.event.id);
+        assert.equal(opened.device.name, 'E1');
+        assert.equal(opened.device.geometry, null, 'a Device submitted without a geometry is unlocated');
 
-        const augmented = await models.CoreEvent.augmented_from(opened.event.id);
+        const augmented = await models.CoreEntity.augmented_from(opened.event.id);
         assert.equal(augmented.active, true);
         assert.deepEqual(augmented.channels, [3, 7]);
         assert.deepEqual((await models.CoreDevice.augmented_from(opened.device.id)).channels, [3]);
@@ -705,10 +723,9 @@ test('POST: api/connection/1/submit - channels, style, links, active & Device as
         const closed = await submit(false, null);
 
         assert.equal(closed.event.id, opened.event.id);
-        assert.equal((await models.CoreEvent.augmented_from(closed.event.id)).active, false);
+        assert.equal((await models.CoreEntity.augmented_from(closed.event.id)).active, false);
         assert.ok(closed.event.ended, 'closing an Event stamps ended');
-        assert.equal(closed.device.event, null, 'an empty event_external_id unassigns the Device');
-        assert.deepEqual((await models.CoreEvent.augmented_from(closed.event.id)).channels, [3, 7]);
+        assert.deepEqual((await models.CoreEntity.augmented_from(closed.event.id)).channels, [3, 7]);
 
         const reclosed = await submit(false, null);
         assert.equal(reclosed.event.ended, closed.event.ended, 'the original end time is preserved');
@@ -724,13 +741,13 @@ test('POST: api/connection/1/submit - ended as seconds from submission is pushed
         await models.LayerMapping.generate({
             layer: 1,
             schema: 'cad',
-            destination: LayerMapping_Destination.COREEVENT,
+            destination: LayerMapping_Destination.COREENTITY,
             name: 'CAD',
             query: null,
             mapping: {
                 name: '{{title}}',
                 type: '10031000001211000000',
-                external_id: 'cad-{{number}}',
+                external_id: { value: 'cad-{{number}}' },
                 ended: 1800,
             },
         });
@@ -756,13 +773,13 @@ test('POST: api/connection/1/submit - ended as seconds from submission is pushed
             assert.equal(res.status, 200);
             assert.deepEqual(res.body.errors, []);
 
-            const [event] = (await flight.config!.pg.select().from(CoreEvent)).filter(e => e.external_id === 'cad-1');
+            const [event] = (await eventRows()).filter(e => e.external_ids.default === 'cad-1');
             return event;
         };
 
         const created = await submit();
         assert.ok(created.ended, 'ended set from submission time');
-        assert.equal((await models.CoreEvent.augmented_from(created.id)).active, true, 'active until ended');
+        assert.equal((await models.CoreEntity.augmented_from(created.id)).active, true, 'active until ended');
 
         await new Promise(resolve => setTimeout(resolve, 10));
 
@@ -771,12 +788,12 @@ test('POST: api/connection/1/submit - ended as seconds from submission is pushed
         assert.ok(new Date(pushed.ended!).getTime() > new Date(created.ended!).getTime(), 'resubmitting pushes ended out');
 
         // The feed goes quiet & the end time passes
-        await models.CoreEvent.commit(created.id, { ended: new Date(Date.now() - 1000).toISOString() });
-        assert.equal((await models.CoreEvent.augmented_from(created.id)).active, false, 'ended in the past');
+        await models.CoreEntity.commitEvent(created.id, { ended: new Date(Date.now() - 1000).toISOString() });
+        assert.equal((await models.CoreEntity.augmented_from(created.id)).active, false, 'ended in the past');
 
         // The feed resumes
         await submit();
-        assert.equal((await models.CoreEvent.augmented_from(created.id)).active, true, 'a new ended reopens the Event');
+        assert.equal((await models.CoreEntity.augmented_from(created.id)).active, true, 'a new ended reopens the Event');
     } catch (err) {
         assert.ifError(err);
     }
@@ -789,7 +806,7 @@ test('POST: api/connection/1/submit - update: false fields are only applied when
         await models.LayerMapping.generate({
             layer: 1,
             schema: 'hydrant',
-            destination: LayerMapping_Destination.COREEVENT,
+            destination: LayerMapping_Destination.COREENTITY,
             name: 'Hydrants',
             query: null,
             mapping: {
@@ -826,7 +843,7 @@ test('POST: api/connection/1/submit - update: false fields are only applied when
             assert.equal(res.status, 200);
             assert.deepEqual(res.body.errors, []);
 
-            const [event] = (await flight.config!.pg.select().from(CoreEvent)).filter(e => e.external_id === 'hydrant-1');
+            const [event] = (await eventRows()).filter(e => e.external_ids.default === 'hydrant-1');
             return event;
         };
 
@@ -836,22 +853,22 @@ test('POST: api/connection/1/submit - update: false fields are only applied when
         assert.deepEqual(created.style, { 'icon': 'abc:Fire/hydrant.png', 'marker-color': '#0000ff' });
 
         // A user renames the Event, closes it, restyles it & shares it with another Channel
-        await models.CoreEvent.commit(created.id, {
+        await models.CoreEntity.commitEvent(created.id, {
             name: 'Hydrant (Main St)',
             ended: '2026-01-01T00:00:00.000Z',
             style: { 'icon': 'abc:Fire/custom.png', 'marker-color': '#0000ff', 'marker-opacity': 0.5 },
         });
-        await flight.config!.pg.insert(CoreEventChannel).values({ event: created.id, channel: BigInt(9) });
+        await flight.config!.pg.insert(CoreEntityChannel).values({ entity: created.id, channel: BigInt(9) });
 
         const updated = await submit({ title: 'Hydrant Renamed Upstream', notes: 'Flow tested', open: 'true', colour: '#00ff00' });
 
         assert.equal(updated.id, created.id);
         assert.equal(updated.remarks, 'Flow tested', 'fields update by default');
         assert.equal(updated.name, 'Hydrant (Main St)');
-        assert.equal((await models.CoreEvent.augmented_from(updated.id)).active, false);
+        assert.equal((await models.CoreEntity.augmented_from(updated.id)).active, false);
         assert.ok(updated.ended, 'ended is derived from a create only active so is left alone');
         assert.deepEqual(updated.style, { 'icon': 'abc:Fire/custom.png', 'marker-color': '#00ff00', 'marker-opacity': 0.5 });
-        assert.deepEqual((await models.CoreEvent.augmented_from(created.id)).channels, [3, 9]);
+        assert.deepEqual((await models.CoreEntity.augmented_from(created.id)).channels, [3, 9]);
     } catch (err) {
         assert.ifError(err);
     }
@@ -875,11 +892,12 @@ test('POST: api/connection/1/submit - records inherit the Channels of the Connec
             response.end();
             return true;
         });
+        await flight.refreshChannels(1);
 
         await models.LayerMapping.generate({
             layer: 1,
             schema: 'inherit',
-            destination: LayerMapping_Destination.COREEVENT,
+            destination: LayerMapping_Destination.COREENTITY,
             name: 'No Channels',
             query: null,
             mapping: { name: '{{title}}', type: '10031000001211000000' },
@@ -920,11 +938,11 @@ test('POST: api/connection/1/submit - records inherit the Channels of the Connec
             assert.equal(res.status, 200);
             assert.deepEqual(res.body.errors, []);
 
-            const [event] = (await flight.config!.pg.select().from(CoreEvent)).filter(e => e.external_id === 'inherit-1');
-            const [device] = (await flight.config!.pg.select().from(CoreDevice)).filter(d => d.external_id === 'inherit-2');
+            const [event] = (await eventRows()).filter(e => e.external_ids.default === 'inherit-1');
+            const [device] = (await deviceRows()).filter(d => d.external_ids.default === 'inherit-2');
 
             return {
-                event: (await models.CoreEvent.augmented_from(event.id)).channels,
+                event: (await models.CoreEntity.augmented_from(event.id)).channels,
                 device: (await models.CoreDevice.augmented_from(device.id)).channels,
             };
         };
@@ -933,26 +951,28 @@ test('POST: api/connection/1/submit - records inherit the Channels of the Connec
 
         // Records that are already shared keep their Channels when the Connection's change
         groups = [{ name: 'Other', direction: 'IN', created: '2026-01-01', type: 'SYSTEM', bitpos: 8, active: true }];
+        await flight.refreshChannels(1);
         assert.deepEqual(await submit(), { event: [4], device: [4] });
 
-        // A record left without any Channels inherits them again
-        await flight.config!.pg.delete(CoreEventChannel);
-        assert.deepEqual(await submit(), { event: [8], device: [4] });
+        // Records left without any Channels inherit them again
+        await flight.config!.pg.delete(CoreEntityChannel);
+        assert.deepEqual(await submit(), { event: [8], device: [8] });
 
         flight.tak.mockMarti.shift();
+        await flight.refreshChannels(1);
     } catch (err) {
         assert.ifError(err);
     }
 });
 
-test('POST: api/connection/1/submit - a CoreEvent map that cannot produce a type is reported per feature', async () => {
+test('POST: api/connection/1/submit - a CoreEntity map that cannot produce a type is reported per feature', async () => {
     try {
         const models = flight.config!.models;
 
         await models.LayerMapping.generate({
             layer: 1,
             schema: 'alert',
-            destination: LayerMapping_Destination.COREEVENT,
+            destination: LayerMapping_Destination.COREENTITY,
             name: 'No Type',
             query: null,
             mapping: { remarks: '{{text}}' },
@@ -980,7 +1000,7 @@ test('POST: api/connection/1/submit - a CoreEvent map that cannot produce a type
         }, false);
 
         assert.equal(res.status, 400);
-        assert.equal(res.body.submitted, 0, 'a Feature directed to a CoreEvent is not delivered as CoT');
+        assert.equal(res.body.submitted, 0, 'a Feature directed to a CoreEntity is not delivered as CoT');
         assert.equal(res.body.events, 0);
         assert.equal(res.body.errors.length, 2);
         assert.equal(res.body.errors[0].error, 'CoreEvent Map did not produce: type');
@@ -1018,9 +1038,9 @@ test('POST: api/connection/1/submit - a Layer token needs the permissions of its
 
         assert.equal(res.status, 403);
         assert.equal(res.body.message, 'Layer token does not have the device:update permission required by its CoreDevice Mappings');
-        assert.equal(await models.CoreEvent.count({ where: eq(CoreEvent.external_id, 'inc-50') }), 0);
+        assert.equal(await flight.config!.pg.$count(CoreEntityExternal, eq(CoreEntityExternal.value, 'inc-50')), 0);
 
-        // Schemas without CoreEvent or CoreDevice Mappings need no permissions
+        // Schemas without CoreEntity or CoreDevice Mappings need no permissions
         await models.Layer.commit(1, { permissions: [] });
 
         const unmapped = await flight.fetch('/api/connection/1/submit', {
@@ -1061,7 +1081,7 @@ test('POST: api/connection/1/submit - a paused Connection does not persist mappe
         assert.equal(res.status, 200);
         assert.equal(res.body.message, 'Received but Connection Paused');
         assert.equal(res.body.events, 0);
-        assert.equal(await models.CoreEvent.count({ where: eq(CoreEvent.external_id, 'inc-51') }), 0);
+        assert.equal(await flight.config!.pg.$count(CoreEntityExternal, eq(CoreEntityExternal.value, 'inc-51')), 0);
 
         await models.Connection.commit(1, { enabled: true });
     } catch (err) {

@@ -32,6 +32,8 @@ export const AugmentedLayerIncoming = Type.Object({
     config: Layer_Config,
     cron: Type.Union([Type.Null(), Type.String()]),
     webhooks: Type.Boolean(),
+    email: Type.Boolean(),
+    email_senders: Type.Array(Type.String()),
     enabled_styles: Type.Boolean(),
     styles: StyleContainer,
     environment: Type.Any(),
@@ -54,12 +56,14 @@ export const AugmentedLayer = Type.Object({
     logging: Type.Boolean(),
     task: Type.String({ description: 'Container tag as <integration prefix>-v<version>' }),
     version: Type.String(),
+    schema: Type.String({ description: 'Version of the static Capabilities document the Task declares - 1.1 disables Legacy Styling in favour of Field Mapping' }),
     integration: Type.Object({
         name: Type.String(),
         icon: Type.Union([Type.Null(), Type.String()], { description: 'Base64 Data URL of the Integration Icon' }),
     }),
     memory: Type.Integer(),
     timeout: Type.Integer(),
+    vpc: Type.Boolean({ description: 'Attach the Lambda to the private VPC subnets - egress uses the static NAT addresses and internal resources are reachable' }),
     priority: Type.Enum(Layer_Priority),
     permissions: Type.Array(Type.String()),
 
@@ -170,6 +174,7 @@ export default class LayerModel extends Modeler<typeof Layer> {
                 logging: Layer.logging,
                 task: sql<string>`${Integration.prefix} || '-v' || ${Layer.version}`,
                 version: Layer.version,
+                schema: Layer.schema,
                 integration: jsonBuildObject({
                     name: Integration.name,
                     icon: Integration.logo,
@@ -177,6 +182,7 @@ export default class LayerModel extends Modeler<typeof Layer> {
                 connection: Layer.connection,
                 memory: Layer.memory,
                 timeout: Layer.timeout,
+                vpc: Layer.vpc,
                 permissions: Layer.permissions,
 
                 alarm_period: Layer.alarm_period,
@@ -195,6 +201,8 @@ export default class LayerModel extends Modeler<typeof Layer> {
                     updated: LayerIncoming.updated,
                     cron: LayerIncoming.cron,
                     webhooks: LayerIncoming.webhooks,
+                    email: LayerIncoming.email,
+                    email_senders: LayerIncoming.email_senders,
                     environment: LayerIncoming.environment,
                     ephemeral: LayerIncoming.ephemeral,
                     config: LayerIncoming.config,
@@ -259,6 +267,7 @@ export default class LayerModel extends Modeler<typeof Layer> {
                 logging: Layer.logging,
                 task: sql<string>`${Integration.prefix} || '-v' || ${Layer.version}`,
                 version: Layer.version,
+                schema: Layer.schema,
                 integration: jsonBuildObject({
                     name: Integration.name,
                     icon: Integration.logo,
@@ -266,6 +275,7 @@ export default class LayerModel extends Modeler<typeof Layer> {
                 connection: Layer.connection,
                 memory: Layer.memory,
                 timeout: Layer.timeout,
+                vpc: Layer.vpc,
                 permissions: Layer.permissions,
 
                 alarm_period: Layer.alarm_period,
@@ -284,6 +294,8 @@ export default class LayerModel extends Modeler<typeof Layer> {
                     updated: LayerIncoming.updated,
                     cron: LayerIncoming.cron,
                     webhooks: LayerIncoming.webhooks,
+                    email: LayerIncoming.email,
+                    email_senders: LayerIncoming.email_senders,
                     environment: LayerIncoming.environment,
                     ephemeral: LayerIncoming.ephemeral,
                     config: LayerIncoming.config,
